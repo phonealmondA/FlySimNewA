@@ -564,7 +564,7 @@ public:
     void updateGame(float deltaTime) {
         // UPDATE NETWORK MANAGER IF ACTIVE
         if (networkManager) {
-            networkManager->update();
+            networkManager->update(deltaTime);
         }
 
         // Update simulation
