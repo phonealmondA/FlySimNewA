@@ -12,6 +12,9 @@ Player::Player(int id, sf::Vector2f spawnPos, PlayerType playerType, const std::
     planets(planetList),
     inputChanged(false) {
 
+    // Initialize currentInput with default values
+    currentInput = PlayerInput{};
+
     // Set default player name
     std::stringstream ss;
     ss << "Player " << (playerID + 1);  // Display as 1-indexed
@@ -279,9 +282,8 @@ void Player::drawVelocityVector(sf::RenderWindow& window, float scale) {
 void Player::drawPlayerLabel(sf::RenderWindow& window, const sf::Font& font) {
     if (!vehicleManager) return;
 
-    // Create text label showing player name
-    sf::Text label;
-    label.setFont(font);
+    // Create text label showing player name - SFML 3.0 compatible
+    sf::Text label(font);
     label.setString(playerName);
     label.setCharacterSize(14);
     label.setFillColor(sf::Color::White);
@@ -289,7 +291,7 @@ void Player::drawPlayerLabel(sf::RenderWindow& window, const sf::Font& font) {
     // Position label above the player
     sf::Vector2f playerPos = getPosition();
     sf::FloatRect textBounds = label.getLocalBounds();
-    label.setPosition(playerPos.x - textBounds.size.x / 2, playerPos.y - 40.0f);
+    label.setPosition(sf::Vector2f(playerPos.x - textBounds.size.x / 2, playerPos.y - 40.0f));
 
     window.draw(label);
 }

@@ -9,7 +9,8 @@
 #include "MainMenu.h"
 #include "MultiplayerMenu.h"
 #include "SplitScreenManager.h"
-#include "NetworkManager.h"  // ADD THIS INCLUDE
+#include "NetworkManager.h"
+#include "Player.h"  // Add Player class include
 #include <memory>
 #include <vector>
 #include <cstdint>
@@ -24,12 +25,12 @@
 #pragma comment(lib, "sfml-graphics-d.lib")
 #pragma comment(lib, "sfml-window-d.lib")
 #pragma comment(lib, "sfml-system-d.lib")
-#pragma comment(lib, "sfml-network-d.lib")  // ADD NETWORK LIBRARY
+#pragma comment(lib, "sfml-network-d.lib")
 #else
 #pragma comment(lib, "sfml-graphics.lib")
 #pragma comment(lib, "sfml-window.lib")
 #pragma comment(lib, "sfml-system.lib")
-#pragma comment(lib, "sfml-network.lib")   // ADD NETWORK LIBRARY
+#pragma comment(lib, "sfml-network.lib")
 #endif
 
 // Define a simple TextPanel class to display information
@@ -89,7 +90,7 @@ private:
     bool fontLoaded;
 
     // Network manager for LAN multiplayer
-    std::unique_ptr<NetworkManager> networkManager;  // ADD THIS
+    std::unique_ptr<NetworkManager> networkManager;
 
     // Game objects (will be initialized when entering game modes)
     std::unique_ptr<Planet> planet;
@@ -98,6 +99,10 @@ private:
     std::unique_ptr<VehicleManager> vehicleManager;
     std::unique_ptr<SplitScreenManager> splitScreenManager;
     std::unique_ptr<GravitySimulator> gravitySimulator;
+
+    // Player management for network multiplayer
+    std::vector<std::unique_ptr<Player>> players;
+    std::unique_ptr<Player> localPlayer;
 
     // Camera and UI
     sf::View gameView;
@@ -110,7 +115,7 @@ private:
     std::unique_ptr<TextPanel> planetInfoPanel;
     std::unique_ptr<TextPanel> orbitInfoPanel;
     std::unique_ptr<TextPanel> controlsPanel;
-    std::unique_ptr<TextPanel> networkInfoPanel;  // ADD NETWORK STATUS PANEL
+    std::unique_ptr<TextPanel> networkInfoPanel;
 
     // Input tracking
     bool lKeyPressed;
@@ -165,14 +170,14 @@ public:
             planetInfoPanel = std::make_unique<TextPanel>(font, 12, sf::Vector2f(10, 170), sf::Vector2f(250, 120));
             orbitInfoPanel = std::make_unique<TextPanel>(font, 12, sf::Vector2f(10, 300), sf::Vector2f(250, 100));
             controlsPanel = std::make_unique<TextPanel>(font, 12, sf::Vector2f(10, 410), sf::Vector2f(250, 120));
-            networkInfoPanel = std::make_unique<TextPanel>(font, 12, sf::Vector2f(10, 540), sf::Vector2f(250, 80));  // ADD NETWORK PANEL
+            networkInfoPanel = std::make_unique<TextPanel>(font, 12, sf::Vector2f(10, 540), sf::Vector2f(250, 80));
 
             controlsPanel->setText(
                 "CONTROLS:\n"
                 "Single: Arrows + 1-9 + L\n"
                 "Split: P1(Arrows+L) P2(WASD+K)\n"
-                "Shared: 1-9 thrust, Mouse wheel zoom\n"
-                "ESC: Return to menu"
+                "Network: Arrows + 1-9 + L\n"
+                "Shared: Mouse wheel zoom, ESC menu"
             );
         }
     }
@@ -211,10 +216,16 @@ public:
         gravitySimulator->addPlanet(planet2.get());
         gravitySimulator->addVehicleManager(vehicleManager.get());
 
+        // Clear players for single player mode
+        players.clear();
+        localPlayer.reset();
+
         // Reset camera
         zoomLevel = 1.0f;
         targetZoom = 1.0f;
         gameView.setCenter(rocketPos);
+
+        std::cout << "Single Player mode initialized!" << std::endl;
     }
 
     void initializeLocalPCMultiplayer() {
@@ -257,6 +268,10 @@ public:
         gravitySimulator->addVehicleManager(splitScreenManager->getPlayer1());
         gravitySimulator->addVehicleManager(splitScreenManager->getPlayer2());
 
+        // Clear players for split-screen mode
+        players.clear();
+        localPlayer.reset();
+
         // Reset camera to center between players
         zoomLevel = 1.0f;
         targetZoom = 1.0f;
@@ -269,7 +284,7 @@ public:
     }
 
     void initializeLANMultiplayer() {
-        // NEW: Initialize network manager for LAN
+        // Initialize network manager for LAN
         networkManager = std::make_unique<NetworkManager>();
 
         std::cout << "Attempting to start LAN multiplayer..." << std::endl;
@@ -277,10 +292,56 @@ public:
         if (networkManager->attemptAutoConnect()) {
             std::cout << "Network connection successful!" << std::endl;
 
-            // Create the same planet setup as single player for now
-            initializeSinglePlayer();
+            // Create planets (same setup as other modes)
+            planet = std::make_unique<Planet>(
+                sf::Vector2f(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y),
+                0.0f, GameConstants::MAIN_PLANET_MASS, sf::Color::Blue);
+            planet->setVelocity(sf::Vector2f(0.f, 0.f));
 
-            // Add network-specific setup here
+            planet2 = std::make_unique<Planet>(
+                sf::Vector2f(GameConstants::SECONDARY_PLANET_X, GameConstants::SECONDARY_PLANET_Y),
+                0.0f, GameConstants::SECONDARY_PLANET_MASS, sf::Color::Green);
+
+            float orbitSpeed = std::sqrt(GameConstants::G * planet->getMass() / GameConstants::PLANET_ORBIT_DISTANCE);
+            planet2->setVelocity(sf::Vector2f(0.f, orbitSpeed));
+
+            // Setup planet vector
+            planets.clear();
+            planets.push_back(planet.get());
+            planets.push_back(planet2.get());
+
+            // Generate spawn positions for network players
+            sf::Vector2f planetPos = planet->getPosition();
+            float planetRadius = planet->getRadius();
+            std::vector<sf::Vector2f> spawnPositions = networkManager->generateSpawnPositions(
+                planetPos, planetRadius, 2);  // Start with 2 players
+
+            // Create local player
+            int localPlayerID = networkManager->getLocalPlayerID();
+            if (localPlayerID == -1) localPlayerID = 0; // Default for host
+
+            localPlayer = std::make_unique<Player>(
+                localPlayerID,
+                spawnPositions[localPlayerID % spawnPositions.size()],
+                PlayerType::LOCAL,
+                planets
+            );
+
+            // Clear old game objects for network mode
+            vehicleManager.reset();
+            splitScreenManager.reset();
+
+            // Setup gravity simulator with Player system
+            gravitySimulator = std::make_unique<GravitySimulator>();
+            gravitySimulator->addPlanet(planet.get());
+            gravitySimulator->addPlanet(planet2.get());
+            gravitySimulator->addPlayer(localPlayer.get());
+
+            // Reset camera
+            zoomLevel = 1.0f;
+            targetZoom = 1.0f;
+            gameView.setCenter(localPlayer->getPosition());
+
             if (networkManager->getRole() == NetworkRole::HOST) {
                 std::cout << "You are the HOST. Waiting for other players..." << std::endl;
             }
@@ -344,7 +405,7 @@ public:
                     break;
                 case MultiplayerMode::LOCAL_AREA:
                     currentState = GameState::LAN_MULTIPLAYER;
-                    initializeLANMultiplayer();  // NOW USES NETWORK MANAGER
+                    initializeLANMultiplayer();
                     break;
                 case MultiplayerMode::ONLINE:
                     currentState = GameState::ONLINE_MULTIPLAYER;
@@ -377,6 +438,10 @@ public:
                         networkManager.reset();
                     }
 
+                    // Clean up players
+                    players.clear();
+                    localPlayer.reset();
+
                     currentState = GameState::MAIN_MENU;
                     mainMenu.show();
                     return;
@@ -391,14 +456,19 @@ public:
                     if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
                         // Handle in split screen manager
                     }
+                    else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
+                        // Handle player transform
+                        localPlayer->requestTransform();
+                    }
                     else if (vehicleManager) {
                         vehicleManager->switchVehicle();
                     }
                 }
-                // ADD NETWORK TEST CONTROLS
+                // Network test controls
                 else if (keyEvent->code == sf::Keyboard::Key::H && networkManager) {
                     // Test sending hello message
                     networkManager->sendHello();
+                    std::cout << "Sent hello message to network!" << std::endl;
                 }
             }
         }
@@ -429,6 +499,9 @@ public:
                 // Set camera center based on current mode
                 if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
                     gameView.setCenter(splitScreenManager->getCenterPoint());
+                }
+                else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
+                    gameView.setCenter(localPlayer->getPosition());
                 }
                 else if (vehicleManager) {
                     gameView.setCenter(vehicleManager->getActiveVehicle()->getPosition());
@@ -488,7 +561,17 @@ public:
                 splitScreenManager->setSyncedThrustLevel(0.9f);
             else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Equal))
                 splitScreenManager->setSyncedThrustLevel(1.0f);
+        }
+        else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
+            // Network multiplayer player input handling
+            localPlayer->handleLocalInput(deltaTime);
 
+            // Send input to network if it changed
+            if (localPlayer->hasInputChanged() && networkManager) {
+                PlayerInput currentInput = localPlayer->getCurrentInput();
+                networkManager->sendPlayerInput(localPlayer->getID(), currentInput);
+                localPlayer->markInputProcessed();
+            }
         }
         else if (vehicleManager) {
             // Single player input handling
@@ -532,8 +615,8 @@ public:
     }
 
     void handleCameraControls() {
-        // Single player camera controls only (split-screen uses mouse wheel)
-        if (currentState != GameState::LOCAL_PC_MULTIPLAYER && vehicleManager) {
+        // Single player camera controls only
+        if (currentState == GameState::SINGLE_PLAYER && vehicleManager) {
             const float minZoom = 1.0f;
             const float maxZoom = 1000.0f;
 
@@ -562,9 +645,13 @@ public:
     }
 
     void updateGame(float deltaTime) {
-        // UPDATE NETWORK MANAGER IF ACTIVE
+        // Update network manager if active
         if (networkManager) {
             networkManager->update(deltaTime);
+
+            // Handle network input for remote players
+            // This is a simplified version - in a full implementation you'd track multiple remote players
+            // For now, we'll just handle the basic network communication
         }
 
         // Update simulation
@@ -578,6 +665,14 @@ public:
             // Auto-center camera between both players
             if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) { // Allow C key override
                 gameView.setCenter(splitScreenManager->getCenterPoint());
+            }
+        }
+        else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
+            localPlayer->update(deltaTime);
+
+            // Auto-center camera on local player
+            if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
+                gameView.setCenter(localPlayer->getPosition());
             }
         }
         else if (vehicleManager) {
@@ -614,10 +709,9 @@ public:
         updateVehicleInfoPanel();
         updatePlanetInfoPanel();
         updateOrbitInfoPanel();
-        updateNetworkInfoPanel();  // ADD NETWORK INFO UPDATE
+        updateNetworkInfoPanel();
     }
 
-    // ADD NEW NETWORK INFO PANEL UPDATE METHOD
     void updateNetworkInfoPanel() {
         if (!networkInfoPanel) return;
 
@@ -641,8 +735,13 @@ public:
 
             ss << "NETWORK STATUS\n"
                 << "Role: " << roleStr << "\n"
-                << "Status: " << statusStr << "\n"
-                << "Press H to test hello message";
+                << "Status: " << statusStr << "\n";
+
+            if (localPlayer) {
+                ss << "Player ID: " << localPlayer->getID() << "\n";
+            }
+
+            ss << "Press H to test hello message";
         }
         else {
             ss << "NETWORK STATUS\n"
@@ -670,19 +769,27 @@ public:
                 ss << "Shared Thrust: " << std::fixed << std::setprecision(0) << thrustLevel * 100.0f << "%\n";
             }
             ss << "Mouse wheel: Zoom in/out";
-
         }
-        else if (currentState == GameState::LAN_MULTIPLAYER && networkManager) {
+        else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
             // Network multiplayer info
-            if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
-                Rocket* rocket = vehicleManager->getRocket();
+            if (localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+                Rocket* rocket = localPlayer->getVehicleManager()->getRocket();
                 float speed = std::sqrt(rocket->getVelocity().x * rocket->getVelocity().x +
                     rocket->getVelocity().y * rocket->getVelocity().y);
 
                 ss << "NETWORK MULTIPLAYER\n"
+                    << "Player: " << localPlayer->getName() << "\n"
                     << "Role: " << (networkManager->getRole() == NetworkRole::HOST ? "HOST" : "CLIENT") << "\n"
                     << "Speed: " << std::fixed << std::setprecision(1) << speed << " units/s\n"
                     << "Thrust: " << std::setprecision(0) << rocket->getThrustLevel() * 100.0f << "%";
+            }
+            else {
+                Car* car = localPlayer->getVehicleManager()->getCar();
+                ss << "NETWORK MULTIPLAYER (CAR)\n"
+                    << "Player: " << localPlayer->getName() << "\n"
+                    << "On Ground: " << (car->isOnGround() ? "Yes" : "No") << "\n"
+                    << "Position: (" << std::fixed << std::setprecision(1)
+                    << car->getPosition().x << ", " << car->getPosition().y << ")";
             }
         }
         else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
@@ -718,6 +825,9 @@ public:
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
             // Use Player 1's vehicle for planet info
             activeVehicle = splitScreenManager->getPlayer1()->getActiveVehicle();
+        }
+        else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
+            activeVehicle = localPlayer->getVehicleManager()->getActiveVehicle();
         }
         else if (vehicleManager) {
             activeVehicle = vehicleManager->getActiveVehicle();
@@ -762,8 +872,11 @@ public:
         else if (currentState == GameState::LAN_MULTIPLAYER && networkManager) {
             ss << "LAN MULTIPLAYER\n"
                 << "Role: " << (networkManager->getRole() == NetworkRole::HOST ? "HOST" : "CLIENT") << "\n"
-                << "Status: " << (networkManager->isConnected() ? "CONNECTED" : "DISCONNECTED") << "\n"
-                << "Press H to send hello message";
+                << "Status: " << (networkManager->isConnected() ? "CONNECTED" : "DISCONNECTED") << "\n";
+            if (localPlayer) {
+                ss << "Playing as: " << localPlayer->getName() << "\n";
+            }
+            ss << "Press H to send hello message";
         }
         else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
             ss << "ORBIT INFO\n"
@@ -789,6 +902,9 @@ public:
         sf::Vector2f referencePos;
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
             referencePos = splitScreenManager->getCenterPoint();
+        }
+        else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
+            referencePos = localPlayer->getPosition();
         }
         else if (vehicleManager) {
             referencePos = vehicleManager->getActiveVehicle()->getPosition();
@@ -821,6 +937,11 @@ public:
                     GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS, false);
             }
         }
+        else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer &&
+            localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+            localPlayer->getVehicleManager()->getRocket()->drawTrajectory(window, planets,
+                GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS, false);
+        }
         else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
             vehicleManager->getRocket()->drawTrajectory(window, planets,
                 GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS, false);
@@ -830,8 +951,17 @@ public:
         planet->draw(window);
         planet2->draw(window);
 
+        // Draw players/vehicles based on game mode
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
             splitScreenManager->drawWithConstantSize(window, zoomLevel);
+        }
+        else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
+            localPlayer->drawWithConstantSize(window, zoomLevel);
+
+            // Draw player label if font is loaded
+            if (fontLoaded) {
+                localPlayer->drawPlayerLabel(window, font);
+            }
         }
         else if (vehicleManager) {
             vehicleManager->drawWithConstantSize(window, zoomLevel);
@@ -843,6 +973,14 @@ public:
 
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
             splitScreenManager->drawVelocityVectors(window, 2.0f);
+        }
+        else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
+            localPlayer->drawVelocityVector(window, 2.0f);
+
+            // Draw gravity force vectors if in rocket mode
+            if (localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+                localPlayer->getVehicleManager()->getRocket()->drawGravityForceVectors(window, planets, GameConstants::GRAVITY_VECTOR_SCALE);
+            }
         }
         else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
             vehicleManager->drawVelocityVector(window, 2.0f);
@@ -858,7 +996,7 @@ public:
             orbitInfoPanel->draw(window);
             controlsPanel->draw(window);
 
-            // Draw network info panel only when network is active
+            // Draw network info panel when network is active
             if (networkManager || currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) {
                 networkInfoPanel->draw(window);
             }

@@ -1,13 +1,10 @@
 #pragma once
 #include "VehicleManager.h"
 #include "Planet.h"
+#include "NetworkManager.h"  // Include this instead of forward declaration
 #include <SFML/Graphics.hpp>
 #include <memory>
 #include <vector>
-
-// Forward declaration for NetworkManager data structures
-struct PlayerInput;
-struct PlayerState;
 
 enum class PlayerType {
     LOCAL,    // This instance controls this player

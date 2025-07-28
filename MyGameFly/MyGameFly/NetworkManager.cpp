@@ -14,7 +14,6 @@ NetworkManager::NetworkManager()
     localPlayerID(-1),  // Initialize as invalid
     nextPlayerID(0) {   // Host will assign IDs starting from 0
 }
-}
 
 NetworkManager::~NetworkManager() {
     disconnect();
@@ -361,10 +360,6 @@ void NetworkManager::serializePlayerSpawnInfo(sf::Packet& packet, const PlayerSp
 
 void NetworkManager::deserializePlayerSpawnInfo(sf::Packet& packet, PlayerSpawnInfo& spawnInfo) {
     packet >> spawnInfo.playerID >> spawnInfo.spawnPosition.x >> spawnInfo.spawnPosition.y;
-    packet >> spawnInfo.isHost;
-}(sf::Packet& packet, PlayerSpawnInfo& spawnInfo) {
-    packet >> spawnInfo.playerID >> spawnInfo.spawnPosition.x >> spawnInfo.spawnPosition.y;
-    packet >> spawnInfo.playerColor.r >> spawnInfo.playerColor.g >> spawnInfo.playerColor.b >> spawnInfo.playerColor.a;
     packet >> spawnInfo.isHost;
 }
 

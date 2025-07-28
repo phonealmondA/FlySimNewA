@@ -1,7 +1,7 @@
 // GravitySimulator.cpp - Updated with Player Support
 #include "GravitySimulator.h"
 #include "VehicleManager.h"
-// #include "Player.h"  // TODO: Uncomment when Player.h is created
+#include "Player.h"  // Now include Player.h since it exists
 
 void GravitySimulator::addPlanet(Planet* planet)
 {
@@ -22,8 +22,6 @@ void GravitySimulator::addVehicleManager(VehicleManager* manager)
     vehicleManagers.push_back(manager);
 }
 
-// TODO: Player support methods - uncomment when Player class is ready
-/*
 void GravitySimulator::addPlayer(Player* player)
 {
     players.push_back(player);
@@ -37,7 +35,6 @@ void GravitySimulator::removePlayer(int playerID)
         players.end()
     );
 }
-*/
 
 void GravitySimulator::clearRockets()
 {
@@ -74,8 +71,6 @@ void GravitySimulator::addRocketGravityInteractions(float deltaTime)
     }
 }
 
-// TODO: Player gravity interactions - uncomment when Player class is ready
-/*
 void GravitySimulator::applyGravityToPlayers(float deltaTime)
 {
     // Apply gravity from planets to all players
@@ -138,7 +133,6 @@ void GravitySimulator::addPlayerGravityInteractions(float deltaTime)
         }
     }
 }
-*/
 
 void GravitySimulator::update(float deltaTime)
 {
@@ -180,57 +174,54 @@ void GravitySimulator::update(float deltaTime)
         }
     }
 
-    // TODO: Player gravity system - uncomment when Player class is ready
-    /*
-    // Apply gravity to all players (replaces VehicleManager system for multiplayer)
+    // Player gravity system - now active
     if (!players.empty()) {
+        // Apply gravity to all players (replaces VehicleManager system for multiplayer)
         applyGravityToPlayers(deltaTime);
         addPlayerGravityInteractions(deltaTime);
     }
     else {
         // Fallback to legacy VehicleManager system for single-player/split-screen
-    */
-    // Apply gravity to ALL vehicle managers (LEGACY SYSTEM)
-    for (VehicleManager* vm : vehicleManagers) {
-        if (vm && vm->getActiveVehicleType() == VehicleType::ROCKET) {
-            Rocket* rocket = vm->getRocket();
-            if (rocket) {
-                for (auto planet : planets) {
-                    sf::Vector2f direction = planet->getPosition() - rocket->getPosition();
-                    float distance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
 
-                    // Avoid division by zero and very small distances
-                    if (distance > planet->getRadius() + GameConstants::TRAJECTORY_COLLISION_RADIUS) {
-                        float forceMagnitude = G * planet->getMass() * rocket->getMass() / (distance * distance);
-                        sf::Vector2f acceleration = normalize(direction) * forceMagnitude / rocket->getMass();
-                        sf::Vector2f velocityChange = acceleration * deltaTime;
-                        rocket->setVelocity(rocket->getVelocity() + velocityChange);
+        // Apply gravity to ALL vehicle managers (LEGACY SYSTEM)
+        for (VehicleManager* vm : vehicleManagers) {
+            if (vm && vm->getActiveVehicleType() == VehicleType::ROCKET) {
+                Rocket* rocket = vm->getRocket();
+                if (rocket) {
+                    for (auto planet : planets) {
+                        sf::Vector2f direction = planet->getPosition() - rocket->getPosition();
+                        float distance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+
+                        // Avoid division by zero and very small distances
+                        if (distance > planet->getRadius() + GameConstants::TRAJECTORY_COLLISION_RADIUS) {
+                            float forceMagnitude = G * planet->getMass() * rocket->getMass() / (distance * distance);
+                            sf::Vector2f acceleration = normalize(direction) * forceMagnitude / rocket->getMass();
+                            sf::Vector2f velocityChange = acceleration * deltaTime;
+                            rocket->setVelocity(rocket->getVelocity() + velocityChange);
+                        }
                     }
                 }
             }
+            // Car gravity is handled internally in Car::update
         }
-        // Car gravity is handled internally in Car::update
-    }
 
-    // Legacy code for handling individual rockets (still needed for single-player mode)
-    for (auto rocket : rockets) {
-        for (auto planet : planets) {
-            sf::Vector2f direction = planet->getPosition() - rocket->getPosition();
-            float distance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+        // Legacy code for handling individual rockets (still needed for single-player mode)
+        for (auto rocket : rockets) {
+            for (auto planet : planets) {
+                sf::Vector2f direction = planet->getPosition() - rocket->getPosition();
+                float distance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
 
-            // Avoid division by zero and very small distances
-            if (distance > planet->getRadius() + GameConstants::TRAJECTORY_COLLISION_RADIUS) {
-                float forceMagnitude = G * planet->getMass() * rocket->getMass() / (distance * distance);
-                sf::Vector2f acceleration = normalize(direction) * forceMagnitude / rocket->getMass();
-                sf::Vector2f velocityChange = acceleration * deltaTime;
-                rocket->setVelocity(rocket->getVelocity() + velocityChange);
+                // Avoid division by zero and very small distances
+                if (distance > planet->getRadius() + GameConstants::TRAJECTORY_COLLISION_RADIUS) {
+                    float forceMagnitude = G * planet->getMass() * rocket->getMass() / (distance * distance);
+                    sf::Vector2f acceleration = normalize(direction) * forceMagnitude / rocket->getMass();
+                    sf::Vector2f velocityChange = acceleration * deltaTime;
+                    rocket->setVelocity(rocket->getVelocity() + velocityChange);
+                }
             }
         }
-    }
 
-    // Add rocket-to-rocket gravity interactions
-    addRocketGravityInteractions(deltaTime);
-    /*
-    }  // End of else block for legacy system
-    */
+        // Add rocket-to-rocket gravity interactions
+        addRocketGravityInteractions(deltaTime);
+    }
 }
