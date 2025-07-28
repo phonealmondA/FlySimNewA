@@ -7,6 +7,9 @@
 #include "GameConstants.h"
 #include "Button.h"
 #include "MainMenu.h"
+#include "MultiplayerMenu.h"
+#include "SplitScreenManager.h"
+#include "NetworkManager.h"  // ADD THIS INCLUDE
 #include <memory>
 #include <vector>
 #include <cstdint>
@@ -14,15 +17,19 @@
 #include <iomanip>
 #include <limits>
 #include <iostream>
+#include <cmath>
+#include <algorithm>
 
 #ifdef _DEBUG
 #pragma comment(lib, "sfml-graphics-d.lib")
 #pragma comment(lib, "sfml-window-d.lib")
 #pragma comment(lib, "sfml-system-d.lib")
+#pragma comment(lib, "sfml-network-d.lib")  // ADD NETWORK LIBRARY
 #else
 #pragma comment(lib, "sfml-graphics.lib")
 #pragma comment(lib, "sfml-window.lib")
 #pragma comment(lib, "sfml-system.lib")
+#pragma comment(lib, "sfml-network.lib")   // ADD NETWORK LIBRARY
 #endif
 
 // Define a simple TextPanel class to display information
@@ -63,9 +70,11 @@ float calculatePeriapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, f
 // Game state management
 enum class GameState {
     MAIN_MENU,
+    MULTIPLAYER_MENU,
     SINGLE_PLAYER,
-    MULTIPLAYER_HOST,
-    MULTIPLAYER_CLIENT,
+    LOCAL_PC_MULTIPLAYER,
+    LAN_MULTIPLAYER,
+    ONLINE_MULTIPLAYER,
     QUIT
 };
 
@@ -74,15 +83,20 @@ class Game {
 private:
     sf::RenderWindow window;
     MainMenu mainMenu;
+    std::unique_ptr<MultiplayerMenu> multiplayerMenu;
     GameState currentState;
     sf::Font font;
     bool fontLoaded;
+
+    // Network manager for LAN multiplayer
+    std::unique_ptr<NetworkManager> networkManager;  // ADD THIS
 
     // Game objects (will be initialized when entering game modes)
     std::unique_ptr<Planet> planet;
     std::unique_ptr<Planet> planet2;
     std::vector<Planet*> planets;
     std::unique_ptr<VehicleManager> vehicleManager;
+    std::unique_ptr<SplitScreenManager> splitScreenManager;
     std::unique_ptr<GravitySimulator> gravitySimulator;
 
     // Camera and UI
@@ -96,6 +110,7 @@ private:
     std::unique_ptr<TextPanel> planetInfoPanel;
     std::unique_ptr<TextPanel> orbitInfoPanel;
     std::unique_ptr<TextPanel> controlsPanel;
+    std::unique_ptr<TextPanel> networkInfoPanel;  // ADD NETWORK STATUS PANEL
 
     // Input tracking
     bool lKeyPressed;
@@ -103,6 +118,7 @@ private:
 public:
     Game() : window(sf::VideoMode({ 1280, 720 }), "Katie's Space Program"),
         mainMenu(sf::Vector2u(1280, 720)),
+        multiplayerMenu(std::make_unique<MultiplayerMenu>(sf::Vector2u(1280, 720))),
         currentState(GameState::MAIN_MENU),
         gameView(sf::Vector2f(640.f, 360.f), sf::Vector2f(1280.f, 720.f)),
         uiView(sf::Vector2f(640.f, 360.f), sf::Vector2f(1280.f, 720.f)),
@@ -149,15 +165,13 @@ public:
             planetInfoPanel = std::make_unique<TextPanel>(font, 12, sf::Vector2f(10, 170), sf::Vector2f(250, 120));
             orbitInfoPanel = std::make_unique<TextPanel>(font, 12, sf::Vector2f(10, 300), sf::Vector2f(250, 100));
             controlsPanel = std::make_unique<TextPanel>(font, 12, sf::Vector2f(10, 410), sf::Vector2f(250, 120));
+            networkInfoPanel = std::make_unique<TextPanel>(font, 12, sf::Vector2f(10, 540), sf::Vector2f(250, 80));  // ADD NETWORK PANEL
 
             controlsPanel->setText(
                 "CONTROLS:\n"
-                "Arrows: Move/Steer\n"
-                "1-9: Set thrust level\n"
-                "L: Transform vehicle\n"
-                "Z: Zoom out\n"
-                "X: Auto-zoom\n"
-                "C: Focus planet 2\n"
+                "Single: Arrows + 1-9 + L\n"
+                "Split: P1(Arrows+L) P2(WASD+K)\n"
+                "Shared: 1-9 thrust, Mouse wheel zoom\n"
                 "ESC: Return to menu"
             );
         }
@@ -203,55 +217,166 @@ public:
         gameView.setCenter(rocketPos);
     }
 
-    void initializeMultiplayerHost() {
-        // For now, same as single player - we'll add networking later
-        initializeSinglePlayer();
-        std::cout << "Multiplayer Host mode - networking to be implemented" << std::endl;
+    void initializeLocalPCMultiplayer() {
+        // Create planets (same as single player)
+        planet = std::make_unique<Planet>(
+            sf::Vector2f(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y),
+            0.0f, GameConstants::MAIN_PLANET_MASS, sf::Color::Blue);
+        planet->setVelocity(sf::Vector2f(0.f, 0.f));
+
+        planet2 = std::make_unique<Planet>(
+            sf::Vector2f(GameConstants::SECONDARY_PLANET_X, GameConstants::SECONDARY_PLANET_Y),
+            0.0f, GameConstants::SECONDARY_PLANET_MASS, sf::Color::Green);
+
+        float orbitSpeed = std::sqrt(GameConstants::G * planet->getMass() / GameConstants::PLANET_ORBIT_DISTANCE);
+        planet2->setVelocity(sf::Vector2f(0.f, orbitSpeed));
+
+        // Setup planet vector
+        planets.clear();
+        planets.push_back(planet.get());
+        planets.push_back(planet2.get());
+
+        // Create spawn positions for both players
+        sf::Vector2f planetPos = planet->getPosition();
+        float planetRadius = planet->getRadius();
+        float rocketSize = GameConstants::ROCKET_SIZE;
+
+        // Player 1: North side of planet
+        sf::Vector2f player1Pos = planetPos + sf::Vector2f(0, -1) * (planetRadius + rocketSize);
+
+        // Player 2: South side of planet
+        sf::Vector2f player2Pos = planetPos + sf::Vector2f(0, 1) * (planetRadius + rocketSize);
+
+        // Create split screen manager
+        splitScreenManager = std::make_unique<SplitScreenManager>(player1Pos, player2Pos, planets);
+
+        // Setup gravity simulator for split screen
+        gravitySimulator = std::make_unique<GravitySimulator>();
+        gravitySimulator->addPlanet(planet.get());
+        gravitySimulator->addPlanet(planet2.get());
+        gravitySimulator->addVehicleManager(splitScreenManager->getPlayer1());
+        gravitySimulator->addVehicleManager(splitScreenManager->getPlayer2());
+
+        // Reset camera to center between players
+        zoomLevel = 1.0f;
+        targetZoom = 1.0f;
+        gameView.setCenter(splitScreenManager->getCenterPoint());
+
+        std::cout << "Local PC Split-Screen Multiplayer initialized!" << std::endl;
+        std::cout << "Player 1: Arrow Keys + L to transform" << std::endl;
+        std::cout << "Player 2: WASD + K to transform" << std::endl;
+        std::cout << "Both: Numbers 1-9,0,= for shared thrust, Mouse wheel to zoom" << std::endl;
     }
 
-    void initializeMultiplayerClient() {
-        // For now, same as single player - we'll add networking later
-        initializeSinglePlayer();
-        std::cout << "Multiplayer Client mode - networking to be implemented" << std::endl;
+    void initializeLANMultiplayer() {
+        // NEW: Initialize network manager for LAN
+        networkManager = std::make_unique<NetworkManager>();
+
+        std::cout << "Attempting to start LAN multiplayer..." << std::endl;
+
+        if (networkManager->attemptAutoConnect()) {
+            std::cout << "Network connection successful!" << std::endl;
+
+            // Create the same planet setup as single player for now
+            initializeSinglePlayer();
+
+            // Add network-specific setup here
+            if (networkManager->getRole() == NetworkRole::HOST) {
+                std::cout << "You are the HOST. Waiting for other players..." << std::endl;
+            }
+            else if (networkManager->getRole() == NetworkRole::CLIENT) {
+                std::cout << "You are a CLIENT. Connected to host." << std::endl;
+            }
+        }
+        else {
+            std::cout << "Failed to establish network connection. Falling back to single player." << std::endl;
+            // Fall back to single player if network fails
+            initializeSinglePlayer();
+        }
+    }
+
+    void initializeOnlineMultiplayer() {
+        // Placeholder for online multiplayer - same as LAN for now
+        std::cout << "Online Multiplayer not yet implemented. Starting LAN mode instead." << std::endl;
+        initializeLANMultiplayer();
     }
 
     void handleMenuEvents(const sf::Event& event) {
         sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window), uiView);
 
-        mainMenu.handleEvent(event, mousePos);
+        if (currentState == GameState::MAIN_MENU) {
+            mainMenu.handleEvent(event, mousePos);
 
-        // Check if menu selection was made
-        if (!mainMenu.getIsActive()) {
-            GameMode selectedMode = mainMenu.getSelectedMode();
+            // Check if menu selection was made
+            if (!mainMenu.getIsActive()) {
+                GameMode selectedMode = mainMenu.getSelectedMode();
 
-            switch (selectedMode) {
-            case GameMode::SINGLE_PLAYER:
-                currentState = GameState::SINGLE_PLAYER;
-                initializeSinglePlayer();
-                break;
-            case GameMode::MULTIPLAYER_HOST:
-                currentState = GameState::MULTIPLAYER_HOST;
-                initializeMultiplayerHost();
-                break;
-            case GameMode::MULTIPLAYER_JOIN:
-                currentState = GameState::MULTIPLAYER_CLIENT;
-                initializeMultiplayerClient();
-                break;
-            case GameMode::QUIT:
-                window.close();
-                break;
-            default:
-                break;
+                switch (selectedMode) {
+                case GameMode::SINGLE_PLAYER:
+                    currentState = GameState::SINGLE_PLAYER;
+                    initializeSinglePlayer();
+                    break;
+                case GameMode::MULTIPLAYER_HOST:
+                case GameMode::MULTIPLAYER_JOIN:
+                    // Open multiplayer submenu instead of directly starting multiplayer
+                    currentState = GameState::MULTIPLAYER_MENU;
+                    multiplayerMenu->show();
+                    break;
+                case GameMode::QUIT:
+                    window.close();
+                    break;
+                default:
+                    break;
+                }
+            }
+        }
+        else if (currentState == GameState::MULTIPLAYER_MENU) {
+            multiplayerMenu->handleEvent(event, mousePos);
+
+            // Check if multiplayer menu selection was made
+            if (!multiplayerMenu->getIsActive()) {
+                MultiplayerMode selectedMode = multiplayerMenu->getSelectedMode();
+
+                switch (selectedMode) {
+                case MultiplayerMode::LOCAL_PC:
+                    currentState = GameState::LOCAL_PC_MULTIPLAYER;
+                    initializeLocalPCMultiplayer();
+                    break;
+                case MultiplayerMode::LOCAL_AREA:
+                    currentState = GameState::LAN_MULTIPLAYER;
+                    initializeLANMultiplayer();  // NOW USES NETWORK MANAGER
+                    break;
+                case MultiplayerMode::ONLINE:
+                    currentState = GameState::ONLINE_MULTIPLAYER;
+                    initializeOnlineMultiplayer();
+                    break;
+                case MultiplayerMode::BACK_TO_MAIN:
+                    currentState = GameState::MAIN_MENU;
+                    mainMenu.show();
+                    break;
+                default:
+                    break;
+                }
             }
         }
     }
 
     void handleGameEvents(const sf::Event& event) {
+        // Handle split-screen transform inputs first
+        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+            splitScreenManager->handleTransformInputs(event);
+        }
+
         if (event.is<sf::Event::KeyPressed>()) {
             const auto* keyEvent = event.getIf<sf::Event::KeyPressed>();
             if (keyEvent) {
                 if (keyEvent->code == sf::Keyboard::Key::Escape) {
-                    // Return to main menu
+                    // Clean up network connection before returning to menu
+                    if (networkManager) {
+                        networkManager->disconnect();
+                        networkManager.reset();
+                    }
+
                     currentState = GameState::MAIN_MENU;
                     mainMenu.show();
                     return;
@@ -263,7 +388,17 @@ public:
                 }
                 else if (keyEvent->code == sf::Keyboard::Key::L && !lKeyPressed) {
                     lKeyPressed = true;
-                    vehicleManager->switchVehicle();
+                    if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+                        // Handle in split screen manager
+                    }
+                    else if (vehicleManager) {
+                        vehicleManager->switchVehicle();
+                    }
+                }
+                // ADD NETWORK TEST CONTROLS
+                else if (keyEvent->code == sf::Keyboard::Key::H && networkManager) {
+                    // Test sending hello message
+                    networkManager->sendHello();
                 }
             }
         }
@@ -272,6 +407,32 @@ public:
             const auto* keyEvent = event.getIf<sf::Event::KeyReleased>();
             if (keyEvent && keyEvent->code == sf::Keyboard::Key::L) {
                 lKeyPressed = false;
+            }
+        }
+
+        // Handle mouse wheel for zooming
+        if (event.is<sf::Event::MouseWheelScrolled>()) {
+            const auto* scrollEvent = event.getIf<sf::Event::MouseWheelScrolled>();
+            if (scrollEvent && scrollEvent->wheel == sf::Mouse::Wheel::Vertical) {
+                const float zoomFactor = 1.1f;
+                if (scrollEvent->delta > 0) {
+                    // Zoom in
+                    targetZoom /= zoomFactor;
+                }
+                else {
+                    // Zoom out
+                    targetZoom *= zoomFactor;
+                }
+                // Clamp zoom
+                targetZoom = std::max(0.5f, std::min(targetZoom, 50.0f));
+
+                // Set camera center based on current mode
+                if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+                    gameView.setCenter(splitScreenManager->getCenterPoint());
+                }
+                else if (vehicleManager) {
+                    gameView.setCenter(vehicleManager->getActiveVehicle()->getPosition());
+                }
             }
         }
 
@@ -299,98 +460,150 @@ public:
     }
 
     void handleGameInput(float deltaTime) {
-        // Thrust level controls
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num0))
-            vehicleManager->getRocket()->setThrustLevel(0.0f);
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num1))
-            vehicleManager->getRocket()->setThrustLevel(0.1f);
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num2))
-            vehicleManager->getRocket()->setThrustLevel(0.2f);
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num3))
-            vehicleManager->getRocket()->setThrustLevel(0.3f);
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num4))
-            vehicleManager->getRocket()->setThrustLevel(0.4f);
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num5))
-            vehicleManager->getRocket()->setThrustLevel(0.5f);
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num6))
-            vehicleManager->getRocket()->setThrustLevel(0.6f);
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num7))
-            vehicleManager->getRocket()->setThrustLevel(0.7f);
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num8))
-            vehicleManager->getRocket()->setThrustLevel(0.8f);
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num9))
-            vehicleManager->getRocket()->setThrustLevel(0.9f);
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Equal))
-            vehicleManager->getRocket()->setThrustLevel(1.0f);
+        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+            // Handle split-screen inputs
+            splitScreenManager->handlePlayer1Input(deltaTime);
+            splitScreenManager->handlePlayer2Input(deltaTime);
 
-        // Movement controls
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Up))
-            vehicleManager->applyThrust(1.0f);
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Down))
-            vehicleManager->applyThrust(-0.5f);
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left))
-            vehicleManager->rotate(-6.0f * deltaTime * 60.0f);
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right))
-            vehicleManager->rotate(6.0f * deltaTime * 60.0f);
+            // Synced thrust level controls (either player can control thrust for both)
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num0))
+                splitScreenManager->setSyncedThrustLevel(0.0f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num1))
+                splitScreenManager->setSyncedThrustLevel(0.1f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num2))
+                splitScreenManager->setSyncedThrustLevel(0.2f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num3))
+                splitScreenManager->setSyncedThrustLevel(0.3f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num4))
+                splitScreenManager->setSyncedThrustLevel(0.4f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num5))
+                splitScreenManager->setSyncedThrustLevel(0.5f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num6))
+                splitScreenManager->setSyncedThrustLevel(0.6f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num7))
+                splitScreenManager->setSyncedThrustLevel(0.7f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num8))
+                splitScreenManager->setSyncedThrustLevel(0.8f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num9))
+                splitScreenManager->setSyncedThrustLevel(0.9f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Equal))
+                splitScreenManager->setSyncedThrustLevel(1.0f);
 
-        // Camera controls
-        handleCameraControls();
+        }
+        else if (vehicleManager) {
+            // Single player input handling
+            // Thrust level controls
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num0))
+                vehicleManager->getRocket()->setThrustLevel(0.0f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num1))
+                vehicleManager->getRocket()->setThrustLevel(0.1f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num2))
+                vehicleManager->getRocket()->setThrustLevel(0.2f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num3))
+                vehicleManager->getRocket()->setThrustLevel(0.3f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num4))
+                vehicleManager->getRocket()->setThrustLevel(0.4f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num5))
+                vehicleManager->getRocket()->setThrustLevel(0.5f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num6))
+                vehicleManager->getRocket()->setThrustLevel(0.6f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num7))
+                vehicleManager->getRocket()->setThrustLevel(0.7f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num8))
+                vehicleManager->getRocket()->setThrustLevel(0.8f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num9))
+                vehicleManager->getRocket()->setThrustLevel(0.9f);
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Equal))
+                vehicleManager->getRocket()->setThrustLevel(1.0f);
+
+            // Movement controls
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Up))
+                vehicleManager->applyThrust(1.0f);
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Down))
+                vehicleManager->applyThrust(-0.5f);
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left))
+                vehicleManager->rotate(-6.0f * deltaTime * 60.0f);
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right))
+                vehicleManager->rotate(6.0f * deltaTime * 60.0f);
+
+            // Camera controls for single player
+            handleCameraControls();
+        }
     }
 
     void handleCameraControls() {
-        const float minZoom = 1.0f;
-        const float maxZoom = 1000.0f;
+        // Single player camera controls only (split-screen uses mouse wheel)
+        if (currentState != GameState::LOCAL_PC_MULTIPLAYER && vehicleManager) {
+            const float minZoom = 1.0f;
+            const float maxZoom = 1000.0f;
 
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Z)) {
-            targetZoom = std::min(maxZoom, targetZoom * 1.05f);
-            gameView.setCenter(vehicleManager->getActiveVehicle()->getPosition());
-        }
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::X)) {
-            sf::Vector2f vehiclePos = vehicleManager->getActiveVehicle()->getPosition();
-            float dist1 = std::sqrt(
-                std::pow(vehiclePos.x - planet->getPosition().x, 2) +
-                std::pow(vehiclePos.y - planet->getPosition().y, 2)
-            );
-            float dist2 = std::sqrt(
-                std::pow(vehiclePos.x - planet2->getPosition().x, 2) +
-                std::pow(vehiclePos.y - planet2->getPosition().y, 2)
-            );
-            targetZoom = minZoom + (std::min(dist1, dist2) - (planet->getRadius() + GameConstants::ROCKET_SIZE)) / 100.0f;
-            gameView.setCenter(vehiclePos);
-        }
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
-            targetZoom = 10.0f;
-            gameView.setCenter(planet2->getPosition());
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Z)) {
+                targetZoom = std::min(maxZoom, targetZoom * 1.05f);
+                gameView.setCenter(vehicleManager->getActiveVehicle()->getPosition());
+            }
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::X)) {
+                sf::Vector2f vehiclePos = vehicleManager->getActiveVehicle()->getPosition();
+                float dist1 = std::sqrt(
+                    std::pow(vehiclePos.x - planet->getPosition().x, 2) +
+                    std::pow(vehiclePos.y - planet->getPosition().y, 2)
+                );
+                float dist2 = std::sqrt(
+                    std::pow(vehiclePos.x - planet2->getPosition().x, 2) +
+                    std::pow(vehiclePos.y - planet2->getPosition().y, 2)
+                );
+                targetZoom = minZoom + (std::min(dist1, dist2) - (planet->getRadius() + GameConstants::ROCKET_SIZE)) / 100.0f;
+                gameView.setCenter(vehiclePos);
+            }
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
+                targetZoom = 10.0f;
+                gameView.setCenter(planet2->getPosition());
+            }
         }
     }
 
     void updateGame(float deltaTime) {
+        // UPDATE NETWORK MANAGER IF ACTIVE
+        if (networkManager) {
+            networkManager->update();
+        }
+
         // Update simulation
         gravitySimulator->update(deltaTime);
         planet->update(deltaTime);
         planet2->update(deltaTime);
-        vehicleManager->update(deltaTime);
 
-        // Auto-zoom logic
-        if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Z) &&
-            !sf::Keyboard::isKeyPressed(sf::Keyboard::Key::X) &&
-            !sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
+        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+            splitScreenManager->update(deltaTime);
 
-            sf::Vector2f vehiclePos = vehicleManager->getActiveVehicle()->getPosition();
-            sf::Vector2f vehicleToPlanet = planet->getPosition() - vehiclePos;
-            sf::Vector2f vehicleToPlanet2 = planet2->getPosition() - vehiclePos;
-            float distance1 = std::sqrt(vehicleToPlanet.x * vehicleToPlanet.x + vehicleToPlanet.y * vehicleToPlanet.y);
-            float distance2 = std::sqrt(vehicleToPlanet2.x * vehicleToPlanet2.x + vehicleToPlanet2.y * vehicleToPlanet2.y);
+            // Auto-center camera between both players
+            if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) { // Allow C key override
+                gameView.setCenter(splitScreenManager->getCenterPoint());
+            }
+        }
+        else if (vehicleManager) {
+            vehicleManager->update(deltaTime);
 
-            float closest = std::min(distance1, distance2);
-            targetZoom = 1.0f + (closest - (planet->getRadius() + GameConstants::ROCKET_SIZE)) / 100.0f;
-            targetZoom = std::max(1.0f, std::min(targetZoom, 1000.0f));
+            // Auto-zoom logic for single player (only if not manually controlled)
+            if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Z) &&
+                !sf::Keyboard::isKeyPressed(sf::Keyboard::Key::X) &&
+                !sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
 
-            gameView.setCenter(vehiclePos);
+                sf::Vector2f vehiclePos = vehicleManager->getActiveVehicle()->getPosition();
+                sf::Vector2f vehicleToPlanet = planet->getPosition() - vehiclePos;
+                sf::Vector2f vehicleToPlanet2 = planet2->getPosition() - vehiclePos;
+                float distance1 = std::sqrt(vehicleToPlanet.x * vehicleToPlanet.x + vehicleToPlanet.y * vehicleToPlanet.y);
+                float distance2 = std::sqrt(vehicleToPlanet2.x * vehicleToPlanet2.x + vehicleToPlanet2.y * vehicleToPlanet2.y);
+
+                float closest = std::min(distance1, distance2);
+                targetZoom = 1.0f + (closest - (planet->getRadius() + GameConstants::ROCKET_SIZE)) / 100.0f;
+                targetZoom = std::max(1.0f, std::min(targetZoom, 1000.0f));
+
+                gameView.setCenter(vehiclePos);
+            }
         }
 
         // Smooth zoom
-        zoomLevel += (targetZoom - zoomLevel) * deltaTime * 1.0f;
+        zoomLevel += (targetZoom - zoomLevel) * deltaTime * 2.0f;
         gameView.setSize(sf::Vector2f(1280.f * zoomLevel, 720.f * zoomLevel));
     }
 
@@ -401,11 +614,78 @@ public:
         updateVehicleInfoPanel();
         updatePlanetInfoPanel();
         updateOrbitInfoPanel();
+        updateNetworkInfoPanel();  // ADD NETWORK INFO UPDATE
+    }
+
+    // ADD NEW NETWORK INFO PANEL UPDATE METHOD
+    void updateNetworkInfoPanel() {
+        if (!networkInfoPanel) return;
+
+        std::stringstream ss;
+        if (networkManager) {
+            std::string roleStr = "NONE";
+            std::string statusStr = "DISCONNECTED";
+
+            switch (networkManager->getRole()) {
+            case NetworkRole::HOST: roleStr = "HOST"; break;
+            case NetworkRole::CLIENT: roleStr = "CLIENT"; break;
+            case NetworkRole::NONE: roleStr = "NONE"; break;
+            }
+
+            switch (networkManager->getStatus()) {
+            case ConnectionStatus::CONNECTED: statusStr = "CONNECTED"; break;
+            case ConnectionStatus::CONNECTING: statusStr = "CONNECTING"; break;
+            case ConnectionStatus::FAILED: statusStr = "FAILED"; break;
+            case ConnectionStatus::DISCONNECTED: statusStr = "DISCONNECTED"; break;
+            }
+
+            ss << "NETWORK STATUS\n"
+                << "Role: " << roleStr << "\n"
+                << "Status: " << statusStr << "\n"
+                << "Press H to test hello message";
+        }
+        else {
+            ss << "NETWORK STATUS\n"
+                << "Network not active\n"
+                << "Use LAN multiplayer to connect";
+        }
+
+        networkInfoPanel->setText(ss.str());
     }
 
     void updateVehicleInfoPanel() {
         std::stringstream ss;
-        if (vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+
+        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+            // Split-screen info
+            VehicleManager* p1 = splitScreenManager->getPlayer1();
+            VehicleManager* p2 = splitScreenManager->getPlayer2();
+
+            ss << "SPLIT-SCREEN MODE\n";
+            ss << "Player 1 (Arrows + L): " << (p1->getActiveVehicleType() == VehicleType::ROCKET ? "ROCKET" : "CAR") << "\n";
+            ss << "Player 2 (WASD + K): " << (p2->getActiveVehicleType() == VehicleType::ROCKET ? "ROCKET" : "CAR") << "\n";
+
+            if (p1->getActiveVehicleType() == VehicleType::ROCKET) {
+                float thrustLevel = p1->getRocket()->getThrustLevel();
+                ss << "Shared Thrust: " << std::fixed << std::setprecision(0) << thrustLevel * 100.0f << "%\n";
+            }
+            ss << "Mouse wheel: Zoom in/out";
+
+        }
+        else if (currentState == GameState::LAN_MULTIPLAYER && networkManager) {
+            // Network multiplayer info
+            if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+                Rocket* rocket = vehicleManager->getRocket();
+                float speed = std::sqrt(rocket->getVelocity().x * rocket->getVelocity().x +
+                    rocket->getVelocity().y * rocket->getVelocity().y);
+
+                ss << "NETWORK MULTIPLAYER\n"
+                    << "Role: " << (networkManager->getRole() == NetworkRole::HOST ? "HOST" : "CLIENT") << "\n"
+                    << "Speed: " << std::fixed << std::setprecision(1) << speed << " units/s\n"
+                    << "Thrust: " << std::setprecision(0) << rocket->getThrustLevel() * 100.0f << "%";
+            }
+        }
+        else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
             Rocket* rocket = vehicleManager->getRocket();
             float speed = std::sqrt(rocket->getVelocity().x * rocket->getVelocity().x +
                 rocket->getVelocity().y * rocket->getVelocity().y);
@@ -417,7 +697,7 @@ public:
                 << rocket->getVelocity().y << ")\n"
                 << "Thrust Level: " << std::setprecision(2) << rocket->getThrustLevel() * 100.0f << "%";
         }
-        else {
+        else if (vehicleManager) {
             Car* car = vehicleManager->getCar();
             ss << "CAR INFO\n"
                 << "On Ground: " << (car->isOnGround() ? "Yes" : "No") << "\n"
@@ -433,38 +713,62 @@ public:
         std::stringstream ss;
         Planet* closestPlanet = nullptr;
         float closestDistance = std::numeric_limits<float>::max();
-        GameObject* activeVehicle = vehicleManager->getActiveVehicle();
 
-        for (const auto& planetPtr : planets) {
-            sf::Vector2f direction = planetPtr->getPosition() - activeVehicle->getPosition();
-            float dist = std::sqrt(direction.x * direction.x + direction.y * direction.y);
-
-            if (dist < closestDistance) {
-                closestDistance = dist;
-                closestPlanet = planetPtr;
-            }
+        GameObject* activeVehicle = nullptr;
+        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+            // Use Player 1's vehicle for planet info
+            activeVehicle = splitScreenManager->getPlayer1()->getActiveVehicle();
+        }
+        else if (vehicleManager) {
+            activeVehicle = vehicleManager->getActiveVehicle();
         }
 
-        if (closestPlanet) {
-            std::string planetName = (closestPlanet == planet.get()) ? "Blue Planet" : "Green Planet";
-            float speed = std::sqrt(closestPlanet->getVelocity().x * closestPlanet->getVelocity().x +
-                closestPlanet->getVelocity().y * closestPlanet->getVelocity().y);
+        if (activeVehicle) {
+            for (const auto& planetPtr : planets) {
+                sf::Vector2f direction = planetPtr->getPosition() - activeVehicle->getPosition();
+                float dist = std::sqrt(direction.x * direction.x + direction.y * direction.y);
 
-            ss << "NEAREST PLANET: " << planetName << "\n"
-                << "Distance: " << std::fixed << std::setprecision(0) << closestDistance << " units\n"
-                << "Mass: " << closestPlanet->getMass() << " units\n"
-                << "Radius: " << closestPlanet->getRadius() << " units\n"
-                << "Speed: " << std::setprecision(1) << speed << " units/s";
+                if (dist < closestDistance) {
+                    closestDistance = dist;
+                    closestPlanet = planetPtr;
+                }
+            }
+
+            if (closestPlanet) {
+                std::string planetName = (closestPlanet == planet.get()) ? "Blue Planet" : "Green Planet";
+                float speed = std::sqrt(closestPlanet->getVelocity().x * closestPlanet->getVelocity().x +
+                    closestPlanet->getVelocity().y * closestPlanet->getVelocity().y);
+
+                ss << "NEAREST PLANET: " << planetName << "\n"
+                    << "Distance: " << std::fixed << std::setprecision(0) << closestDistance << " units\n"
+                    << "Mass: " << closestPlanet->getMass() << " units\n"
+                    << "Radius: " << closestPlanet->getRadius() << " units\n"
+                    << "Speed: " << std::setprecision(1) << speed << " units/s";
+            }
         }
         planetInfoPanel->setText(ss.str());
     }
 
     void updateOrbitInfoPanel() {
         std::stringstream ss;
-        if (vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+
+        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+            ss << "SPLIT-SCREEN MODE\n"
+                << "Camera centered between players\n"
+                << "Mouse wheel to zoom\n"
+                << "Numbers 1-9,0,= control thrust\n"
+                << "for both players";
+        }
+        else if (currentState == GameState::LAN_MULTIPLAYER && networkManager) {
+            ss << "LAN MULTIPLAYER\n"
+                << "Role: " << (networkManager->getRole() == NetworkRole::HOST ? "HOST" : "CLIENT") << "\n"
+                << "Status: " << (networkManager->isConnected() ? "CONNECTED" : "DISCONNECTED") << "\n"
+                << "Press H to send hello message";
+        }
+        else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
             ss << "ORBIT INFO\n"
                 << "Trajectory visible on screen\n"
-                << "Use Z/X for zoom control\n"
+                << "Mouse wheel to zoom\n"
                 << "Press C to focus on green planet";
         }
         else {
@@ -481,10 +785,17 @@ public:
         // Find closest planet for orbit path
         Planet* closestPlanet = nullptr;
         float closestDistance = std::numeric_limits<float>::max();
-        sf::Vector2f rocketPos = vehicleManager->getActiveVehicle()->getPosition();
+
+        sf::Vector2f referencePos;
+        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+            referencePos = splitScreenManager->getCenterPoint();
+        }
+        else if (vehicleManager) {
+            referencePos = vehicleManager->getActiveVehicle()->getPosition();
+        }
 
         for (auto& planetPtr : planets) {
-            sf::Vector2f direction = planetPtr->getPosition() - rocketPos;
+            sf::Vector2f direction = planetPtr->getPosition() - referencePos;
             float dist = std::sqrt(direction.x * direction.x + direction.y * direction.y);
 
             if (dist < closestDistance) {
@@ -498,8 +809,19 @@ public:
             closestPlanet->drawOrbitPath(window, planets);
         }
 
-        // Draw trajectory only if in rocket mode
-        if (vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+        // Draw trajectory for rockets
+        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+            // Draw trajectories for both players if they're rockets
+            if (splitScreenManager->getPlayer1()->getActiveVehicleType() == VehicleType::ROCKET) {
+                splitScreenManager->getPlayer1()->getRocket()->drawTrajectory(window, planets,
+                    GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS, false);
+            }
+            if (splitScreenManager->getPlayer2()->getActiveVehicleType() == VehicleType::ROCKET) {
+                splitScreenManager->getPlayer2()->getRocket()->drawTrajectory(window, planets,
+                    GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS, false);
+            }
+        }
+        else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
             vehicleManager->getRocket()->drawTrajectory(window, planets,
                 GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS, false);
         }
@@ -507,13 +829,22 @@ public:
         // Draw game objects
         planet->draw(window);
         planet2->draw(window);
-        vehicleManager->drawWithConstantSize(window, zoomLevel);
+
+        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+            splitScreenManager->drawWithConstantSize(window, zoomLevel);
+        }
+        else if (vehicleManager) {
+            vehicleManager->drawWithConstantSize(window, zoomLevel);
+        }
 
         // Draw velocity vectors
         planet->drawVelocityVector(window, 5.0f);
         planet2->drawVelocityVector(window, 5.0f);
 
-        if (vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+            splitScreenManager->drawVelocityVectors(window, 2.0f);
+        }
+        else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
             vehicleManager->drawVelocityVector(window, 2.0f);
             vehicleManager->getRocket()->drawGravityForceVectors(window, planets, GameConstants::GRAVITY_VECTOR_SCALE);
         }
@@ -526,14 +857,26 @@ public:
             planetInfoPanel->draw(window);
             orbitInfoPanel->draw(window);
             controlsPanel->draw(window);
+
+            // Draw network info panel only when network is active
+            if (networkManager || currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) {
+                networkInfoPanel->draw(window);
+            }
         }
     }
 
     void renderMenu() {
         window.setView(uiView);
         sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window), uiView);
-        mainMenu.update(mousePos);
-        mainMenu.draw(window);
+
+        if (currentState == GameState::MAIN_MENU) {
+            mainMenu.update(mousePos);
+            mainMenu.draw(window);
+        }
+        else if (currentState == GameState::MULTIPLAYER_MENU) {
+            multiplayerMenu->update(mousePos);
+            multiplayerMenu->draw(window);
+        }
     }
 
     void run() {
@@ -545,17 +888,23 @@ public:
             // Handle events
             if (std::optional<sf::Event> event = window.pollEvent()) {
                 if (event->is<sf::Event::Closed>()) {
+                    // Clean up network before closing
+                    if (networkManager) {
+                        networkManager->disconnect();
+                    }
                     window.close();
                     continue;
                 }
 
                 switch (currentState) {
                 case GameState::MAIN_MENU:
+                case GameState::MULTIPLAYER_MENU:
                     handleMenuEvents(*event);
                     break;
                 case GameState::SINGLE_PLAYER:
-                case GameState::MULTIPLAYER_HOST:
-                case GameState::MULTIPLAYER_CLIENT:
+                case GameState::LOCAL_PC_MULTIPLAYER:
+                case GameState::LAN_MULTIPLAYER:
+                case GameState::ONLINE_MULTIPLAYER:
                     handleGameEvents(*event);
                     break;
                 default:
@@ -566,8 +915,9 @@ public:
             // Update game state
             switch (currentState) {
             case GameState::SINGLE_PLAYER:
-            case GameState::MULTIPLAYER_HOST:
-            case GameState::MULTIPLAYER_CLIENT:
+            case GameState::LOCAL_PC_MULTIPLAYER:
+            case GameState::LAN_MULTIPLAYER:
+            case GameState::ONLINE_MULTIPLAYER:
                 handleGameInput(deltaTime);
                 updateGame(deltaTime);
                 updateInfoPanels();
@@ -581,11 +931,13 @@ public:
 
             switch (currentState) {
             case GameState::MAIN_MENU:
+            case GameState::MULTIPLAYER_MENU:
                 renderMenu();
                 break;
             case GameState::SINGLE_PLAYER:
-            case GameState::MULTIPLAYER_HOST:
-            case GameState::MULTIPLAYER_CLIENT:
+            case GameState::LOCAL_PC_MULTIPLAYER:
+            case GameState::LAN_MULTIPLAYER:
+            case GameState::ONLINE_MULTIPLAYER:
                 renderGame();
                 break;
             default:

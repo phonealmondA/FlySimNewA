@@ -4,8 +4,36 @@
 MainMenu::MainMenu(sf::Vector2u winSize)
     : selectedMode(GameMode::NONE), isActive(true), windowSize(winSize)
 {
-    // For now, we'll skip font loading since your Button class doesn't use text yet
-    // The buttons will be colored rectangles with different colors to distinguish them
+    // Load font - try the same paths as in main.cpp
+    bool fontLoaded = false;
+
+#ifdef _WIN32
+    if (font.openFromFile("arial.ttf") ||
+        font.openFromFile("C:/Windows/Fonts/arial.ttf") ||
+        font.openFromFile("C:/Windows/Fonts/Arial.ttf")) {
+        fontLoaded = true;
+    }
+#elif defined(__APPLE__)
+    if (font.openFromFile("arial.ttf") ||
+        font.openFromFile("/Library/Fonts/Arial.ttf") ||
+        font.openFromFile("/System/Library/Fonts/Arial.ttf")) {
+        fontLoaded = true;
+    }
+#elif defined(__linux__)
+    if (font.openFromFile("arial.ttf") ||
+        font.openFromFile("/usr/share/fonts/truetype/msttcorefonts/Arial.ttf") ||
+        font.openFromFile("/usr/share/fonts/TTF/arial.ttf")) {
+        fontLoaded = true;
+    }
+#else
+    fontLoaded = font.openFromFile("arial.ttf");
+#endif
+
+    if (!fontLoaded) {
+        std::cerr << "Warning: Could not load font file for menu. Text won't display correctly." << std::endl;
+        // Create a dummy font or handle the error appropriately
+        // For now, we'll continue but buttons won't have text
+    }
 
     setupBackground();
     createButtons();
@@ -24,36 +52,42 @@ void MainMenu::createButtons() {
     float buttonHeight = 50.0f;
     float spacing = 70.0f;
 
-    // Single Player Button (Green)
-    auto singlePlayerButton = std::make_unique<Button>(
-        sf::Vector2f(centerX - buttonWidth / 2, startY),
-        sf::Vector2f(buttonWidth, buttonHeight),
-        "Single Player", // Text (not displayed yet)
-        font, // Font (not used yet)
-        [this]() { onSinglePlayerClicked(); }
-    );
-    // We'll need to modify the button color - for now it uses default
-    buttons.push_back(std::move(singlePlayerButton));
+    // Only create buttons if we have a valid font
+    try {
+        // Single Player Button
+        auto singlePlayerButton = std::make_unique<Button>(
+            sf::Vector2f(centerX - buttonWidth / 2, startY),
+            sf::Vector2f(buttonWidth, buttonHeight),
+            "Single Player",
+            font,
+            [this]() { onSinglePlayerClicked(); }
+        );
+        buttons.push_back(std::move(singlePlayerButton));
 
-    // Multiplayer Button (Blue)
-    auto multiplayerButton = std::make_unique<Button>(
-        sf::Vector2f(centerX - buttonWidth / 2, startY + spacing),
-        sf::Vector2f(buttonWidth, buttonHeight),
-        "Multiplayer",
-        font,
-        [this]() { onMultiplayerClicked(); }
-    );
-    buttons.push_back(std::move(multiplayerButton));
+        // Multiplayer Button
+        auto multiplayerButton = std::make_unique<Button>(
+            sf::Vector2f(centerX - buttonWidth / 2, startY + spacing),
+            sf::Vector2f(buttonWidth, buttonHeight),
+            "Multiplayer",
+            font,
+            [this]() { onMultiplayerClicked(); }
+        );
+        buttons.push_back(std::move(multiplayerButton));
 
-    // Quit Button (Red)
-    auto quitButton = std::make_unique<Button>(
-        sf::Vector2f(centerX - buttonWidth / 2, startY + spacing * 2),
-        sf::Vector2f(buttonWidth, buttonHeight),
-        "Quit",
-        font,
-        [this]() { onQuitClicked(); }
-    );
-    buttons.push_back(std::move(quitButton));
+        // Quit Button
+        auto quitButton = std::make_unique<Button>(
+            sf::Vector2f(centerX - buttonWidth / 2, startY + spacing * 2),
+            sf::Vector2f(buttonWidth, buttonHeight),
+            "Quit",
+            font,
+            [this]() { onQuitClicked(); }
+        );
+        buttons.push_back(std::move(quitButton));
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Error creating buttons: " << e.what() << std::endl;
+        // If button creation fails, we could create simple colored rectangles instead
+    }
 }
 
 void MainMenu::onSinglePlayerClicked() {
@@ -63,9 +97,9 @@ void MainMenu::onSinglePlayerClicked() {
 }
 
 void MainMenu::onMultiplayerClicked() {
-    selectedMode = GameMode::MULTIPLAYER_HOST; // For now, default to host
+    selectedMode = GameMode::MULTIPLAYER_HOST; // This will trigger the multiplayer submenu
     isActive = false;
-    std::cout << "Multiplayer mode selected" << std::endl;
+    std::cout << "Opening multiplayer menu..." << std::endl;
 }
 
 void MainMenu::onQuitClicked() {
@@ -110,10 +144,4 @@ void MainMenu::draw(sf::RenderWindow& window) {
     for (auto& button : buttons) {
         button->draw(window);
     }
-
-    // TODO: Add title text when font system is working
-    // For now, the colored buttons should be enough to identify:
-    // Top button = Single Player
-    // Middle button = Multiplayer  
-    // Bottom button = Quit
 }
