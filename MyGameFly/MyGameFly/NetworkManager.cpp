@@ -1,19 +1,17 @@
-// NetworkManager.cpp
+// NetworkManager.cpp - State Synchronization Version
 #include "NetworkManager.h"
 #include <iostream>
 
-const float NetworkManager::HEARTBEAT_INTERVAL = 1.0f; // Send heartbeat every second
+const float NetworkManager::HEARTBEAT_INTERVAL = 1.0f;
 
 NetworkManager::NetworkManager()
     : role(NetworkRole::NONE),
     status(ConnectionStatus::DISCONNECTED),
-    inputSequenceNumber(0),
-    worldStateSequenceNumber(0),
     clientConnected(false),
     lastHeartbeat(0.0f),
-    localPlayerID(-1),  // Initialize as invalid
-    nextPlayerID(0),    // Host will assign IDs starting from 0
-    hasNewSpawnInfo(false) {   // Initialize new member
+    localPlayerID(-1),
+    nextPlayerID(0),
+    hasNewSpawnInfo(false) {
 }
 
 NetworkManager::~NetworkManager() {
@@ -47,7 +45,7 @@ bool NetworkManager::startAsHost() {
         return false;
     }
 
-    listener->setBlocking(false); // Non-blocking for polling
+    listener->setBlocking(false);
     role = NetworkRole::HOST;
     status = ConnectionStatus::CONNECTED;
     clientConnected = false;
@@ -67,13 +65,9 @@ bool NetworkManager::connectAsClient() {
         role = NetworkRole::CLIENT;
         status = ConnectionStatus::CONNECTED;
         serverSocket->setBlocking(false);
-
-        // FIXED: Client should wait for server to assign player ID
-        localPlayerID = -1;  // Will be assigned by host via PLAYER_SPAWN message
+        localPlayerID = -1;  // Will be assigned by host
 
         std::cout << "Network: Client connected to host" << std::endl;
-
-        // Send initial hello and wait for player ID assignment
         sendHello();
         return true;
     }
@@ -85,48 +79,42 @@ bool NetworkManager::connectAsClient() {
 void NetworkManager::assignClientPlayerID() {
     if (role != NetworkRole::HOST || !clientConnected) return;
 
-    // Create spawn info for the new client
     PlayerSpawnInfo spawnInfo;
-    spawnInfo.playerID = assignNewPlayerID();  // This will return 1 for first client
+    spawnInfo.playerID = assignNewPlayerID();
     spawnInfo.isHost = false;
 
-    // Generate spawn position (you can customize this logic)
+    // Generate spawn position
     const float PI = 3.14159265358979323846f;
-    float angle = spawnInfo.playerID * (2 * PI / 4);  // Assume max 4 players
-    sf::Vector2f planetCenter(400.0f, 300.0f);  // Use GameConstants values
-    float spawnRadius = 100.0f + 30.0f;  // Planet radius + clearance
+    float angle = spawnInfo.playerID * (2 * PI / 4);
+    sf::Vector2f planetCenter(400.0f, 300.0f);
+    float spawnRadius = 100.0f + 30.0f;
 
     spawnInfo.spawnPosition = planetCenter + sf::Vector2f(
         std::cos(angle) * spawnRadius,
         std::sin(angle) * spawnRadius
     );
 
-    // Send spawn info to client
     sendPlayerSpawn(spawnInfo);
-
     std::cout << "Assigned Player ID " << spawnInfo.playerID << " to client" << std::endl;
 }
 
 void NetworkManager::update(float deltaTime) {
     if (role == NetworkRole::HOST && listener) {
-        // Check for new client connections (non-blocking)
+        // Check for new client connections
         if (!clientConnected && !clientSocket) {
             clientSocket = std::make_unique<sf::TcpSocket>();
             if (listener->accept(*clientSocket) == sf::Socket::Status::Done) {
                 std::cout << "Network: Client connected to host!" << std::endl;
                 clientSocket->setBlocking(false);
                 clientConnected = true;
-
-                // Assign player ID to the new client
                 assignClientPlayerID();
             }
             else {
-                clientSocket.reset(); // No connection yet
+                clientSocket.reset();
             }
         }
     }
 
-    // Handle heartbeat and connection health
     handleHeartbeat(deltaTime);
 
     // Process incoming messages
@@ -137,26 +125,21 @@ void NetworkManager::update(float deltaTime) {
         case MessageType::HELLO:
             receiveHello();
             break;
-        case MessageType::INPUT_UPDATE: {
-            PlayerInput input;
-            deserializePlayerInput(packet, input);
-            lastReceivedInputs[input.playerID] = input;
+        case MessageType::PLAYER_STATE: {
+            PlayerState state;
+            deserializePlayerState(packet, state);
+            lastReceivedStates[state.playerID] = state;
             break;
         }
-        case MessageType::WORLD_STATE:
-            deserializeWorldState(packet, lastReceivedWorldState);
-            break;
         case MessageType::PLAYER_SPAWN: {
             PlayerSpawnInfo spawnInfo;
             deserializePlayerSpawnInfo(packet, spawnInfo);
 
-            // If we're a client and don't have a player ID yet, this is our assignment
             if (role == NetworkRole::CLIENT && localPlayerID == -1) {
                 localPlayerID = spawnInfo.playerID;
                 std::cout << "Network: Assigned player ID " << localPlayerID << std::endl;
             }
 
-            // Store spawn info for game to handle
             pendingSpawnInfo = spawnInfo;
             hasNewSpawnInfo = true;
             break;
@@ -164,7 +147,7 @@ void NetworkManager::update(float deltaTime) {
         case MessageType::PLAYER_DISCONNECT: {
             int playerID;
             packet >> playerID;
-            lastReceivedInputs.erase(playerID);
+            lastReceivedStates.erase(playerID);
             std::cout << "Network: Player " << playerID << " disconnected" << std::endl;
             break;
         }
@@ -172,57 +155,39 @@ void NetworkManager::update(float deltaTime) {
             int playerID;
             bool toRocket;
             packet >> playerID >> toRocket;
-            // TODO: Handle transform request when Player class is ready
+            // Transform requests can be handled by the game layer
             break;
         }
         case MessageType::DISCONNECT:
             std::cout << "Network: Remote player disconnected" << std::endl;
             disconnect();
             break;
-        default:
-            std::cout << "Network: Unknown message type received" << std::endl;
-            break;
         }
     }
 }
 
-bool NetworkManager::sendPlayerInput(int playerID, const PlayerInput& input) {
+// NEW: Core state synchronization method
+bool NetworkManager::sendPlayerState(const PlayerState& state) {
     if (!isConnected()) return false;
 
     sf::Packet packet;
-    serializePlayerInput(packet, input);
-    return sendMessage(MessageType::INPUT_UPDATE, packet);
+    serializePlayerState(packet, state);
+    return sendMessage(MessageType::PLAYER_STATE, packet);
 }
 
-bool NetworkManager::receivePlayerInput(int playerID, PlayerInput& outInput) {
+bool NetworkManager::receivePlayerState(int playerID, PlayerState& outState) {
     if (!isConnected()) return false;
 
-    auto it = lastReceivedInputs.find(playerID);
-    if (it != lastReceivedInputs.end()) {
-        outInput = it->second;
+    auto it = lastReceivedStates.find(playerID);
+    if (it != lastReceivedStates.end()) {
+        outState = it->second;
         return true;
     }
     return false;
 }
 
-bool NetworkManager::hasInputForPlayer(int playerID) const {
-    return lastReceivedInputs.find(playerID) != lastReceivedInputs.end();
-}
-
-bool NetworkManager::sendWorldState(const WorldState& state) {
-    if (!isConnected() || role != NetworkRole::HOST) return false;
-
-    sf::Packet packet;
-    serializeWorldState(packet, state);
-    return sendMessage(MessageType::WORLD_STATE, packet);
-}
-
-bool NetworkManager::receiveWorldState(WorldState& outState) {
-    if (!isConnected() || role != NetworkRole::CLIENT) return false;
-
-    // Return the last received world state
-    outState = lastReceivedWorldState;
-    return true;
+bool NetworkManager::hasStateForPlayer(int playerID) const {
+    return lastReceivedStates.find(playerID) != lastReceivedStates.end();
 }
 
 bool NetworkManager::sendPlayerSpawn(const PlayerSpawnInfo& spawnInfo) {
@@ -231,12 +196,6 @@ bool NetworkManager::sendPlayerSpawn(const PlayerSpawnInfo& spawnInfo) {
     sf::Packet packet;
     serializePlayerSpawnInfo(packet, spawnInfo);
     return sendMessage(MessageType::PLAYER_SPAWN, packet);
-}
-
-bool NetworkManager::receivePlayerSpawn(PlayerSpawnInfo& outSpawnInfo) {
-    // This would be handled in the main message loop
-    // This method is for external access to spawn info
-    return false; // TODO: Implement buffering if needed
 }
 
 bool NetworkManager::sendPlayerDisconnect(int playerID) {
@@ -268,14 +227,10 @@ std::vector<sf::Vector2f> NetworkManager::generateSpawnPositions(sf::Vector2f pl
     for (int i = 0; i < numPlayers; i++) {
         float angle = i * angleStep;
         sf::Vector2f direction(std::cos(angle), std::sin(angle));
-        sf::Vector2f spawn = planetCenter + direction * (planetRadius + 30.0f); // 30.0f = rocket clearance
+        sf::Vector2f spawn = planetCenter + direction * (planetRadius + 30.0f);
         spawns.push_back(spawn);
     }
     return spawns;
-}
-
-bool NetworkManager::hasNewPlayer() const {
-    return hasNewSpawnInfo;
 }
 
 PlayerSpawnInfo NetworkManager::getNewPlayerInfo() {
@@ -286,7 +241,6 @@ PlayerSpawnInfo NetworkManager::getNewPlayerInfo() {
 bool NetworkManager::sendMessage(MessageType type, sf::Packet& packet) {
     if (!isConnected()) return false;
 
-    // Prepend message type to packet
     sf::Packet finalPacket;
     finalPacket << static_cast<uint8_t>(type);
     finalPacket.append(packet.getData(), packet.getDataSize());
@@ -321,7 +275,6 @@ bool NetworkManager::receiveMessage(MessageType& outType, sf::Packet& outPacket)
         rawPacket >> typeValue;
         outType = static_cast<MessageType>(typeValue);
 
-        // Copy remaining data to output packet
         size_t remainingSize = rawPacket.getDataSize() - sizeof(uint8_t);
         if (remainingSize > 0) {
             const char* data = static_cast<const char*>(rawPacket.getData()) + sizeof(uint8_t);
@@ -333,56 +286,6 @@ bool NetworkManager::receiveMessage(MessageType& outType, sf::Packet& outPacket)
     }
 
     return false;
-}
-
-void NetworkManager::serializePlayerInput(sf::Packet& packet, const PlayerInput& input) {
-    packet << input.playerID << input.thrust << input.reverseThrust << input.rotateLeft
-        << input.rotateRight << input.transform << input.thrustLevel << input.sequenceNumber;
-}
-
-void NetworkManager::deserializePlayerInput(sf::Packet& packet, PlayerInput& input) {
-    packet >> input.playerID >> input.thrust >> input.reverseThrust >> input.rotateLeft
-        >> input.rotateRight >> input.transform >> input.thrustLevel >> input.sequenceNumber;
-}
-
-void NetworkManager::serializeWorldState(sf::Packet& packet, const WorldState& state) {
-    // Serialize number of players first
-    uint32_t numPlayers = static_cast<uint32_t>(state.players.size());
-    packet << numPlayers;
-
-    // Serialize each player
-    for (const auto& player : state.players) {
-        serializePlayerState(packet, player);
-    }
-
-    // Serialize planet data
-    packet << state.planet1Position.x << state.planet1Position.y;
-    packet << state.planet1Velocity.x << state.planet1Velocity.y;
-    packet << state.planet2Position.x << state.planet2Position.y;
-    packet << state.planet2Velocity.x << state.planet2Velocity.y;
-    packet << state.sequenceNumber << state.maxPlayers;
-}
-
-void NetworkManager::deserializeWorldState(sf::Packet& packet, WorldState& state) {
-    // Deserialize number of players
-    uint32_t numPlayers;
-    packet >> numPlayers;
-
-    // Clear and resize players vector
-    state.players.clear();
-    state.players.resize(numPlayers);
-
-    // Deserialize each player
-    for (uint32_t i = 0; i < numPlayers; i++) {
-        deserializePlayerState(packet, state.players[i]);
-    }
-
-    // Deserialize planet data
-    packet >> state.planet1Position.x >> state.planet1Position.y;
-    packet >> state.planet1Velocity.x >> state.planet1Velocity.y;
-    packet >> state.planet2Position.x >> state.planet2Position.y;
-    packet >> state.planet2Velocity.x >> state.planet2Velocity.y;
-    packet >> state.sequenceNumber >> state.maxPlayers;
 }
 
 void NetworkManager::serializePlayerState(sf::Packet& packet, const PlayerState& state) {
@@ -424,22 +327,11 @@ bool NetworkManager::sendHeartbeat() {
     sf::Packet packet;
     std::string heartbeatMsg = "HEARTBEAT";
     packet << heartbeatMsg;
-    return sendMessage(MessageType::HELLO, packet); // Reuse hello message type for heartbeat
+    return sendMessage(MessageType::HELLO, packet);
 }
 
 void NetworkManager::checkConnectionHealth() {
     // TODO: Implement connection timeout logic
-    // Check if we haven't received messages for too long
-}
-
-float NetworkManager::getLatency() const {
-    // TODO: Implement RTT calculation using ping/pong messages
-    return 0.0f;
-}
-
-int NetworkManager::getPacketsPerSecond() const {
-    // TODO: Implement packet rate tracking
-    return 0;
 }
 
 bool NetworkManager::sendHello() {
@@ -453,13 +345,10 @@ bool NetworkManager::sendHello() {
 }
 
 bool NetworkManager::receiveHello() {
-    // Hello messages are now handled through the main message processing loop
-    // This method is kept for compatibility but the actual processing happens in update()
     return true;
 }
 
 void NetworkManager::disconnect() {
-    // Send disconnect message before closing
     if (isConnected()) {
         sf::Packet packet;
         std::string disconnectMsg = "DISCONNECT";

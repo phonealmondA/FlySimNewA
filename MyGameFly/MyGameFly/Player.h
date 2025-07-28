@@ -18,15 +18,16 @@ private:
     PlayerType type;
     sf::Vector2f spawnPosition;
 
-    // Input state
-    PlayerInput currentInput;
-    bool inputChanged;
-
-    // Visual identification (since no colors yet)
+    // Visual identification
     std::string playerName;
 
     // Physics/game state
     std::vector<Planet*> planets;
+
+    // State tracking for networking
+    bool stateChanged;
+    float timeSinceLastStateSent;
+    static constexpr float STATE_SEND_INTERVAL = 1.0f / 30.0f; // 30 FPS state sync
 
 public:
     // Constructor
@@ -38,22 +39,16 @@ public:
     void draw(sf::RenderWindow& window);
     void drawWithConstantSize(sf::RenderWindow& window, float zoomLevel);
 
-    // Input handling
-    void handleLocalInput(float deltaTime);  // For LOCAL players
-    void applyNetworkInput(const PlayerInput& input);  // For REMOTE players
-    PlayerInput getCurrentInput() const;
-    bool hasInputChanged() const { return inputChanged; }
-    void markInputProcessed() { inputChanged = false; }
+    // Input handling - ONLY for LOCAL players
+    void handleLocalInput(float deltaTime);
 
     // State management for networking
     PlayerState getState() const;
     void applyState(const PlayerState& state);
+    bool shouldSendState() const;
+    void markStateSent() { timeSinceLastStateSent = 0.0f; }
 
-    // Individual player controls (replaces shared controls)
-    void setThrustLevel(float level);
-    float getThrustLevel() const;
-    void applyThrust(float amount);
-    void rotate(float amount);
+    // Transform handling
     void requestTransform();
 
     // Getters
@@ -70,7 +65,7 @@ public:
 
     // Visual helpers
     void drawVelocityVector(sf::RenderWindow& window, float scale = 1.0f);
-    void drawPlayerLabel(sf::RenderWindow& window, const sf::Font& font);  // Show "Player X"
+    void drawPlayerLabel(sf::RenderWindow& window, const sf::Font& font);
 
     // Physics integration
     void setNearbyPlanets(const std::vector<Planet*>& planetList) {
@@ -87,6 +82,5 @@ public:
 private:
     // Helper methods
     void initializeVehicleManager();
-    void updateInputFromKeyboard();
-    PlayerInput createInputFromState() const;
+    void updateInputFromKeyboard(float deltaTime);
 };

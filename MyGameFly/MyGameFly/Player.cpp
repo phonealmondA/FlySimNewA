@@ -1,5 +1,5 @@
 #include "Player.h"
-#include "NetworkManager.h"  // For PlayerInput and PlayerState structs
+#include "NetworkManager.h"
 #include "GameConstants.h"
 #include <SFML/Window/Keyboard.hpp>
 #include <iostream>
@@ -10,10 +10,8 @@ Player::Player(int id, sf::Vector2f spawnPos, PlayerType playerType, const std::
     spawnPosition(spawnPos),
     type(playerType),
     planets(planetList),
-    inputChanged(false) {
-
-    // Initialize currentInput with default values
-    currentInput = PlayerInput{};
+    stateChanged(false),
+    timeSinceLastStateSent(0.0f) {
 
     // Set default player name
     std::stringstream ss;
@@ -37,11 +35,14 @@ void Player::initializeVehicleManager() {
 }
 
 void Player::update(float deltaTime) {
+    // Update state send timer
+    timeSinceLastStateSent += deltaTime;
+
     if (type == PlayerType::LOCAL) {
         // Handle local input for this player
         handleLocalInput(deltaTime);
     }
-    // For REMOTE players, input is applied via applyNetworkInput()
+    // REMOTE players just run physics based on their current state
 
     // Update the vehicle regardless of player type
     if (vehicleManager) {
@@ -52,112 +53,70 @@ void Player::update(float deltaTime) {
 void Player::handleLocalInput(float deltaTime) {
     if (type != PlayerType::LOCAL) return;
 
-    // Store previous input state to detect changes
-    PlayerInput previousInput = currentInput;
-
-    // Update input from keyboard
-    updateInputFromKeyboard();
-
-    // Apply input to vehicle
+    // Apply input directly to vehicle - no networking here!
     if (vehicleManager) {
-        if (currentInput.thrust) {
+        bool inputActive = false;
+
+        // Different controls based on player ID
+        bool thrust, reverseThrust, rotateLeft, rotateRight;
+
+        if (playerID == 0) {
+            // Player 1 (Host): Arrow keys
+            thrust = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Up);
+            reverseThrust = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Down);
+            rotateLeft = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left);
+            rotateRight = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right);
+        }
+        else {
+            // Player 2+ (Clients): WASD keys
+            thrust = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::W);
+            reverseThrust = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::S);
+            rotateLeft = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A);
+            rotateRight = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
+        }
+
+        // Apply movement
+        if (thrust) {
             vehicleManager->applyThrust(1.0f);
+            inputActive = true;
         }
-        if (currentInput.reverseThrust) {
+        if (reverseThrust) {
             vehicleManager->applyThrust(-0.5f);
+            inputActive = true;
         }
-        if (currentInput.rotateLeft) {
+        if (rotateLeft) {
             vehicleManager->rotate(-6.0f * deltaTime * 60.0f);
+            inputActive = true;
         }
-        if (currentInput.rotateRight) {
+        if (rotateRight) {
             vehicleManager->rotate(6.0f * deltaTime * 60.0f);
+            inputActive = true;
         }
 
-        // Set thrust level on the rocket
-        if (vehicleManager->getRocket()) {
-            vehicleManager->getRocket()->setThrustLevel(currentInput.thrustLevel);
-        }
-    }
+        // Handle thrust level (number keys 0-9, =)
+        float newThrustLevel = -1.0f; // -1 means no change
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num0)) newThrustLevel = 0.0f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num1)) newThrustLevel = 0.1f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num2)) newThrustLevel = 0.2f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num3)) newThrustLevel = 0.3f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num4)) newThrustLevel = 0.4f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num5)) newThrustLevel = 0.5f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num6)) newThrustLevel = 0.6f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num7)) newThrustLevel = 0.7f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num8)) newThrustLevel = 0.8f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num9)) newThrustLevel = 0.9f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Equal)) newThrustLevel = 1.0f;
 
-    // Check if input changed (for networking)
-    inputChanged = (
-        previousInput.thrust != currentInput.thrust ||
-        previousInput.reverseThrust != currentInput.reverseThrust ||
-        previousInput.rotateLeft != currentInput.rotateLeft ||
-        previousInput.rotateRight != currentInput.rotateRight ||
-        previousInput.transform != currentInput.transform ||
-        std::abs(previousInput.thrustLevel - currentInput.thrustLevel) > 0.01f
-        );
-}
-
-void Player::updateInputFromKeyboard() {
-    currentInput.playerID = playerID;
-    currentInput.sequenceNumber++; // Increment for networking
-
-    // Movement input (same for all players for now - can be customized per player later)
-    currentInput.thrust = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Up);
-    currentInput.reverseThrust = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Down);
-    currentInput.rotateLeft = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left);
-    currentInput.rotateRight = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right);
-
-    // Transform input (L key)
-    currentInput.transform = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::L);
-
-    // Thrust level input (number keys 0-9, =)
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num0))
-        currentInput.thrustLevel = 0.0f;
-    else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num1))
-        currentInput.thrustLevel = 0.1f;
-    else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num2))
-        currentInput.thrustLevel = 0.2f;
-    else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num3))
-        currentInput.thrustLevel = 0.3f;
-    else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num4))
-        currentInput.thrustLevel = 0.4f;
-    else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num5))
-        currentInput.thrustLevel = 0.5f;
-    else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num6))
-        currentInput.thrustLevel = 0.6f;
-    else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num7))
-        currentInput.thrustLevel = 0.7f;
-    else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num8))
-        currentInput.thrustLevel = 0.8f;
-    else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num9))
-        currentInput.thrustLevel = 0.9f;
-    else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Equal))
-        currentInput.thrustLevel = 1.0f;
-    // If no thrust key is pressed, keep the current thrust level
-}
-
-void Player::applyNetworkInput(const PlayerInput& input) {
-    if (type != PlayerType::REMOTE) return;
-
-    currentInput = input;
-
-    // Apply input to vehicle
-    if (vehicleManager) {
-        if (input.thrust) {
-            vehicleManager->applyThrust(1.0f);
-        }
-        if (input.reverseThrust) {
-            vehicleManager->applyThrust(-0.5f);
-        }
-        // Note: Rotation will be handled by the authoritative host
-
-        // Set thrust level
-        if (vehicleManager->getRocket()) {
-            vehicleManager->getRocket()->setThrustLevel(input.thrustLevel);
+        if (newThrustLevel >= 0.0f && vehicleManager->getRocket()) {
+            vehicleManager->getRocket()->setThrustLevel(newThrustLevel);
+            inputActive = true;
         }
 
-        // Handle transform
-        if (input.transform) {
-            vehicleManager->switchVehicle();
+        // Mark state as changed if any input was active
+        if (inputActive) {
+            stateChanged = true;
         }
     }
-}
-
-PlayerInput Player::getCurrentInput() const {
-    return currentInput;
 }
 
 PlayerState Player::getState() const {
@@ -173,12 +132,12 @@ PlayerState Player::getState() const {
             state.rotation = vehicleManager->getRocket()->getRotation();
             state.mass = vehicleManager->getRocket()->getMass();
             state.thrustLevel = vehicleManager->getRocket()->getThrustLevel();
-            state.isOnGround = false; // Rockets don't have ground state
+            state.isOnGround = false;
         }
         else if (!state.isRocket && vehicleManager->getCar()) {
             state.rotation = vehicleManager->getCar()->getRotation();
-            state.mass = GameConstants::ROCKET_MASS; // Use default mass for cars
-            state.thrustLevel = 0.0f; // Cars don't have thrust
+            state.mass = GameConstants::ROCKET_MASS;
+            state.thrustLevel = 0.0f;
             state.isOnGround = vehicleManager->getCar()->isOnGround();
         }
     }
@@ -198,7 +157,7 @@ void Player::applyState(const PlayerState& state) {
             Rocket* rocket = vehicleManager->getRocket();
             if (rocket) {
                 rocket->setPosition(state.position);
-                // Note: Don't override local thrust level for remote players
+                // Don't override thrust level for remote players in state sync
             }
         }
         else if (!state.isRocket && vehicleManager->getActiveVehicleType() == VehicleType::CAR) {
@@ -213,37 +172,16 @@ void Player::applyState(const PlayerState& state) {
     }
 }
 
-void Player::setThrustLevel(float level) {
-    currentInput.thrustLevel = std::max(0.0f, std::min(1.0f, level));
-    inputChanged = true;
-
-    if (vehicleManager && vehicleManager->getRocket()) {
-        vehicleManager->getRocket()->setThrustLevel(currentInput.thrustLevel);
-    }
-}
-
-float Player::getThrustLevel() const {
-    return currentInput.thrustLevel;
-}
-
-void Player::applyThrust(float amount) {
-    if (vehicleManager) {
-        vehicleManager->applyThrust(amount);
-    }
-}
-
-void Player::rotate(float amount) {
-    if (vehicleManager) {
-        vehicleManager->rotate(amount);
-    }
+bool Player::shouldSendState() const {
+    // Send state if enough time has passed OR if state changed significantly
+    return (type == PlayerType::LOCAL) &&
+        (timeSinceLastStateSent >= STATE_SEND_INTERVAL || stateChanged);
 }
 
 void Player::requestTransform() {
-    currentInput.transform = true;
-    inputChanged = true;
-
     if (type == PlayerType::LOCAL && vehicleManager) {
         vehicleManager->switchVehicle();
+        stateChanged = true; // Mark for immediate state sync
     }
 }
 
@@ -282,13 +220,11 @@ void Player::drawVelocityVector(sf::RenderWindow& window, float scale) {
 void Player::drawPlayerLabel(sf::RenderWindow& window, const sf::Font& font) {
     if (!vehicleManager) return;
 
-    // Create text label showing player name - SFML 3.0 compatible
     sf::Text label(font);
     label.setString(playerName);
     label.setCharacterSize(14);
     label.setFillColor(sf::Color::White);
 
-    // Position label above the player
     sf::Vector2f playerPos = getPosition();
     sf::FloatRect textBounds = label.getLocalBounds();
     label.setPosition(sf::Vector2f(playerPos.x - textBounds.size.x / 2, playerPos.y - 40.0f));
@@ -300,12 +236,12 @@ void Player::respawnAtPosition(sf::Vector2f newSpawnPos) {
     spawnPosition = newSpawnPos;
 
     if (vehicleManager) {
-        // Reset vehicle to rocket mode at new position
         vehicleManager = std::make_unique<VehicleManager>(spawnPosition, planets);
         if (vehicleManager->getRocket()) {
             vehicleManager->getRocket()->setNearbyPlanets(planets);
         }
     }
 
+    stateChanged = true; // Force state sync after respawn
     std::cout << playerName << " respawned at (" << newSpawnPos.x << ", " << newSpawnPos.y << ")" << std::endl;
 }

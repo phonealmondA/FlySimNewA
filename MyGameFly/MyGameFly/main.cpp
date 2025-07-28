@@ -10,7 +10,7 @@
 #include "MultiplayerMenu.h"
 #include "SplitScreenManager.h"
 #include "NetworkManager.h"
-#include "Player.h"  // Add Player class include
+#include "Player.h"
 #include <memory>
 #include <vector>
 #include <cstdint>
@@ -103,7 +103,7 @@ private:
     // Player management for network multiplayer
     std::vector<std::unique_ptr<Player>> players;
     std::unique_ptr<Player> localPlayer;
-    std::vector<std::unique_ptr<Player>> remotePlayers;  // ADDED: Track remote players separately
+    std::vector<std::unique_ptr<Player>> remotePlayers;
 
     // Camera and UI
     sf::View gameView;
@@ -177,7 +177,7 @@ public:
                 "CONTROLS:\n"
                 "Single: Arrows + 1-9 + L\n"
                 "Split: P1(Arrows+L) P2(WASD+K)\n"
-                "Network: Arrows + 1-9 + L\n"
+                "Network: P1(Arrows) P2(WASD)\n"
                 "Shared: Mouse wheel zoom, ESC menu"
             );
         }
@@ -319,7 +319,7 @@ public:
             std::vector<sf::Vector2f> spawnPositions = networkManager->generateSpawnPositions(
                 planetPos, planetRadius, 4);  // Support up to 4 players
 
-            // FIXED: Proper player ID assignment
+            // Proper player ID assignment
             int localPlayerID = -1;
             if (networkManager->getRole() == NetworkRole::HOST) {
                 localPlayerID = 0;  // Host is always Player 0
@@ -332,7 +332,7 @@ public:
             if (localPlayerID >= 0 && localPlayerID < static_cast<int>(spawnPositions.size())) {
                 localPlayer = std::make_unique<Player>(
                     localPlayerID,
-                    spawnPositions[localPlayerID],  // Use the correct spawn position for this player
+                    spawnPositions[localPlayerID],
                     PlayerType::LOCAL,
                     planets
                 );
@@ -342,7 +342,7 @@ public:
                     << ", " << spawnPositions[localPlayerID].y << ")" << std::endl;
             }
 
-            // ADDED: Create the remote player immediately for both host and client
+            // Create the remote player immediately for both host and client
             if (networkManager->getRole() == NetworkRole::HOST) {
                 // Host creates a placeholder for Player 1 (client)
                 auto remotePlayer = std::make_unique<Player>(
@@ -394,15 +394,14 @@ public:
             }
 
             if (networkManager->getRole() == NetworkRole::HOST) {
-                std::cout << "You are the HOST (Player 1). Client will be Player 2." << std::endl;
+                std::cout << "You are the HOST (Player 1). Use Arrow Keys." << std::endl;
             }
             else if (networkManager->getRole() == NetworkRole::CLIENT) {
-                std::cout << "You are CLIENT (Player 2). Host is Player 1." << std::endl;
+                std::cout << "You are CLIENT (Player 2). Use WASD Keys." << std::endl;
             }
         }
         else {
             std::cout << "Failed to establish network connection. Falling back to single player." << std::endl;
-            // Fall back to single player if network fails
             initializeSinglePlayer();
         }
     }
@@ -413,7 +412,6 @@ public:
         initializeLANMultiplayer();
     }
 
-    // UPDATED: Handle remote player joining - now updates existing player instead of creating new one
     void handleRemotePlayerJoin(int playerID, sf::Vector2f spawnPos) {
         std::cout << "Handling remote player join for ID: " << playerID << std::endl;
 
@@ -421,7 +419,6 @@ public:
         for (auto& remotePlayer : remotePlayers) {
             if (remotePlayer->getID() == playerID) {
                 std::cout << "Remote player " << playerID << " already exists, updating position" << std::endl;
-                // Player already exists, just update spawn position if needed
                 remotePlayer->respawnAtPosition(spawnPos);
                 return;
             }
@@ -442,9 +439,7 @@ public:
             gravitySimulator->addPlayer(remotePlayer.get());
         }
 
-        // Store the unique_ptr in remotePlayers vector
         remotePlayers.push_back(std::move(remotePlayer));
-
         std::cout << "Total remote players: " << remotePlayers.size() << std::endl;
     }
 
@@ -465,7 +460,6 @@ public:
                     break;
                 case GameMode::MULTIPLAYER_HOST:
                 case GameMode::MULTIPLAYER_JOIN:
-                    // Open multiplayer submenu instead of directly starting multiplayer
                     currentState = GameState::MULTIPLAYER_MENU;
                     multiplayerMenu->show();
                     break;
@@ -480,7 +474,6 @@ public:
         else if (currentState == GameState::MULTIPLAYER_MENU) {
             multiplayerMenu->handleEvent(event, mousePos);
 
-            // Check if multiplayer menu selection was made
             if (!multiplayerMenu->getIsActive()) {
                 MultiplayerMode selectedMode = multiplayerMenu->getSelectedMode();
 
@@ -525,7 +518,7 @@ public:
                     }
 
                     // Clean up players
-                    remotePlayers.clear();  // ADDED: Clear remote players
+                    remotePlayers.clear();
                     players.clear();
                     localPlayer.reset();
 
@@ -553,7 +546,6 @@ public:
                 }
                 // Network test controls
                 else if (keyEvent->code == sf::Keyboard::Key::H && networkManager) {
-                    // Test sending hello message
                     networkManager->sendHello();
                     std::cout << "Sent hello message to network!" << std::endl;
                 }
@@ -573,14 +565,11 @@ public:
             if (scrollEvent && scrollEvent->wheel == sf::Mouse::Wheel::Vertical) {
                 const float zoomFactor = 1.1f;
                 if (scrollEvent->delta > 0) {
-                    // Zoom in
                     targetZoom /= zoomFactor;
                 }
                 else {
-                    // Zoom out
                     targetZoom *= zoomFactor;
                 }
-                // Clamp zoom
                 targetZoom = std::max(0.5f, std::min(targetZoom, 50.0f));
 
                 // Set camera center based on current mode
@@ -625,7 +614,7 @@ public:
             splitScreenManager->handlePlayer1Input(deltaTime);
             splitScreenManager->handlePlayer2Input(deltaTime);
 
-            // Synced thrust level controls (either player can control thrust for both)
+            // Synced thrust level controls
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num0))
                 splitScreenManager->setSyncedThrustLevel(0.0f);
             else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num1))
@@ -650,19 +639,11 @@ public:
                 splitScreenManager->setSyncedThrustLevel(1.0f);
         }
         else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
-            // Network multiplayer player input handling
+            // STATE SYNC: Only handle LOCAL input - no networking here!
             localPlayer->handleLocalInput(deltaTime);
-
-            // Send input to network if it changed
-            if (localPlayer->hasInputChanged() && networkManager) {
-                PlayerInput currentInput = localPlayer->getCurrentInput();
-                networkManager->sendPlayerInput(localPlayer->getID(), currentInput);
-                localPlayer->markInputProcessed();
-            }
         }
         else if (vehicleManager) {
             // Single player input handling
-            // Thrust level controls
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num0))
                 vehicleManager->getRocket()->setThrustLevel(0.0f);
             else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num1))
@@ -696,7 +677,6 @@ public:
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right))
                 vehicleManager->rotate(6.0f * deltaTime * 60.0f);
 
-            // Camera controls for single player
             handleCameraControls();
         }
     }
@@ -749,72 +729,29 @@ public:
                 }
             }
 
-            // Handle network input for remote players
-            static int inputCount = 0;
+            // STATE SYNC: Send local player state if needed
+            if (localPlayer && localPlayer->shouldSendState()) {
+                PlayerState currentState = localPlayer->getState();
+                if (networkManager->sendPlayerState(currentState)) {
+                    localPlayer->markStateSent();
+
+                    static int sentCount = 0;
+                    sentCount++;
+                    if (sentCount % 30 == 0) {  // Debug every ~1 second at 30 FPS
+                        std::cout << "Sent state for player " << localPlayer->getID() << std::endl;
+                    }
+                }
+            }
+
+            // STATE SYNC: Receive remote player states
+            static int receivedCount = 0;
             for (auto& remotePlayer : remotePlayers) {
-                PlayerInput remoteInput;
-                if (networkManager->receivePlayerInput(remotePlayer->getID(), remoteInput)) {
-                    remotePlayer->applyNetworkInput(remoteInput);
-                    inputCount++;
-                    if (inputCount % 60 == 0) {  // Debug every ~1 second
-                        std::cout << "Received input from player " << remotePlayer->getID() << std::endl;
-                    }
-                }
-            }
-
-            // Send world state if we're the host
-            if (networkManager->getRole() == NetworkRole::HOST) {
-                static int hostStateCount = 0;
-                WorldState worldState;
-                worldState.sequenceNumber++;
-
-                // Add all players to world state
-                if (localPlayer) {
-                    worldState.players.push_back(localPlayer->getState());
-                }
-                for (auto& remotePlayer : remotePlayers) {
-                    worldState.players.push_back(remotePlayer->getState());
-                }
-
-                // Add planet states
-                worldState.planet1Position = planet->getPosition();
-                worldState.planet1Velocity = planet->getVelocity();
-                worldState.planet2Position = planet2->getPosition();
-                worldState.planet2Velocity = planet2->getVelocity();
-
-                networkManager->sendWorldState(worldState);
-
-                hostStateCount++;
-                if (hostStateCount % 60 == 0) {  // Debug every ~1 second
-                    std::cout << "Host sent world state with " << worldState.players.size() << " players" << std::endl;
-                }
-            }
-            // Receive world state if we're a client
-            else if (networkManager->getRole() == NetworkRole::CLIENT) {
-                static int clientStateCount = 0;
-                WorldState worldState;
-                if (networkManager->receiveWorldState(worldState)) {
-                    clientStateCount++;
-                    if (clientStateCount % 60 == 0) {  // Debug every ~1 second
-                        std::cout << "Client received world state with " << worldState.players.size() << " players" << std::endl;
-                    }
-
-                    // Apply state to remote players (host's state)
-                    for (const auto& playerState : worldState.players) {
-                        if (playerState.playerID != networkManager->getLocalPlayerID()) {
-                            // Find and update remote player
-                            bool found = false;
-                            for (auto& remotePlayer : remotePlayers) {
-                                if (remotePlayer->getID() == playerState.playerID) {
-                                    remotePlayer->applyState(playerState);
-                                    found = true;
-                                    break;
-                                }
-                            }
-                            if (!found && clientStateCount % 60 == 0) {
-                                std::cout << "Could not find remote player with ID " << playerState.playerID << std::endl;
-                            }
-                        }
+                PlayerState remoteState;
+                if (networkManager->receivePlayerState(remotePlayer->getID(), remoteState)) {
+                    remotePlayer->applyState(remoteState);
+                    receivedCount++;
+                    if (receivedCount % 30 == 0) {  // Debug every ~1 second at 30 FPS
+                        std::cout << "Received state from player " << remotePlayer->getID() << std::endl;
                     }
                 }
             }
@@ -829,7 +766,7 @@ public:
             splitScreenManager->update(deltaTime);
 
             // Auto-center camera between both players
-            if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) { // Allow C key override
+            if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
                 gameView.setCenter(splitScreenManager->getCenterPoint());
             }
         }
@@ -849,7 +786,7 @@ public:
         else if (vehicleManager) {
             vehicleManager->update(deltaTime);
 
-            // Auto-zoom logic for single player (only if not manually controlled)
+            // Auto-zoom logic for single player
             if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Z) &&
                 !sf::Keyboard::isKeyPressed(sf::Keyboard::Key::X) &&
                 !sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
@@ -876,7 +813,6 @@ public:
     void updateInfoPanels() {
         if (!fontLoaded) return;
 
-        // Update all info panels with current game data
         updateVehicleInfoPanel();
         updatePlanetInfoPanel();
         updateOrbitInfoPanel();
@@ -904,7 +840,7 @@ public:
             case ConnectionStatus::DISCONNECTED: statusStr = "DISCONNECTED"; break;
             }
 
-            ss << "NETWORK STATUS\n"
+            ss << "NETWORK STATUS (STATE SYNC)\n"
                 << "Role: " << roleStr << "\n"
                 << "Status: " << statusStr << "\n";
 
@@ -912,7 +848,7 @@ public:
                 ss << "Player ID: " << localPlayer->getID() << "\n";
             }
 
-            ss << "Press H to test hello message";
+            ss << "Each player controls own rocket";
         }
         else {
             ss << "NETWORK STATUS\n"
@@ -927,7 +863,6 @@ public:
         std::stringstream ss;
 
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-            // Split-screen info
             VehicleManager* p1 = splitScreenManager->getPlayer1();
             VehicleManager* p2 = splitScreenManager->getPlayer2();
 
@@ -942,13 +877,12 @@ public:
             ss << "Mouse wheel: Zoom in/out";
         }
         else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
-            // Network multiplayer info
             if (localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
                 Rocket* rocket = localPlayer->getVehicleManager()->getRocket();
                 float speed = std::sqrt(rocket->getVelocity().x * rocket->getVelocity().x +
                     rocket->getVelocity().y * rocket->getVelocity().y);
 
-                ss << "NETWORK MULTIPLAYER\n"
+                ss << "STATE SYNC MULTIPLAYER\n"
                     << "Player: " << localPlayer->getName() << "\n"
                     << "Role: " << (networkManager->getRole() == NetworkRole::HOST ? "HOST" : "CLIENT") << "\n"
                     << "Speed: " << std::fixed << std::setprecision(1) << speed << " units/s\n"
@@ -956,7 +890,7 @@ public:
             }
             else {
                 Car* car = localPlayer->getVehicleManager()->getCar();
-                ss << "NETWORK MULTIPLAYER (CAR)\n"
+                ss << "STATE SYNC MULTIPLAYER (CAR)\n"
                     << "Player: " << localPlayer->getName() << "\n"
                     << "On Ground: " << (car->isOnGround() ? "Yes" : "No") << "\n"
                     << "Position: (" << std::fixed << std::setprecision(1)
@@ -994,7 +928,6 @@ public:
 
         GameObject* activeVehicle = nullptr;
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-            // Use Player 1's vehicle for planet info
             activeVehicle = splitScreenManager->getPlayer1()->getActiveVehicle();
         }
         else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
@@ -1041,13 +974,13 @@ public:
                 << "for both players";
         }
         else if (currentState == GameState::LAN_MULTIPLAYER && networkManager) {
-            ss << "LAN MULTIPLAYER\n"
+            ss << "STATE SYNC MULTIPLAYER\n"
                 << "Role: " << (networkManager->getRole() == NetworkRole::HOST ? "HOST" : "CLIENT") << "\n"
                 << "Status: " << (networkManager->isConnected() ? "CONNECTED" : "DISCONNECTED") << "\n";
             if (localPlayer) {
                 ss << "Playing as: " << localPlayer->getName() << "\n";
             }
-            ss << "Press H to send hello message";
+            ss << "Immediate local response!";
         }
         else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
             ss << "ORBIT INFO\n"
@@ -1098,7 +1031,6 @@ public:
 
         // Draw trajectory for rockets
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-            // Draw trajectories for both players if they're rockets
             if (splitScreenManager->getPlayer1()->getActiveVehicleType() == VehicleType::ROCKET) {
                 splitScreenManager->getPlayer1()->getRocket()->drawTrajectory(window, planets,
                     GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS, false);
@@ -1144,13 +1076,12 @@ public:
             for (auto& remotePlayer : remotePlayers) {
                 remotePlayer->drawWithConstantSize(window, zoomLevel);
 
-                // Draw player label if font is loaded
                 if (fontLoaded) {
                     remotePlayer->drawPlayerLabel(window, font);
                 }
             }
 
-            // Draw local player label if font is loaded
+            // Draw local player label
             if (fontLoaded) {
                 localPlayer->drawPlayerLabel(window, font);
             }
