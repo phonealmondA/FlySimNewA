@@ -1,4 +1,4 @@
-// Update in GravitySimulator.cpp
+// GravitySimulator.cpp - Updated
 #include "GravitySimulator.h"
 #include "VehicleManager.h"
 
@@ -10,6 +10,15 @@ void GravitySimulator::addPlanet(Planet* planet)
 void GravitySimulator::addRocket(Rocket* rocket)
 {
     rockets.push_back(rocket);
+}
+
+void GravitySimulator::addVehicleManager(VehicleManager* manager)
+{
+    // Add to both for backward compatibility
+    if (vehicleManager == nullptr) {
+        vehicleManager = manager;  // Keep the first one for legacy code
+    }
+    vehicleManagers.push_back(manager);
 }
 
 void GravitySimulator::clearRockets()
@@ -87,10 +96,10 @@ void GravitySimulator::update(float deltaTime)
         }
     }
 
-    // Apply gravity to the vehicle manager's active vehicle
-    if (vehicleManager) {
-        if (vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
-            Rocket* rocket = vehicleManager->getRocket();
+    // Apply gravity to ALL vehicle managers (NEW FIX!)
+    for (VehicleManager* vm : vehicleManagers) {
+        if (vm && vm->getActiveVehicleType() == VehicleType::ROCKET) {
+            Rocket* rocket = vm->getRocket();
             if (rocket) {
                 for (auto planet : planets) {
                     sf::Vector2f direction = planet->getPosition() - rocket->getPosition();
@@ -108,24 +117,23 @@ void GravitySimulator::update(float deltaTime)
         }
         // Car gravity is handled internally in Car::update
     }
-    else {
-        // Legacy code for handling individual rockets
-        for (auto rocket : rockets) {
-            for (auto planet : planets) {
-                sf::Vector2f direction = planet->getPosition() - rocket->getPosition();
-                float distance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
 
-                // Avoid division by zero and very small distances
-                if (distance > planet->getRadius() + GameConstants::TRAJECTORY_COLLISION_RADIUS) {
-                    float forceMagnitude = G * planet->getMass() * rocket->getMass() / (distance * distance);
-                    sf::Vector2f acceleration = normalize(direction) * forceMagnitude / rocket->getMass();
-                    sf::Vector2f velocityChange = acceleration * deltaTime;
-                    rocket->setVelocity(rocket->getVelocity() + velocityChange);
-                }
+    // Legacy code for handling individual rockets (still needed for single-player mode)
+    for (auto rocket : rockets) {
+        for (auto planet : planets) {
+            sf::Vector2f direction = planet->getPosition() - rocket->getPosition();
+            float distance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+
+            // Avoid division by zero and very small distances
+            if (distance > planet->getRadius() + GameConstants::TRAJECTORY_COLLISION_RADIUS) {
+                float forceMagnitude = G * planet->getMass() * rocket->getMass() / (distance * distance);
+                sf::Vector2f acceleration = normalize(direction) * forceMagnitude / rocket->getMass();
+                sf::Vector2f velocityChange = acceleration * deltaTime;
+                rocket->setVelocity(rocket->getVelocity() + velocityChange);
             }
         }
-
-        // Add rocket-to-rocket gravity interactions
-        addRocketGravityInteractions(deltaTime);
     }
+
+    // Add rocket-to-rocket gravity interactions
+    addRocketGravityInteractions(deltaTime);
 }

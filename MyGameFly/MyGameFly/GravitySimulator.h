@@ -1,9 +1,9 @@
-// Update in GravitySimulator.h
+// GravitySimulator.h - Updated
 #pragma once
 #include "Planet.h"
 #include "Rocket.h"
 #include "VectorHelper.h"
-#include "GameConstants.h"  // Include the constants
+#include "GameConstants.h"
 #include <vector>
 
 // Forward declaration
@@ -13,14 +13,15 @@ class GravitySimulator {
 private:
     std::vector<Planet*> planets;
     std::vector<Rocket*> rockets;
-    VehicleManager* vehicleManager = nullptr;
-    const float G = GameConstants::G;  // Use the constant from the header
+    VehicleManager* vehicleManager = nullptr;  // Single vehicle manager (legacy)
+    std::vector<VehicleManager*> vehicleManagers;  // Multiple vehicle managers for split-screen
+    const float G = GameConstants::G;
     bool simulatePlanetGravity = true;
 
 public:
     void addPlanet(Planet* planet);
     void addRocket(Rocket* rocket);
-    void addVehicleManager(VehicleManager* manager) { vehicleManager = manager; }
+    void addVehicleManager(VehicleManager* manager);  // Now adds to the vector
     void update(float deltaTime);
     void clearRockets();
     void addRocketGravityInteractions(float deltaTime);
