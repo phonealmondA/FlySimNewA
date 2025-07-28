@@ -100,6 +100,10 @@ private:
     static const float HEARTBEAT_INTERVAL;
     static const unsigned short DEFAULT_PORT = 54000;
 
+    // NEW: Player spawn tracking
+    PlayerSpawnInfo pendingSpawnInfo;
+    bool hasNewSpawnInfo;
+
 public:
     NetworkManager();
     ~NetworkManager();
@@ -130,6 +134,11 @@ public:
     int getLocalPlayerID() const { return localPlayerID; }
     int assignNewPlayerID(); // Host only: assigns next available player ID
     std::vector<sf::Vector2f> generateSpawnPositions(sf::Vector2f planetCenter, float planetRadius, int numPlayers);
+
+    // NEW: Player spawn management
+    void assignClientPlayerID();  // Host assigns ID to new client
+    bool hasNewPlayer() const;    // Check if new player info is available
+    PlayerSpawnInfo getNewPlayerInfo(); // Get and clear new player info
 
     // Status getters
     NetworkRole getRole() const { return role; }

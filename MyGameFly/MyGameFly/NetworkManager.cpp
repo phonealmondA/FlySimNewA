@@ -12,7 +12,8 @@ NetworkManager::NetworkManager()
     clientConnected(false),
     lastHeartbeat(0.0f),
     localPlayerID(-1),  // Initialize as invalid
-    nextPlayerID(0) {   // Host will assign IDs starting from 0
+    nextPlayerID(0),    // Host will assign IDs starting from 0
+    hasNewSpawnInfo(false) {   // Initialize new member
 }
 
 NetworkManager::~NetworkManager() {
@@ -66,16 +67,44 @@ bool NetworkManager::connectAsClient() {
         role = NetworkRole::CLIENT;
         status = ConnectionStatus::CONNECTED;
         serverSocket->setBlocking(false);
-        localPlayerID = -1;  // Will be assigned by host
+
+        // FIXED: Client should wait for server to assign player ID
+        localPlayerID = -1;  // Will be assigned by host via PLAYER_SPAWN message
+
         std::cout << "Network: Client connected to host" << std::endl;
 
-        // Send initial hello
+        // Send initial hello and wait for player ID assignment
         sendHello();
         return true;
     }
 
     serverSocket.reset();
     return false;
+}
+
+void NetworkManager::assignClientPlayerID() {
+    if (role != NetworkRole::HOST || !clientConnected) return;
+
+    // Create spawn info for the new client
+    PlayerSpawnInfo spawnInfo;
+    spawnInfo.playerID = assignNewPlayerID();  // This will return 1 for first client
+    spawnInfo.isHost = false;
+
+    // Generate spawn position (you can customize this logic)
+    const float PI = 3.14159265358979323846f;
+    float angle = spawnInfo.playerID * (2 * PI / 4);  // Assume max 4 players
+    sf::Vector2f planetCenter(400.0f, 300.0f);  // Use GameConstants values
+    float spawnRadius = 100.0f + 30.0f;  // Planet radius + clearance
+
+    spawnInfo.spawnPosition = planetCenter + sf::Vector2f(
+        std::cos(angle) * spawnRadius,
+        std::sin(angle) * spawnRadius
+    );
+
+    // Send spawn info to client
+    sendPlayerSpawn(spawnInfo);
+
+    std::cout << "Assigned Player ID " << spawnInfo.playerID << " to client" << std::endl;
 }
 
 void NetworkManager::update(float deltaTime) {
@@ -87,7 +116,9 @@ void NetworkManager::update(float deltaTime) {
                 std::cout << "Network: Client connected to host!" << std::endl;
                 clientSocket->setBlocking(false);
                 clientConnected = true;
-                sendHello(); // Send hello when client connects
+
+                // Assign player ID to the new client
+                assignClientPlayerID();
             }
             else {
                 clientSocket.reset(); // No connection yet
@@ -116,12 +147,18 @@ void NetworkManager::update(float deltaTime) {
             deserializeWorldState(packet, lastReceivedWorldState);
             break;
         case MessageType::PLAYER_SPAWN: {
-            // TODO: Handle player spawn when Player class is ready
-            /*
             PlayerSpawnInfo spawnInfo;
             deserializePlayerSpawnInfo(packet, spawnInfo);
-            // Notify game to create new player
-            */
+
+            // If we're a client and don't have a player ID yet, this is our assignment
+            if (role == NetworkRole::CLIENT && localPlayerID == -1) {
+                localPlayerID = spawnInfo.playerID;
+                std::cout << "Network: Assigned player ID " << localPlayerID << std::endl;
+            }
+
+            // Store spawn info for game to handle
+            pendingSpawnInfo = spawnInfo;
+            hasNewSpawnInfo = true;
             break;
         }
         case MessageType::PLAYER_DISCONNECT: {
@@ -235,6 +272,15 @@ std::vector<sf::Vector2f> NetworkManager::generateSpawnPositions(sf::Vector2f pl
         spawns.push_back(spawn);
     }
     return spawns;
+}
+
+bool NetworkManager::hasNewPlayer() const {
+    return hasNewSpawnInfo;
+}
+
+PlayerSpawnInfo NetworkManager::getNewPlayerInfo() {
+    hasNewSpawnInfo = false;
+    return pendingSpawnInfo;
 }
 
 bool NetworkManager::sendMessage(MessageType type, sf::Packet& packet) {
