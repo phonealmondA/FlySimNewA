@@ -7,8 +7,8 @@
 enum class MultiplayerMode {
     NONE,
     LOCAL_PC,          // Split-screen on same computer
-    LOCAL_AREA,        // LAN multiplayer (placeholder)
-    ONLINE,            // Online multiplayer (placeholder)
+    LOCAL_AREA,        // LAN multiplayer (auto-discovery)
+    ONLINE,            // Online multiplayer (manual IP/port) - NEW: Opens OnlineMultiplayerMenu
     BACK_TO_MAIN       // Return to main menu
 };
 
@@ -26,7 +26,7 @@ private:
     // Button callbacks
     void onLocalPCClicked();
     void onLocalAreaClicked();
-    void onOnlineClicked();
+    void onOnlineClicked();  // Now opens OnlineMultiplayerMenu
     void onBackClicked();
 
     // Helper methods

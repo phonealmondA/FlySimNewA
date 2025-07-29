@@ -8,6 +8,7 @@
 #include "Button.h"
 #include "MainMenu.h"
 #include "MultiplayerMenu.h"
+#include "OnlineMultiplayerMenu.h"  // NEW: Include the online menu
 #include "SplitScreenManager.h"
 #include "NetworkManager.h"
 #include "Player.h"
@@ -68,10 +69,11 @@ public:
 float calculateApoapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, float G);
 float calculatePeriapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, float G);
 
-// Game state management
+// Game state management - UPDATED with new state
 enum class GameState {
     MAIN_MENU,
     MULTIPLAYER_MENU,
+    ONLINE_MENU,           // NEW: Online multiplayer menu state
     SINGLE_PLAYER,
     LOCAL_PC_MULTIPLAYER,
     LAN_MULTIPLAYER,
@@ -85,6 +87,7 @@ private:
     sf::RenderWindow window;
     MainMenu mainMenu;
     std::unique_ptr<MultiplayerMenu> multiplayerMenu;
+    std::unique_ptr<OnlineMultiplayerMenu> onlineMenu;  // NEW: Online menu
     GameState currentState;
     sf::Font font;
     bool fontLoaded;
@@ -125,6 +128,7 @@ public:
     Game() : window(sf::VideoMode({ 1280, 720 }), "Katie's Space Program"),
         mainMenu(sf::Vector2u(1280, 720)),
         multiplayerMenu(std::make_unique<MultiplayerMenu>(sf::Vector2u(1280, 720))),
+        onlineMenu(std::make_unique<OnlineMultiplayerMenu>(sf::Vector2u(1280, 720))),  // NEW: Initialize online menu
         currentState(GameState::MAIN_MENU),
         gameView(sf::Vector2f(640.f, 360.f), sf::Vector2f(1280.f, 720.f)),
         uiView(sf::Vector2f(640.f, 360.f), sf::Vector2f(1280.f, 720.f)),
@@ -396,10 +400,94 @@ public:
         }
     }
 
-    void initializeOnlineMultiplayer() {
-        // Placeholder for online multiplayer - same as LAN for now
-        std::cout << "Online Multiplayer not yet implemented. Starting LAN mode instead." << std::endl;
-        initializeLANMultiplayer();
+    // NEW: Initialize online multiplayer with custom IP/port
+    void initializeOnlineMultiplayer(const ConnectionInfo& connectionInfo) {
+        // Initialize network manager for online
+        networkManager = std::make_unique<NetworkManager>();
+
+        std::cout << "Attempting to start online multiplayer..." << std::endl;
+        std::cout << "Target: " << connectionInfo.ipAddress << ":" << connectionInfo.port << std::endl;
+
+        // TODO: Extend NetworkManager to support custom IP/port
+        // For now, use the existing auto-connect as placeholder
+        if (networkManager->attemptAutoConnect()) {
+            std::cout << "Online connection successful!" << std::endl;
+
+            // Create planets (same setup as LAN mode)
+            planet = std::make_unique<Planet>(
+                sf::Vector2f(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y),
+                0.0f, GameConstants::MAIN_PLANET_MASS, sf::Color::Blue);
+            planet->setVelocity(sf::Vector2f(0.f, 0.f));
+
+            planet2 = std::make_unique<Planet>(
+                sf::Vector2f(GameConstants::SECONDARY_PLANET_X, GameConstants::SECONDARY_PLANET_Y),
+                0.0f, GameConstants::SECONDARY_PLANET_MASS, sf::Color::Green);
+
+            float orbitSpeed = std::sqrt(GameConstants::G * planet->getMass() / GameConstants::PLANET_ORBIT_DISTANCE);
+            planet2->setVelocity(sf::Vector2f(0.f, orbitSpeed));
+
+            // Setup planet vector
+            planets.clear();
+            planets.push_back(planet.get());
+            planets.push_back(planet2.get());
+
+            // Generate spawn positions for network players
+            sf::Vector2f planetPos = planet->getPosition();
+            float planetRadius = planet->getRadius();
+            std::vector<sf::Vector2f> spawnPositions = networkManager->generateSpawnPositions(
+                planetPos, planetRadius, 4);
+
+            // Same player setup as LAN multiplayer
+            if (networkManager->getRole() == NetworkRole::HOST) {
+                localPlayer = std::make_unique<Player>(0, spawnPositions[0], PlayerType::LOCAL, planets);
+                localPlayer->setName("Player 1 (You)");
+
+                auto remotePlayer = std::make_unique<Player>(1, spawnPositions[1], PlayerType::REMOTE, planets);
+                remotePlayer->setName("Player 2");
+                remotePlayers.push_back(std::move(remotePlayer));
+
+                std::cout << "ONLINE HOST: You control Player 1 (Arrow Keys)" << std::endl;
+            }
+            else if (networkManager->getRole() == NetworkRole::CLIENT) {
+                localPlayer = std::make_unique<Player>(1, spawnPositions[1], PlayerType::LOCAL, planets);
+                localPlayer->setName("Player 2 (You)");
+
+                auto remotePlayer = std::make_unique<Player>(0, spawnPositions[0], PlayerType::REMOTE, planets);
+                remotePlayer->setName("Player 1");
+                remotePlayers.push_back(std::move(remotePlayer));
+
+                std::cout << "ONLINE CLIENT: You control Player 2 (WASD Keys)" << std::endl;
+            }
+
+            // Clear old game objects
+            vehicleManager.reset();
+            splitScreenManager.reset();
+            players.clear();
+
+            // Setup gravity simulator
+            gravitySimulator = std::make_unique<GravitySimulator>();
+            gravitySimulator->addPlanet(planet.get());
+            gravitySimulator->addPlanet(planet2.get());
+            if (localPlayer) {
+                gravitySimulator->addPlayer(localPlayer.get());
+            }
+
+            for (auto& remotePlayer : remotePlayers) {
+                gravitySimulator->addPlayer(remotePlayer.get());
+            }
+
+            // Reset camera
+            zoomLevel = 1.0f;
+            targetZoom = 1.0f;
+            if (localPlayer) {
+                gameView.setCenter(localPlayer->getPosition());
+            }
+        }
+        else {
+            std::cout << "Failed to establish online connection. Falling back to single player." << std::endl;
+            onlineMenu->setStatusMessage("Connection failed! Check IP and port.");
+            initializeSinglePlayer();
+        }
     }
 
     void handleRemotePlayerJoin(int playerID, sf::Vector2f spawnPos) {
@@ -477,12 +565,43 @@ public:
                     initializeLANMultiplayer();
                     break;
                 case MultiplayerMode::ONLINE:
-                    currentState = GameState::ONLINE_MULTIPLAYER;
-                    initializeOnlineMultiplayer();
+                    // NEW: Open online menu instead of direct connection
+                    currentState = GameState::ONLINE_MENU;
+                    onlineMenu->show();
                     break;
                 case MultiplayerMode::BACK_TO_MAIN:
                     currentState = GameState::MAIN_MENU;
                     mainMenu.show();
+                    break;
+                default:
+                    break;
+                }
+            }
+        }
+        // NEW: Handle online multiplayer menu events
+        else if (currentState == GameState::ONLINE_MENU) {
+            onlineMenu->handleEvent(event, mousePos);
+
+            if (!onlineMenu->getIsActive()) {
+                OnlineMode selectedMode = onlineMenu->getSelectedMode();
+
+                switch (selectedMode) {
+                case OnlineMode::HOST_GAME:
+                case OnlineMode::JOIN_GAME: {
+                    ConnectionInfo connectionInfo = onlineMenu->getConnectionInfo();
+                    if (connectionInfo.isValid()) {
+                        currentState = GameState::ONLINE_MULTIPLAYER;
+                        initializeOnlineMultiplayer(connectionInfo);
+                    }
+                    else {
+                        std::cout << "Invalid connection info!" << std::endl;
+                        onlineMenu->show(); // Stay in menu
+                    }
+                    break;
+                }
+                case OnlineMode::BACK_TO_MULTIPLAYER:
+                    currentState = GameState::MULTIPLAYER_MENU;
+                    multiplayerMenu->show();
                     break;
                 default:
                     break;
@@ -526,8 +645,8 @@ public:
                     if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
                         // Handle in split screen manager
                     }
-                    else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
-                        // Handle player transform
+                    else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
+                        // Handle player transform for both LAN and Online
                         localPlayer->requestTransform();
                     }
                     else if (vehicleManager) {
@@ -566,7 +685,7 @@ public:
                 if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
                     gameView.setCenter(splitScreenManager->getCenterPoint());
                 }
-                else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
+                else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
                     gameView.setCenter(localPlayer->getPosition());
                 }
                 else if (vehicleManager) {
@@ -628,7 +747,7 @@ public:
             else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Equal))
                 splitScreenManager->setSyncedThrustLevel(1.0f);
         }
-        else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
+        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
             // STATE SYNC: Only handle LOCAL input - no networking here!
             localPlayer->handleLocalInput(deltaTime);
         }
@@ -760,7 +879,7 @@ public:
                 gameView.setCenter(splitScreenManager->getCenterPoint());
             }
         }
-        else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
+        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
             localPlayer->update(deltaTime);
 
             // Update all remote players
@@ -843,7 +962,7 @@ public:
         else {
             ss << "NETWORK STATUS\n"
                 << "Network not active\n"
-                << "Use LAN multiplayer to connect";
+                << "Use LAN/Online multiplayer to connect";
         }
 
         networkInfoPanel->setText(ss.str());
@@ -866,13 +985,15 @@ public:
             }
             ss << "Mouse wheel: Zoom in/out";
         }
-        else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
+        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
+            std::string modeStr = (currentState == GameState::LAN_MULTIPLAYER) ? "LAN" : "ONLINE";
+
             if (localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
                 Rocket* rocket = localPlayer->getVehicleManager()->getRocket();
                 float speed = std::sqrt(rocket->getVelocity().x * rocket->getVelocity().x +
                     rocket->getVelocity().y * rocket->getVelocity().y);
 
-                ss << "STATE SYNC MULTIPLAYER\n"
+                ss << modeStr << " MULTIPLAYER\n"
                     << "Player: " << localPlayer->getName() << "\n"
                     << "Role: " << (networkManager->getRole() == NetworkRole::HOST ? "HOST" : "CLIENT") << "\n"
                     << "Speed: " << std::fixed << std::setprecision(1) << speed << " units/s\n"
@@ -880,7 +1001,7 @@ public:
             }
             else {
                 Car* car = localPlayer->getVehicleManager()->getCar();
-                ss << "STATE SYNC MULTIPLAYER (CAR)\n"
+                ss << modeStr << " MULTIPLAYER (CAR)\n"
                     << "Player: " << localPlayer->getName() << "\n"
                     << "On Ground: " << (car->isOnGround() ? "Yes" : "No") << "\n"
                     << "Position: (" << std::fixed << std::setprecision(1)
@@ -920,7 +1041,7 @@ public:
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
             activeVehicle = splitScreenManager->getPlayer1()->getActiveVehicle();
         }
-        else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
+        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
             activeVehicle = localPlayer->getVehicleManager()->getActiveVehicle();
         }
         else if (vehicleManager) {
@@ -963,8 +1084,9 @@ public:
                 << "Numbers 1-9,0,= control thrust\n"
                 << "for both players";
         }
-        else if (currentState == GameState::LAN_MULTIPLAYER && networkManager) {
-            ss << "STATE SYNC MULTIPLAYER\n"
+        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && networkManager) {
+            std::string modeStr = (currentState == GameState::LAN_MULTIPLAYER) ? "LAN" : "ONLINE";
+            ss << modeStr << " MULTIPLAYER\n"
                 << "Role: " << (networkManager->getRole() == NetworkRole::HOST ? "HOST" : "CLIENT") << "\n"
                 << "Status: " << (networkManager->isConnected() ? "CONNECTED" : "DISCONNECTED") << "\n";
             if (localPlayer) {
@@ -997,7 +1119,7 @@ public:
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
             referencePos = splitScreenManager->getCenterPoint();
         }
-        else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
+        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
             referencePos = localPlayer->getPosition();
         }
         else if (vehicleManager) {
@@ -1030,7 +1152,7 @@ public:
                     GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS, false);
             }
         }
-        else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
+        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
             // Draw trajectory for local player if rocket
             if (localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
                 localPlayer->getVehicleManager()->getRocket()->drawTrajectory(window, planets,
@@ -1058,7 +1180,7 @@ public:
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
             splitScreenManager->drawWithConstantSize(window, zoomLevel);
         }
-        else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
+        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
             // Draw local player
             localPlayer->drawWithConstantSize(window, zoomLevel);
 
@@ -1087,7 +1209,7 @@ public:
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
             splitScreenManager->drawVelocityVectors(window, 2.0f);
         }
-        else if (currentState == GameState::LAN_MULTIPLAYER && localPlayer) {
+        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
             // Draw local player velocity vector
             localPlayer->drawVelocityVector(window, 2.0f);
 
@@ -1139,6 +1261,11 @@ public:
             multiplayerMenu->update(mousePos);
             multiplayerMenu->draw(window);
         }
+        else if (currentState == GameState::ONLINE_MENU) {
+            // NEW: Render online multiplayer menu
+            onlineMenu->update(mousePos);
+            onlineMenu->draw(window);
+        }
     }
 
     void run() {
@@ -1161,6 +1288,7 @@ public:
                 switch (currentState) {
                 case GameState::MAIN_MENU:
                 case GameState::MULTIPLAYER_MENU:
+                case GameState::ONLINE_MENU:  // NEW: Handle online menu events
                     handleMenuEvents(*event);
                     break;
                 case GameState::SINGLE_PLAYER:
@@ -1194,6 +1322,7 @@ public:
             switch (currentState) {
             case GameState::MAIN_MENU:
             case GameState::MULTIPLAYER_MENU:
+            case GameState::ONLINE_MENU:  // NEW: Render online menu
                 renderMenu();
                 break;
             case GameState::SINGLE_PLAYER:

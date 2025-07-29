@@ -82,7 +82,7 @@ void MultiplayerMenu::createButtons() {
         );
         buttons.push_back(std::move(localPCButton));
 
-        // Local Area Network Button (LAN)
+        // Local Area Network Button (Auto-discovery LAN)
         auto localAreaButton = std::make_unique<Button>(
             sf::Vector2f(centerX - buttonWidth / 2, startY + spacing),
             sf::Vector2f(buttonWidth, buttonHeight),
@@ -92,11 +92,11 @@ void MultiplayerMenu::createButtons() {
         );
         buttons.push_back(std::move(localAreaButton));
 
-        // Online Multiplayer Button
+        // Online Multiplayer Button (Manual IP/Port) - UPDATED
         auto onlineButton = std::make_unique<Button>(
             sf::Vector2f(centerX - buttonWidth / 2, startY + spacing * 2),
             sf::Vector2f(buttonWidth, buttonHeight),
-            "Online Multiplayer",
+            "Online/Hamachi",
             font,
             [this]() { onOnlineClicked(); }
         );
@@ -126,13 +126,14 @@ void MultiplayerMenu::onLocalPCClicked() {
 void MultiplayerMenu::onLocalAreaClicked() {
     selectedMode = MultiplayerMode::LOCAL_AREA;
     isActive = false;
-    std::cout << "Local Area Network mode selected (placeholder)" << std::endl;
+    std::cout << "Local Area Network (auto-discovery) mode selected" << std::endl;
 }
 
 void MultiplayerMenu::onOnlineClicked() {
+    // UPDATED: Now opens OnlineMultiplayerMenu instead of direct online mode
     selectedMode = MultiplayerMode::ONLINE;
     isActive = false;
-    std::cout << "Online Multiplayer mode selected (placeholder)" << std::endl;
+    std::cout << "Opening Online/Hamachi multiplayer menu..." << std::endl;
 }
 
 void MultiplayerMenu::onBackClicked() {
