@@ -319,53 +319,50 @@ public:
             std::vector<sf::Vector2f> spawnPositions = networkManager->generateSpawnPositions(
                 planetPos, planetRadius, 4);  // Support up to 4 players
 
-            // Proper player ID assignment
-            int localPlayerID = -1;
+            // FIXED: Each instance only creates ONE local player
             if (networkManager->getRole() == NetworkRole::HOST) {
-                localPlayerID = 0;  // Host is always Player 0
-            }
-            else if (networkManager->getRole() == NetworkRole::CLIENT) {
-                localPlayerID = 1;  // First client is Player 1
-            }
-
-            // Create local player with correct ID and spawn position
-            if (localPlayerID >= 0 && localPlayerID < static_cast<int>(spawnPositions.size())) {
+                // HOST: Create local player 0, remote player 1
                 localPlayer = std::make_unique<Player>(
-                    localPlayerID,
-                    spawnPositions[localPlayerID],
-                    PlayerType::LOCAL,
+                    0,  // Host is Player 0
+                    spawnPositions[0],
+                    PlayerType::LOCAL,  // This instance controls Player 0
                     planets
                 );
+                localPlayer->setName("Player 1 (You)");
 
-                std::cout << "Created local player with ID: " << localPlayerID
-                    << " at position (" << spawnPositions[localPlayerID].x
-                    << ", " << spawnPositions[localPlayerID].y << ")" << std::endl;
-            }
-
-            // Create the remote player immediately for both host and client
-            if (networkManager->getRole() == NetworkRole::HOST) {
-                // Host creates a placeholder for Player 1 (client)
+                // Create remote placeholder for Player 1
                 auto remotePlayer = std::make_unique<Player>(
                     1,  // Client will be Player 1
                     spawnPositions[1],
-                    PlayerType::REMOTE,
+                    PlayerType::REMOTE,  // This instance does NOT control Player 1
                     planets
                 );
                 remotePlayer->setName("Player 2");
                 remotePlayers.push_back(std::move(remotePlayer));
-                std::cout << "Host created placeholder for Player 2" << std::endl;
+
+                std::cout << "HOST: You control Player 1 (Arrow Keys)" << std::endl;
             }
             else if (networkManager->getRole() == NetworkRole::CLIENT) {
-                // Client creates a placeholder for Player 0 (host)
+                // CLIENT: Create local player 1, remote player 0
+                localPlayer = std::make_unique<Player>(
+                    1,  // Client is Player 1
+                    spawnPositions[1],
+                    PlayerType::LOCAL,  // This instance controls Player 1
+                    planets
+                );
+                localPlayer->setName("Player 2 (You)");
+
+                // Create remote placeholder for Player 0
                 auto remotePlayer = std::make_unique<Player>(
                     0,  // Host is Player 0
                     spawnPositions[0],
-                    PlayerType::REMOTE,
+                    PlayerType::REMOTE,  // This instance does NOT control Player 0
                     planets
                 );
                 remotePlayer->setName("Player 1");
                 remotePlayers.push_back(std::move(remotePlayer));
-                std::cout << "Client created placeholder for Player 1" << std::endl;
+
+                std::cout << "CLIENT: You control Player 2 (WASD Keys)" << std::endl;
             }
 
             // Clear old game objects for network mode
@@ -391,13 +388,6 @@ public:
             targetZoom = 1.0f;
             if (localPlayer) {
                 gameView.setCenter(localPlayer->getPosition());
-            }
-
-            if (networkManager->getRole() == NetworkRole::HOST) {
-                std::cout << "You are the HOST (Player 1). Use Arrow Keys." << std::endl;
-            }
-            else if (networkManager->getRole() == NetworkRole::CLIENT) {
-                std::cout << "You are CLIENT (Player 2). Use WASD Keys." << std::endl;
             }
         }
         else {
