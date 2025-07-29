@@ -6,11 +6,11 @@ namespace GameConstants {
     constexpr float PI = 3.14159265358979323846f;
 
     // Mass-radius relationship constants
-    constexpr float BASE_RADIUS_FACTOR = 100.0f;  // Base size factor for planets
+    constexpr float BASE_RADIUS_FACTOR = 260.0f;  // Base size factor for planets
     constexpr float REFERENCE_MASS = 10000.0f;  // Reference mass for radius scaling
 
     // Primary inputs
-    constexpr float MAIN_PLANET_MASS = 100000.0f;  // Primary parameter to adjust
+    constexpr float MAIN_PLANET_MASS = 2600000.0f;  // Primary parameter to adjust
     constexpr float ORBIT_PERIOD = 420.0f;  // Desired orbit period in seconds
 
     // Derived parameters
@@ -42,7 +42,7 @@ namespace GameConstants {
     constexpr float ROCKET_SIZE = 15.0f;
 
     // Visualization settings
-    constexpr float GRAVITY_VECTOR_SCALE = 100.0f;
+    constexpr float GRAVITY_VECTOR_SCALE = 5.0f;
     constexpr float VELOCITY_VECTOR_SCALE = 0.01f;
 
     // Trajectory calculation settings
@@ -59,7 +59,7 @@ namespace GameConstants {
     constexpr float CAR_BODY_HEIGHT = 15.0f;  // Height of car body
 
     // Engine parameters - scaled with gravitational constant
-    constexpr float BASE_THRUST_MULTIPLIER = 100000000.0f;
+    constexpr float BASE_THRUST_MULTIPLIER = 10000000000.0f;
     constexpr float ENGINE_THRUST_POWER = G * BASE_THRUST_MULTIPLIER;
 
     // Vehicle transformation parameters

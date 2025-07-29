@@ -776,11 +776,13 @@ public:
             else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Equal))
                 vehicleManager->getRocket()->setThrustLevel(1.0f);
 
-            // Movement controls
+            //// Movement controls
+            //if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Up))
+            //    vehicleManager->applyThrust(1.0f);
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Up))
-                vehicleManager->applyThrust(1.0f);
+                vehicleManager->applyThrust(vehicleManager->getRocket()->getThrustLevel());
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Down))
-                vehicleManager->applyThrust(-0.5f);
+                vehicleManager->applyThrust(-vehicleManager->getRocket()->getThrustLevel());
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left))
                 vehicleManager->rotate(-6.0f * deltaTime * 60.0f);
             if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right))
@@ -895,23 +897,27 @@ public:
         else if (vehicleManager) {
             vehicleManager->update(deltaTime);
 
-            // Auto-zoom logic for single player
-            if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Z) &&
-                !sf::Keyboard::isKeyPressed(sf::Keyboard::Key::X) &&
-                !sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
+            //// Auto-zoom logic for single player
+            //if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Z) &&
+            //    !sf::Keyboard::isKeyPressed(sf::Keyboard::Key::X) &&
+            //    !sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
 
-                sf::Vector2f vehiclePos = vehicleManager->getActiveVehicle()->getPosition();
-                sf::Vector2f vehicleToPlanet = planet->getPosition() - vehiclePos;
-                sf::Vector2f vehicleToPlanet2 = planet2->getPosition() - vehiclePos;
-                float distance1 = std::sqrt(vehicleToPlanet.x * vehicleToPlanet.x + vehicleToPlanet.y * vehicleToPlanet.y);
-                float distance2 = std::sqrt(vehicleToPlanet2.x * vehicleToPlanet2.x + vehicleToPlanet2.y * vehicleToPlanet2.y);
+            //    sf::Vector2f vehiclePos = vehicleManager->getActiveVehicle()->getPosition();
+            //    sf::Vector2f vehicleToPlanet = planet->getPosition() - vehiclePos;
+            //    sf::Vector2f vehicleToPlanet2 = planet2->getPosition() - vehiclePos;
+            //    float distance1 = std::sqrt(vehicleToPlanet.x * vehicleToPlanet.x + vehicleToPlanet.y * vehicleToPlanet.y);
+            //    float distance2 = std::sqrt(vehicleToPlanet2.x * vehicleToPlanet2.x + vehicleToPlanet2.y * vehicleToPlanet2.y);
 
-                float closest = std::min(distance1, distance2);
-                targetZoom = 1.0f + (closest - (planet->getRadius() + GameConstants::ROCKET_SIZE)) / 100.0f;
-                targetZoom = std::max(1.0f, std::min(targetZoom, 1000.0f));
+            //    float closest = std::min(distance1, distance2);
+            //    targetZoom = 1.0f + (closest - (planet->getRadius() + GameConstants::ROCKET_SIZE)) / 100.0f;
+            //    targetZoom = std::max(1.0f, std::min(targetZoom, 1000.0f));
 
-                gameView.setCenter(vehiclePos);
-            }
+            //    gameView.setCenter(vehiclePos);
+            //}
+
+            // Auto-center camera on vehicle (like multiplayer)
+            sf::Vector2f vehiclePos = vehicleManager->getActiveVehicle()->getPosition();
+            gameView.setCenter(vehiclePos);
         }
 
         // Smooth zoom
@@ -1048,7 +1054,7 @@ public:
             activeVehicle = vehicleManager->getActiveVehicle();
         }
 
-        if (activeVehicle) {
+        if (activeVehicle) {/*
             for (const auto& planetPtr : planets) {
                 sf::Vector2f direction = planetPtr->getPosition() - activeVehicle->getPosition();
                 float dist = std::sqrt(direction.x * direction.x + direction.y * direction.y);
@@ -1057,7 +1063,18 @@ public:
                     closestDistance = dist;
                     closestPlanet = planetPtr;
                 }
+            }*/
+            for (const auto& planetPtr : planets) {
+                sf::Vector2f direction = planetPtr->getPosition() - activeVehicle->getPosition();
+                float centerDistance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+                float surfaceDistance = centerDistance - planetPtr->getRadius(); // Distance to surface
+
+                if (centerDistance < closestDistance) {
+                    closestDistance = centerDistance;
+                    closestPlanet = planetPtr;
+                }
             }
+
 
             if (closestPlanet) {
                 std::string planetName = (closestPlanet == planet.get()) ? "Blue Planet" : "Green Planet";
@@ -1065,7 +1082,8 @@ public:
                     closestPlanet->getVelocity().y * closestPlanet->getVelocity().y);
 
                 ss << "NEAREST PLANET: " << planetName << "\n"
-                    << "Distance: " << std::fixed << std::setprecision(0) << closestDistance << " units\n"
+                    /*<< "Distance: " << std::fixed << std::setprecision(0) << closestDistance << " units\n"                    */
+					<< "Distance: " << std::fixed << std::setprecision(0) << (closestDistance - closestPlanet->getRadius() - GameConstants::ROCKET_SIZE) << " units\n"
                     << "Mass: " << closestPlanet->getMass() << " units\n"
                     << "Radius: " << closestPlanet->getRadius() << " units\n"
                     << "Speed: " << std::setprecision(1) << speed << " units/s";
