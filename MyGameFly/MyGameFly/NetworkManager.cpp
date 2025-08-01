@@ -166,7 +166,7 @@ void NetworkManager::update(float deltaTime) {
     }
 }
 
-// NEW: Core state synchronization method
+// Core state synchronization method
 bool NetworkManager::sendPlayerState(const PlayerState& state) {
     if (!isConnected()) return false;
 
@@ -288,11 +288,15 @@ bool NetworkManager::receiveMessage(MessageType& outType, sf::Packet& outPacket)
     return false;
 }
 
+// FIXED: Fuel system serialization
 void NetworkManager::serializePlayerState(sf::Packet& packet, const PlayerState& state) {
     packet << state.playerID << state.position.x << state.position.y;
     packet << state.velocity.x << state.velocity.y;
     packet << state.rotation << state.isRocket << state.isOnGround << state.mass;
     packet << state.thrustLevel;
+
+    // ADD FUEL SYSTEM SERIALIZATION
+    packet << state.currentFuel << state.maxFuel << state.isCollectingFuel;
 }
 
 void NetworkManager::deserializePlayerState(sf::Packet& packet, PlayerState& state) {
@@ -300,6 +304,9 @@ void NetworkManager::deserializePlayerState(sf::Packet& packet, PlayerState& sta
     packet >> state.velocity.x >> state.velocity.y;
     packet >> state.rotation >> state.isRocket >> state.isOnGround >> state.mass;
     packet >> state.thrustLevel;
+
+    // ADD FUEL SYSTEM DESERIALIZATION
+    packet >> state.currentFuel >> state.maxFuel >> state.isCollectingFuel;
 }
 
 void NetworkManager::serializePlayerSpawnInfo(sf::Packet& packet, const PlayerSpawnInfo& spawnInfo) {

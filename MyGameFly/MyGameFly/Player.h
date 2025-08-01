@@ -1,10 +1,13 @@
 #pragma once
 #include "VehicleManager.h"
 #include "Planet.h"
-#include "NetworkManager.h"  // Include this instead of forward declaration
 #include <SFML/Graphics.hpp>
 #include <memory>
 #include <vector>
+
+// Forward declaration to avoid circular dependency
+class NetworkManager;
+struct PlayerState;
 
 enum class PlayerType {
     LOCAL,    // This instance controls this player
@@ -59,12 +62,20 @@ public:
     VehicleManager* getVehicleManager() const { return vehicleManager.get(); }
     std::string getName() const { return playerName; }
 
+    // FUEL SYSTEM GETTERS
+    float getCurrentFuel() const;
+    float getMaxFuel() const;
+    float getFuelPercentage() const;
+    bool canThrust() const;
+    bool isCollectingFuel() const;
+
     // Setters
     void setType(PlayerType newType) { type = newType; }
     void setName(const std::string& name) { playerName = name; }
 
     // Visual helpers
     void drawVelocityVector(sf::RenderWindow& window, float scale = 1.0f);
+    void drawFuelCollectionIndicator(sf::RenderWindow& window);
     void drawPlayerLabel(sf::RenderWindow& window, const sf::Font& font);
 
     // Physics integration

@@ -4,7 +4,9 @@
 #include <cmath>
 
 Rocket::Rocket(sf::Vector2f pos, sf::Vector2f vel, sf::Color col, float m)
-    : GameObject(pos, vel, col), rotation(0), angularVelocity(0), thrustLevel(0.0f), mass(m)
+    : GameObject(pos, vel, col), rotation(0), angularVelocity(0), thrustLevel(0.0f), mass(m),
+    currentFuel(GameConstants::ROCKET_STARTING_FUEL), maxFuel(GameConstants::ROCKET_MAX_FUEL),
+    isCollectingFuel(false), fuelSourcePlanet(nullptr)
 {
     // Create rocket body (a simple triangle)
     body.setPointCount(3);
@@ -17,7 +19,6 @@ Rocket::Rocket(sf::Vector2f pos, sf::Vector2f vel, sf::Color col, float m)
 
     // Add default engine
     addPart(std::make_unique<Engine>(sf::Vector2f(0, GameConstants::ROCKET_SIZE), GameConstants::ENGINE_THRUST_POWER));
-    // You'll need to add ENGINE_THRUST_POWER
 }
 
 void Rocket::addPart(std::unique_ptr<RocketPart> part)
@@ -27,6 +28,11 @@ void Rocket::addPart(std::unique_ptr<RocketPart> part)
 
 void Rocket::applyThrust(float amount)
 {
+    // Check if we have fuel to thrust
+    if (!canThrust()) {
+        return;  // No fuel, no thrust
+    }
+
     // Calculate thrust direction based on rocket rotation
     float radians = rotation * 3.14159f / 180.0f;
 
@@ -47,6 +53,85 @@ void Rocket::setThrustLevel(float level)
 {
     // Clamp level between 0.0 and 1.0
     thrustLevel = std::max(0.0f, std::min(1.0f, level));
+}
+
+float Rocket::calculateFuelConsumption() const
+{
+    // No fuel consumption if thrust level is below minimum threshold
+    if (thrustLevel < GameConstants::FUEL_CONSUMPTION_MIN_THRESHOLD) {
+        return 0.0f;
+    }
+
+    // Base consumption at 10% thrust, then exponential increase
+    // This makes higher thrust levels much more fuel-intensive
+    float normalizedThrust = thrustLevel; // 0.0 to 1.0
+    float consumption = GameConstants::FUEL_CONSUMPTION_BASE +
+        (GameConstants::FUEL_CONSUMPTION_MULTIPLIER * normalizedThrust * normalizedThrust);
+
+    return consumption;
+}
+
+void Rocket::consumeFuel(float deltaTime)
+{
+    if (thrustLevel > GameConstants::FUEL_CONSUMPTION_MIN_THRESHOLD && currentFuel > 0.0f) {
+        float consumption = calculateFuelConsumption() * deltaTime;
+        currentFuel = std::max(0.0f, currentFuel - consumption);
+    }
+}
+
+void Rocket::collectFuelFromPlanets(float deltaTime)
+{
+    isCollectingFuel = false;
+    fuelSourcePlanet = nullptr;
+
+    // Don't collect if fuel is already full
+    if (currentFuel >= maxFuel) {
+        return;
+    }
+
+    // Check each nearby planet for fuel collection
+    for (auto& planet : nearbyPlanets) {
+        sf::Vector2f direction = position - planet->getPosition();
+        float distance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+
+        // Check if we're within fuel collection range
+        float collectionRange = planet->getRadius() + GameConstants::FUEL_COLLECTION_RANGE;
+
+        if (distance <= collectionRange &&
+            planet->getMass() > GameConstants::MIN_PLANET_MASS_FOR_COLLECTION) {
+
+            // Calculate fuel collection amount
+            float fuelToCollect = GameConstants::FUEL_COLLECTION_RATE * deltaTime;
+
+            // Don't collect more fuel than we can hold
+            fuelToCollect = std::min(fuelToCollect, maxFuel - currentFuel);
+
+            // Calculate mass to remove from planet
+            float massToRemove = fuelToCollect * GameConstants::FUEL_COLLECTION_MASS_RATIO;
+
+            // Don't remove more mass than the planet can afford
+            float availableMass = planet->getMass() - GameConstants::MIN_PLANET_MASS_FOR_COLLECTION;
+            massToRemove = std::min(massToRemove, availableMass);
+
+            // Recalculate actual fuel collected based on available mass
+            float actualFuelCollected = massToRemove / GameConstants::FUEL_COLLECTION_MASS_RATIO;
+
+            if (actualFuelCollected > 0.0f) {
+                // Collect the fuel
+                currentFuel += actualFuelCollected;
+
+                // Remove mass from planet (this will also update its radius)
+                planet->setMass(planet->getMass() - massToRemove);
+
+                // Set collection status
+                isCollectingFuel = true;
+                fuelSourcePlanet = planet;
+
+                // Only collect from one planet at a time
+                break;
+            }
+        }
+    }
 }
 
 bool Rocket::checkCollision(const Planet& planet)
@@ -77,6 +162,10 @@ Rocket* Rocket::mergeWith(Rocket* other)
     float mergedMass = mass + other->getMass();
     Rocket* mergedRocket = new Rocket(mergedPosition, mergedVelocity, mergedColor, mergedMass);
 
+    // Combine fuel from both rockets
+    float combinedFuel = currentFuel + other->getCurrentFuel();
+    mergedRocket->setFuel(combinedFuel);
+
     // Combine thrust capabilities by adding an engine with combined thrust power
     float combinedThrust = 0.0f;
 
@@ -103,6 +192,12 @@ Rocket* Rocket::mergeWith(Rocket* other)
 void Rocket::update(float deltaTime)
 {
     bool resting = false;
+
+    // Process fuel consumption first
+    consumeFuel(deltaTime);
+
+    // Process fuel collection from nearby planets
+    collectFuelFromPlanets(deltaTime);
 
     // Check if we're resting on any planet
     for (const auto& planet : nearbyPlanets) {

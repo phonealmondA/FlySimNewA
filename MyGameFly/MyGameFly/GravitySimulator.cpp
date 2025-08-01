@@ -1,4 +1,4 @@
-// GravitySimulator.cpp - Updated with Player Support
+// GravitySimulator.cpp - Updated with Player Support and Fuel System
 #include "GravitySimulator.h"
 #include "VehicleManager.h"
 #include "Player.h"  // Now include Player.h since it exists
@@ -224,4 +224,8 @@ void GravitySimulator::update(float deltaTime)
         // Add rocket-to-rocket gravity interactions
         addRocketGravityInteractions(deltaTime);
     }
+
+    // FUEL SYSTEM: The fuel consumption and collection is handled automatically 
+    // in each Rocket's update() method, so no additional code needed here.
+    // Planet mass reduction from fuel collection is also handled in Rocket::collectFuelFromPlanets()
 }

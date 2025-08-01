@@ -1,5 +1,5 @@
 #include "Player.h"
-#include "NetworkManager.h"
+#include "NetworkManager.h"  // Include after Player.h to get PlayerState definition
 #include "GameConstants.h"
 #include <SFML/Window/Keyboard.hpp>
 #include <iostream>
@@ -129,16 +129,27 @@ PlayerState Player::getState() const {
         state.isRocket = (vehicleManager->getActiveVehicleType() == VehicleType::ROCKET);
 
         if (state.isRocket && vehicleManager->getRocket()) {
-            state.rotation = vehicleManager->getRocket()->getRotation();
-            state.mass = vehicleManager->getRocket()->getMass();
-            state.thrustLevel = vehicleManager->getRocket()->getThrustLevel();
+            Rocket* rocket = vehicleManager->getRocket();
+            state.rotation = rocket->getRotation();
+            state.mass = rocket->getMass();
+            state.thrustLevel = rocket->getThrustLevel();
             state.isOnGround = false;
+
+            // ADD FUEL DATA TO STATE
+            state.currentFuel = rocket->getCurrentFuel();
+            state.maxFuel = rocket->getMaxFuel();
+            state.isCollectingFuel = rocket->getIsCollectingFuel();
         }
         else if (!state.isRocket && vehicleManager->getCar()) {
             state.rotation = vehicleManager->getCar()->getRotation();
             state.mass = GameConstants::ROCKET_MASS;
             state.thrustLevel = 0.0f;
             state.isOnGround = vehicleManager->getCar()->isOnGround();
+
+            // Cars don't use fuel (for now)
+            state.currentFuel = GameConstants::ROCKET_MAX_FUEL;
+            state.maxFuel = GameConstants::ROCKET_MAX_FUEL;
+            state.isCollectingFuel = false;
         }
     }
 
@@ -157,6 +168,8 @@ void Player::applyState(const PlayerState& state) {
             Rocket* rocket = vehicleManager->getRocket();
             if (rocket) {
                 rocket->setPosition(state.position);
+                // Apply fuel state for remote players (for visual consistency)
+                rocket->setFuel(state.currentFuel);
                 // Don't override thrust level for remote players in state sync
             }
         }
@@ -199,6 +212,42 @@ sf::Vector2f Player::getVelocity() const {
     return sf::Vector2f(0, 0);
 }
 
+// FUEL SYSTEM GETTERS
+float Player::getCurrentFuel() const {
+    if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+        return vehicleManager->getRocket()->getCurrentFuel();
+    }
+    return GameConstants::ROCKET_MAX_FUEL; // Cars have "infinite" fuel
+}
+
+float Player::getMaxFuel() const {
+    if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+        return vehicleManager->getRocket()->getMaxFuel();
+    }
+    return GameConstants::ROCKET_MAX_FUEL;
+}
+
+float Player::getFuelPercentage() const {
+    if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+        return vehicleManager->getRocket()->getFuelPercentage();
+    }
+    return 100.0f; // Cars have "full" fuel
+}
+
+bool Player::canThrust() const {
+    if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+        return vehicleManager->getRocket()->canThrust();
+    }
+    return true; // Cars can always "thrust" (accelerate)
+}
+
+bool Player::isCollectingFuel() const {
+    if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+        return vehicleManager->getRocket()->getIsCollectingFuel();
+    }
+    return false; // Cars don't collect fuel
+}
+
 void Player::draw(sf::RenderWindow& window) {
     if (vehicleManager) {
         vehicleManager->draw(window);
@@ -214,6 +263,39 @@ void Player::drawWithConstantSize(sf::RenderWindow& window, float zoomLevel) {
 void Player::drawVelocityVector(sf::RenderWindow& window, float scale) {
     if (vehicleManager) {
         vehicleManager->drawVelocityVector(window, scale);
+    }
+}
+
+void Player::drawFuelCollectionIndicator(sf::RenderWindow& window) {
+    if (!vehicleManager || vehicleManager->getActiveVehicleType() != VehicleType::ROCKET) {
+        return; // Only rockets collect fuel
+    }
+
+    Rocket* rocket = vehicleManager->getRocket();
+    if (!rocket || !rocket->getIsCollectingFuel()) {
+        return; // Not currently collecting fuel
+    }
+
+    // Draw a visual indicator showing fuel collection
+    Planet* sourcePlanet = rocket->getFuelSourcePlanet();
+    if (sourcePlanet) {
+        // Draw active fuel collection ring around the source planet
+        sourcePlanet->drawFuelCollectionRing(window, true);
+
+        // Draw a line connecting rocket to planet to show fuel transfer
+        sf::VertexArray fuelLine(sf::PrimitiveType::LineStrip);
+
+        sf::Vertex startVertex;
+        startVertex.position = rocket->getPosition();
+        startVertex.color = GameConstants::FUEL_RING_ACTIVE_COLOR;
+        fuelLine.append(startVertex);
+
+        sf::Vertex endVertex;
+        endVertex.position = sourcePlanet->getPosition();
+        endVertex.color = GameConstants::FUEL_RING_ACTIVE_COLOR;
+        fuelLine.append(endVertex);
+
+        window.draw(fuelLine);
     }
 }
 

@@ -29,7 +29,13 @@ void Planet::update(float deltaTime)
 
 void Planet::draw(sf::RenderWindow& window)
 {
+    // Draw the planet
     window.draw(shape);
+
+    // Draw fuel collection ring if the planet can provide fuel
+    if (canCollectFuel()) {
+        drawFuelCollectionRing(window, false);
+    }
 }
 
 float Planet::getMass() const
@@ -57,6 +63,60 @@ void Planet::updateRadiusFromMass()
     // Update the visual shape
     shape.setRadius(radius);
     shape.setOrigin({ radius, radius });
+}
+
+bool Planet::canCollectFuel() const
+{
+    return mass > GameConstants::MIN_PLANET_MASS_FOR_COLLECTION;
+}
+
+float Planet::getFuelCollectionRange() const
+{
+    return radius + GameConstants::FUEL_COLLECTION_RANGE;
+}
+
+void Planet::drawFuelCollectionRing(sf::RenderWindow& window, bool isActivelyCollecting)
+{
+    if (!canCollectFuel()) {
+        return;  // Don't draw ring if planet can't provide fuel
+    }
+
+    // Calculate ring radius
+    float ringRadius = getFuelCollectionRange();
+
+    // Choose color based on collection status
+    sf::Color ringColor = isActivelyCollecting ?
+        GameConstants::FUEL_RING_ACTIVE_COLOR :
+        GameConstants::FUEL_RING_COLOR;
+
+    // Create ring using CircleShape with transparent fill
+    sf::CircleShape ring;
+    ring.setRadius(ringRadius);
+    ring.setPosition(sf::Vector2f(position.x - ringRadius, position.y - ringRadius));
+    ring.setFillColor(sf::Color::Transparent);
+    ring.setOutlineColor(ringColor);
+    ring.setOutlineThickness(GameConstants::FUEL_RING_THICKNESS);
+
+    // Draw the ring
+    window.draw(ring);
+
+    // For active collection, add a pulsing inner ring effect
+    if (isActivelyCollecting) {
+        // Create a smaller, more opaque inner ring
+        float innerRingRadius = ringRadius * 0.8f;
+        sf::CircleShape innerRing;
+        innerRing.setRadius(innerRingRadius);
+        innerRing.setPosition(sf::Vector2f(position.x - innerRingRadius, position.y - innerRingRadius));
+        innerRing.setFillColor(sf::Color::Transparent);
+
+        // Make the inner ring more vibrant
+        sf::Color innerRingColor = GameConstants::FUEL_RING_ACTIVE_COLOR;
+        innerRingColor.a = 255;  // Full opacity
+        innerRing.setOutlineColor(innerRingColor);
+        innerRing.setOutlineThickness(GameConstants::FUEL_RING_THICKNESS * 0.5f);
+
+        window.draw(innerRing);
+    }
 }
 
 void Planet::drawVelocityVector(sf::RenderWindow& window, float scale)

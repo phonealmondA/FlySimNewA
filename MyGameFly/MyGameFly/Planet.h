@@ -26,4 +26,9 @@ public:
 
     // Draw predicted orbit path
     void drawOrbitPath(sf::RenderWindow& window, const std::vector<Planet*>& planets, float timeStep = 0.5f, int steps = 200);
+
+    // FUEL COLLECTION METHODS
+    void drawFuelCollectionRing(sf::RenderWindow& window, bool isActivelyCollecting = false);
+    bool canCollectFuel() const;  // Check if planet has enough mass for fuel collection
+    float getFuelCollectionRange() const;  // Get the fuel collection range for this planet
 };

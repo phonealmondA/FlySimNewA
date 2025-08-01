@@ -1,4 +1,4 @@
-// NetworkManager.h - State Synchronization Version
+// NetworkManager.h - State Synchronization Version with Fuel System
 #pragma once
 #include <SFML/Network.hpp>
 #include <SFML/System/Vector2.hpp>
@@ -24,14 +24,14 @@ enum class ConnectionStatus {
 
 enum class MessageType : uint8_t {
     HELLO = 0,
-    PLAYER_STATE = 1,      // NEW: Individual player state updates
+    PLAYER_STATE = 1,      // Individual player state updates
     PLAYER_SPAWN = 2,      // Player joining game
     PLAYER_DISCONNECT = 3, // Player leaving game
     TRANSFORM = 4,         // Transform requests
     DISCONNECT = 5
 };
 
-// Simplified data structures for state sync
+// Simplified data structures for state sync - UPDATED WITH FUEL FIELDS
 struct PlayerState {
     int playerID = 0;
     sf::Vector2f position;
@@ -41,6 +41,11 @@ struct PlayerState {
     bool isOnGround = false;
     float mass = 1.0f;
     float thrustLevel = 0.0f;
+
+    // FUEL SYSTEM FIELDS
+    float currentFuel = 100.0f;
+    float maxFuel = 100.0f;
+    bool isCollectingFuel = false;
 };
 
 struct PlayerSpawnInfo {
@@ -123,7 +128,7 @@ private:
     bool sendMessage(MessageType type, sf::Packet& packet);
     bool receiveMessage(MessageType& outType, sf::Packet& outPacket);
 
-    // Serialization helpers
+    // Serialization helpers - UPDATED WITH FUEL FIELDS
     void serializePlayerState(sf::Packet& packet, const PlayerState& state);
     void deserializePlayerState(sf::Packet& packet, PlayerState& state);
     void serializePlayerSpawnInfo(sf::Packet& packet, const PlayerSpawnInfo& spawnInfo);

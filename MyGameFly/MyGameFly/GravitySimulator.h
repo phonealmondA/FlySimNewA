@@ -8,7 +8,7 @@
 
 // Forward declarations
 class VehicleManager;
-class Player;  // Now uncommented since Player.h exists
+class Player;
 
 class GravitySimulator {
 private:

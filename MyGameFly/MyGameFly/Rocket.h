@@ -17,7 +17,18 @@ private:
     std::vector<Planet*> nearbyPlanets;
     float mass; // Added mass property for physics calculations
 
+    // FUEL SYSTEM PROPERTIES
+    float currentFuel;  // Current fuel amount
+    float maxFuel;      // Maximum fuel capacity
+    bool isCollectingFuel;  // Flag to track if currently collecting fuel
+    Planet* fuelSourcePlanet;  // Which planet we're collecting fuel from
+
     bool checkCollision(const Planet& planet);
+
+    // FUEL SYSTEM METHODS
+    void consumeFuel(float deltaTime);  // Consume fuel based on thrust level
+    void collectFuelFromPlanets(float deltaTime);  // Collect fuel from nearby planets
+    float calculateFuelConsumption() const;  // Calculate current fuel consumption rate
 
 public:
     Rocket(sf::Vector2f pos, sf::Vector2f vel, sf::Color col = sf::Color::White, float m = 1.0f);
@@ -33,6 +44,18 @@ public:
 
     // Add getter for mass
     float getMass() const { return mass; }
+
+    // FUEL SYSTEM GETTERS
+    float getCurrentFuel() const { return currentFuel; }
+    float getMaxFuel() const { return maxFuel; }
+    float getFuelPercentage() const { return maxFuel > 0 ? (currentFuel / maxFuel) * 100.0f : 0.0f; }
+    bool canThrust() const { return currentFuel > 0.0f; }  // Check if rocket has fuel to thrust
+    bool getIsCollectingFuel() const { return isCollectingFuel; }
+    Planet* getFuelSourcePlanet() const { return fuelSourcePlanet; }
+
+    // FUEL SYSTEM SETTERS
+    void setFuel(float fuel) { currentFuel = std::max(0.0f, std::min(fuel, maxFuel)); }
+    void addFuel(float fuel) { setFuel(currentFuel + fuel); }
 
     void update(float deltaTime) override;
     void draw(sf::RenderWindow& window) override;

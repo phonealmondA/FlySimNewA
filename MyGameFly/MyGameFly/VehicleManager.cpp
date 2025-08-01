@@ -75,10 +75,8 @@ void VehicleManager::drawWithConstantSize(sf::RenderWindow& window, float zoomLe
 
 void VehicleManager::applyThrust(float amount) {
     if (activeVehicle == VehicleType::ROCKET) {
-        //rocket->setThrustLevel(1.0f); // Set thrust level to max
         rocket->applyThrust(amount);
     }
-
     else {
         car->accelerate(amount);
     }

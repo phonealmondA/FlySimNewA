@@ -20,7 +20,7 @@ namespace GameConstants {
     constexpr float MAIN_PLANET_RADIUS = 10000.0f;  // Base radius at this mass
     constexpr float MASS_RATIO = 0.06f;  // Same as SECONDARY_PLANET_MASS / MAIN_PLANET_MASS
     constexpr float CUBE_ROOT_APPROX = 60.0f;  // Approximate cube root of 0.08
-    constexpr float SECONDARY_PLANET_RADIUS = (MAIN_PLANET_RADIUS / CUBE_ROOT_APPROX)/10000;  // ~430
+    constexpr float SECONDARY_PLANET_RADIUS = (MAIN_PLANET_RADIUS / CUBE_ROOT_APPROX) / 10000;  // ~430
 
     // Planet positions
     constexpr float MAIN_PLANET_X = 400.0f;
@@ -40,6 +40,26 @@ namespace GameConstants {
     // Rocket parameters
     constexpr float ROCKET_MASS = 1.0f;
     constexpr float ROCKET_SIZE = 15.0f;
+
+    // FUEL SYSTEM CONSTANTS
+    constexpr float ROCKET_MAX_FUEL = 100.0f;  // Maximum fuel capacity
+    constexpr float ROCKET_STARTING_FUEL = 100.0f;  // Starting fuel amount
+
+    // Fuel consumption rates (units per second at different thrust levels)
+    constexpr float FUEL_CONSUMPTION_BASE = 2.0f;  // Base consumption at 10% thrust
+    constexpr float FUEL_CONSUMPTION_MULTIPLIER = 8.0f;  // Multiplier for higher thrust levels
+    constexpr float FUEL_CONSUMPTION_MIN_THRESHOLD = 0.1f;  // Minimum thrust level that consumes fuel
+
+    // Fuel collection parameters
+    constexpr float FUEL_COLLECTION_RANGE = 80.0f;  // Distance from planet surface for fuel collection
+    constexpr float FUEL_COLLECTION_RATE = 15.0f;  // Fuel units per second when collecting
+    constexpr float FUEL_COLLECTION_MASS_RATIO = 10.0f;  // How much planet mass equals 1 fuel unit
+    constexpr float MIN_PLANET_MASS_FOR_COLLECTION = 1000.0f;  // Minimum planet mass before collection stops
+
+    // Fuel collection ring visual settings
+    constexpr float FUEL_RING_THICKNESS = 3.0f;  // Thickness of the fuel collection ring
+    const sf::Color FUEL_RING_COLOR = sf::Color(0, 255, 255, 128);  // Cyan with transparency
+    const sf::Color FUEL_RING_ACTIVE_COLOR = sf::Color(255, 255, 0, 200);  // Yellow when actively collecting
 
     // Visualization settings
     constexpr float GRAVITY_VECTOR_SCALE = 5.0f;
