@@ -10,7 +10,7 @@ namespace GameConstants {
     constexpr float REFERENCE_MASS = 10000.0f;  // Reference mass for radius scaling
 
     // Primary inputs
-    constexpr float MAIN_PLANET_MASS = 2600000.0f;  // Primary parameter to adjust
+    constexpr float MAIN_PLANET_MASS = 260000.0f;  // Primary parameter to adjust
     constexpr float ORBIT_PERIOD = 420.0f;  // Desired orbit period in seconds
 
     // Derived parameters
@@ -38,7 +38,7 @@ namespace GameConstants {
         std::sqrt(G * MAIN_PLANET_MASS / PLANET_ORBIT_DISTANCE);
 
     // Rocket parameters
-    constexpr float ROCKET_MASS = 1.0f;
+    constexpr float ROCKET_MASS = 1000.0f;
     constexpr float ROCKET_SIZE = 15.0f;
 
     // FUEL SYSTEM CONSTANTS
@@ -51,10 +51,10 @@ namespace GameConstants {
     constexpr float FUEL_CONSUMPTION_MIN_THRESHOLD = 0.1f;  // Minimum thrust level that consumes fuel
 
     // Fuel collection parameters
-    constexpr float FUEL_COLLECTION_RANGE = 80.0f;  // Distance from planet surface for fuel collection
+    constexpr float FUEL_COLLECTION_RANGE = 250.0f;  // Distance from planet surface for fuel collection
     constexpr float FUEL_COLLECTION_RATE = 15.0f;  // Fuel units per second when collecting
-    constexpr float FUEL_COLLECTION_MASS_RATIO = 10.0f;  // How much planet mass equals 1 fuel unit
-    constexpr float MIN_PLANET_MASS_FOR_COLLECTION = 1000.0f;  // Minimum planet mass before collection stops
+    constexpr float FUEL_COLLECTION_MASS_RATIO = 1.0f;  // How much planet mass equals 1 fuel unit
+    constexpr float MIN_PLANET_MASS_FOR_COLLECTION = 50.0f;  // Minimum planet mass before collection stops
 
     // Fuel collection ring visual settings
     constexpr float FUEL_RING_THICKNESS = 3.0f;  // Thickness of the fuel collection ring
