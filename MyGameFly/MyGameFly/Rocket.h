@@ -22,6 +22,7 @@ private:
     float maxFuel;      // Maximum fuel capacity
     bool isCollectingFuel;  // Flag to track if currently collecting fuel
     Planet* fuelSourcePlanet;  // Which planet we're collecting fuel from
+    bool isCurrentlyThrusting;  // NEW: Track if thrust is actually being applied this frame
 
     bool checkCollision(const Planet& planet);
 

@@ -6,7 +6,7 @@
 Rocket::Rocket(sf::Vector2f pos, sf::Vector2f vel, sf::Color col, float m)
     : GameObject(pos, vel, col), rotation(0), angularVelocity(0), thrustLevel(0.0f), mass(m),
     currentFuel(GameConstants::ROCKET_STARTING_FUEL), maxFuel(GameConstants::ROCKET_MAX_FUEL),
-    isCollectingFuel(false), fuelSourcePlanet(nullptr)
+    isCollectingFuel(false), fuelSourcePlanet(nullptr), isCurrentlyThrusting(false)  // NEW: Initialize thrusting flag
 {
     // Create rocket body (a simple triangle)
     body.setPointCount(3);
@@ -30,8 +30,12 @@ void Rocket::applyThrust(float amount)
 {
     // Check if we have fuel to thrust
     if (!canThrust()) {
+        isCurrentlyThrusting = false;  // NEW: No fuel, no thrusting
         return;  // No fuel, no thrust
     }
+
+    // NEW: Mark that we're actually thrusting this frame
+    isCurrentlyThrusting = true;
 
     // Calculate thrust direction based on rocket rotation
     float radians = rotation * 3.14159f / 180.0f;
@@ -73,7 +77,10 @@ float Rocket::calculateFuelConsumption() const
 
 void Rocket::consumeFuel(float deltaTime)
 {
-    if (thrustLevel > GameConstants::FUEL_CONSUMPTION_MIN_THRESHOLD && currentFuel > 0.0f) {
+    // NEW: Only consume fuel if we're actually thrusting AND have enough thrust level AND have fuel
+    if (isCurrentlyThrusting &&
+        thrustLevel > GameConstants::FUEL_CONSUMPTION_MIN_THRESHOLD &&
+        currentFuel > 0.0f) {
         float consumption = calculateFuelConsumption() * deltaTime;
         currentFuel = std::max(0.0f, currentFuel - consumption);
     }
@@ -193,11 +200,14 @@ void Rocket::update(float deltaTime)
 {
     bool resting = false;
 
-    // Process fuel consumption first
+    // Process fuel consumption first (will only consume if isCurrentlyThrusting is true from previous frame's input)
     consumeFuel(deltaTime);
 
     // Process fuel collection from nearby planets
     collectFuelFromPlanets(deltaTime);
+
+    // Reset the thrusting flag AFTER fuel consumption for next frame
+    isCurrentlyThrusting = false;
 
     // Check if we're resting on any planet
     for (const auto& planet : nearbyPlanets) {

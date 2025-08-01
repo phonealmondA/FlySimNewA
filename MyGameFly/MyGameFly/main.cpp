@@ -986,9 +986,20 @@ public:
             ss << "Player 2 (WASD + K): " << (p2->getActiveVehicleType() == VehicleType::ROCKET ? "ROCKET" : "CAR") << "\n";
 
             if (p1->getActiveVehicleType() == VehicleType::ROCKET) {
-                float thrustLevel = p1->getRocket()->getThrustLevel();
+                Rocket* rocket = p1->getRocket();
+                float thrustLevel = rocket->getThrustLevel();
                 ss << "Shared Thrust: " << std::fixed << std::setprecision(0) << thrustLevel * 100.0f << "%\n";
+                // ADD FUEL INFO FOR SPLIT-SCREEN
+                ss << "P1 Fuel: " << std::setprecision(1) << rocket->getCurrentFuel() << "/"
+                    << rocket->getMaxFuel() << " (" << std::setprecision(0) << rocket->getFuelPercentage() << "%)\n";
             }
+
+            if (p2->getActiveVehicleType() == VehicleType::ROCKET) {
+                Rocket* rocket2 = p2->getRocket();
+                ss << "P2 Fuel: " << std::setprecision(1) << rocket2->getCurrentFuel() << "/"
+                    << rocket2->getMaxFuel() << " (" << std::setprecision(0) << rocket2->getFuelPercentage() << "%)\n";
+            }
+
             ss << "Mouse wheel: Zoom in/out";
         }
         else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
@@ -1003,7 +1014,11 @@ public:
                     << "Player: " << localPlayer->getName() << "\n"
                     << "Role: " << (networkManager->getRole() == NetworkRole::HOST ? "HOST" : "CLIENT") << "\n"
                     << "Speed: " << std::fixed << std::setprecision(1) << speed << " units/s\n"
-                    << "Thrust: " << std::setprecision(0) << rocket->getThrustLevel() * 100.0f << "%";
+                    << "Thrust: " << std::setprecision(0) << rocket->getThrustLevel() * 100.0f << "%\n"
+                    // ADD FUEL INFO FOR NETWORK MULTIPLAYER
+                    << "Fuel: " << std::setprecision(1) << rocket->getCurrentFuel() << "/"
+                    << rocket->getMaxFuel() << " (" << std::setprecision(0) << rocket->getFuelPercentage() << "%)\n"
+                    << "Collecting: " << (rocket->getIsCollectingFuel() ? "YES" : "NO");
             }
             else {
                 Car* car = localPlayer->getVehicleManager()->getCar();
@@ -1024,7 +1039,11 @@ public:
                 << "Speed: " << std::fixed << std::setprecision(1) << speed << " units/s\n"
                 << "Velocity: (" << std::setprecision(1) << rocket->getVelocity().x << ", "
                 << rocket->getVelocity().y << ")\n"
-                << "Thrust Level: " << std::setprecision(2) << rocket->getThrustLevel() * 100.0f << "%";
+                << "Thrust Level: " << std::setprecision(2) << rocket->getThrustLevel() * 100.0f << "%\n"
+                // ADD FUEL INFO FOR SINGLE PLAYER
+                << "Fuel: " << std::setprecision(1) << rocket->getCurrentFuel() << "/"
+                << rocket->getMaxFuel() << " (" << std::setprecision(0) << rocket->getFuelPercentage() << "%)\n"
+                << "Collecting: " << (rocket->getIsCollectingFuel() ? "YES" : "NO");
         }
         else if (vehicleManager) {
             Car* car = vehicleManager->getCar();
@@ -1054,20 +1073,10 @@ public:
             activeVehicle = vehicleManager->getActiveVehicle();
         }
 
-        if (activeVehicle) {/*
-            for (const auto& planetPtr : planets) {
-                sf::Vector2f direction = planetPtr->getPosition() - activeVehicle->getPosition();
-                float dist = std::sqrt(direction.x * direction.x + direction.y * direction.y);
-
-                if (dist < closestDistance) {
-                    closestDistance = dist;
-                    closestPlanet = planetPtr;
-                }
-            }*/
+        if (activeVehicle) {
             for (const auto& planetPtr : planets) {
                 sf::Vector2f direction = planetPtr->getPosition() - activeVehicle->getPosition();
                 float centerDistance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
-                float surfaceDistance = centerDistance - planetPtr->getRadius(); // Distance to surface
 
                 if (centerDistance < closestDistance) {
                     closestDistance = centerDistance;
@@ -1075,18 +1084,18 @@ public:
                 }
             }
 
-
             if (closestPlanet) {
                 std::string planetName = (closestPlanet == planet.get()) ? "Blue Planet" : "Green Planet";
                 float speed = std::sqrt(closestPlanet->getVelocity().x * closestPlanet->getVelocity().x +
                     closestPlanet->getVelocity().y * closestPlanet->getVelocity().y);
 
                 ss << "NEAREST PLANET: " << planetName << "\n"
-                    /*<< "Distance: " << std::fixed << std::setprecision(0) << closestDistance << " units\n"                    */
-					<< "Distance: " << std::fixed << std::setprecision(0) << (closestDistance - closestPlanet->getRadius() - GameConstants::ROCKET_SIZE) << " units\n"
-                    << "Mass: " << closestPlanet->getMass() << " units\n"
-                    << "Radius: " << closestPlanet->getRadius() << " units\n"
-                    << "Speed: " << std::setprecision(1) << speed << " units/s";
+                    << "Distance: " << std::fixed << std::setprecision(0) << (closestDistance - closestPlanet->getRadius() - GameConstants::ROCKET_SIZE) << " units\n"
+                    << "Mass: " << std::setprecision(0) << closestPlanet->getMass() << " units\n"
+                    << "Radius: " << std::setprecision(0) << closestPlanet->getRadius() << " units\n"
+                    << "Speed: " << std::setprecision(1) << speed << " units/s\n"
+                    // ADD FUEL COLLECTION INFO
+                    << "Can collect fuel: " << (closestPlanet->canCollectFuel() ? "YES" : "NO");
             }
         }
         planetInfoPanel->setText(ss.str());
@@ -1100,7 +1109,8 @@ public:
                 << "Camera centered between players\n"
                 << "Mouse wheel to zoom\n"
                 << "Numbers 1-9,0,= control thrust\n"
-                << "for both players";
+                << "for both players\n"
+                << "Fuel collection from planets!";
         }
         else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && networkManager) {
             std::string modeStr = (currentState == GameState::LAN_MULTIPLAYER) ? "LAN" : "ONLINE";
@@ -1110,18 +1120,21 @@ public:
             if (localPlayer) {
                 ss << "Playing as: " << localPlayer->getName() << "\n";
             }
-            ss << "Immediate local response!";
+            ss << "Immediate local response!\n"
+                << "Fuel collection enabled!";
         }
         else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
             ss << "ORBIT INFO\n"
                 << "Trajectory visible on screen\n"
                 << "Mouse wheel to zoom\n"
-                << "Press C to focus on green planet";
+                << "Press C to focus on green planet\n"
+                << "Collect fuel from planets!";
         }
         else {
             ss << "ORBIT INFO\n"
                 << "Not available in car mode\n"
-                << "Transform to rocket for orbital data";
+                << "Transform to rocket for orbital data\n"
+                << "Fuel system active in rocket mode";
         }
         orbitInfoPanel->setText(ss.str());
     }
@@ -1194,17 +1207,88 @@ public:
         planet->draw(window);
         planet2->draw(window);
 
+        // NEW: Draw fuel collection indicators - planets already draw their own rings in draw()
+        // So we just need to draw active collection lines for rockets
+
         // Draw players/vehicles based on game mode
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
             splitScreenManager->drawWithConstantSize(window, zoomLevel);
+
+            // Draw fuel collection indicators for split-screen
+            if (splitScreenManager->getPlayer1()->getActiveVehicleType() == VehicleType::ROCKET) {
+                Rocket* rocket = splitScreenManager->getPlayer1()->getRocket();
+                if (rocket->getIsCollectingFuel() && rocket->getFuelSourcePlanet()) {
+                    // Draw line connecting rocket to fuel source
+                    sf::VertexArray fuelLine(sf::PrimitiveType::LineStrip);
+                    sf::Vertex startVertex;
+                    startVertex.position = rocket->getPosition();
+                    startVertex.color = GameConstants::FUEL_RING_ACTIVE_COLOR;
+                    fuelLine.append(startVertex);
+                    sf::Vertex endVertex;
+                    endVertex.position = rocket->getFuelSourcePlanet()->getPosition();
+                    endVertex.color = GameConstants::FUEL_RING_ACTIVE_COLOR;
+                    fuelLine.append(endVertex);
+                    window.draw(fuelLine);
+                }
+            }
+            if (splitScreenManager->getPlayer2()->getActiveVehicleType() == VehicleType::ROCKET) {
+                Rocket* rocket = splitScreenManager->getPlayer2()->getRocket();
+                if (rocket->getIsCollectingFuel() && rocket->getFuelSourcePlanet()) {
+                    // Draw line connecting rocket to fuel source
+                    sf::VertexArray fuelLine(sf::PrimitiveType::LineStrip);
+                    sf::Vertex startVertex;
+                    startVertex.position = rocket->getPosition();
+                    startVertex.color = GameConstants::FUEL_RING_ACTIVE_COLOR;
+                    fuelLine.append(startVertex);
+                    sf::Vertex endVertex;
+                    endVertex.position = rocket->getFuelSourcePlanet()->getPosition();
+                    endVertex.color = GameConstants::FUEL_RING_ACTIVE_COLOR;
+                    fuelLine.append(endVertex);
+                    window.draw(fuelLine);
+                }
+            }
         }
         else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
             // Draw local player
             localPlayer->drawWithConstantSize(window, zoomLevel);
 
+            // Draw fuel collection indicator for local player
+            if (localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+                Rocket* rocket = localPlayer->getVehicleManager()->getRocket();
+                if (rocket->getIsCollectingFuel() && rocket->getFuelSourcePlanet()) {
+                    sf::VertexArray fuelLine(sf::PrimitiveType::LineStrip);
+                    sf::Vertex startVertex;
+                    startVertex.position = rocket->getPosition();
+                    startVertex.color = GameConstants::FUEL_RING_ACTIVE_COLOR;
+                    fuelLine.append(startVertex);
+                    sf::Vertex endVertex;
+                    endVertex.position = rocket->getFuelSourcePlanet()->getPosition();
+                    endVertex.color = GameConstants::FUEL_RING_ACTIVE_COLOR;
+                    fuelLine.append(endVertex);
+                    window.draw(fuelLine);
+                }
+            }
+
             // Draw all remote players
             for (auto& remotePlayer : remotePlayers) {
                 remotePlayer->drawWithConstantSize(window, zoomLevel);
+
+                // Draw fuel collection indicator for remote players
+                if (remotePlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+                    Rocket* rocket = remotePlayer->getVehicleManager()->getRocket();
+                    if (rocket->getIsCollectingFuel() && rocket->getFuelSourcePlanet()) {
+                        sf::VertexArray fuelLine(sf::PrimitiveType::LineStrip);
+                        sf::Vertex startVertex;
+                        startVertex.position = rocket->getPosition();
+                        startVertex.color = sf::Color(255, 255, 0, 150); // Dimmer for remote players
+                        fuelLine.append(startVertex);
+                        sf::Vertex endVertex;
+                        endVertex.position = rocket->getFuelSourcePlanet()->getPosition();
+                        endVertex.color = sf::Color(255, 255, 0, 150);
+                        fuelLine.append(endVertex);
+                        window.draw(fuelLine);
+                    }
+                }
 
                 if (fontLoaded) {
                     remotePlayer->drawPlayerLabel(window, font);
@@ -1218,6 +1302,23 @@ public:
         }
         else if (vehicleManager) {
             vehicleManager->drawWithConstantSize(window, zoomLevel);
+
+            // Draw fuel collection indicator for single player
+            if (vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+                Rocket* rocket = vehicleManager->getRocket();
+                if (rocket->getIsCollectingFuel() && rocket->getFuelSourcePlanet()) {
+                    sf::VertexArray fuelLine(sf::PrimitiveType::LineStrip);
+                    sf::Vertex startVertex;
+                    startVertex.position = rocket->getPosition();
+                    startVertex.color = GameConstants::FUEL_RING_ACTIVE_COLOR;
+                    fuelLine.append(startVertex);
+                    sf::Vertex endVertex;
+                    endVertex.position = rocket->getFuelSourcePlanet()->getPosition();
+                    endVertex.color = GameConstants::FUEL_RING_ACTIVE_COLOR;
+                    fuelLine.append(endVertex);
+                    window.draw(fuelLine);
+                }
+            }
         }
 
         // Draw velocity vectors
