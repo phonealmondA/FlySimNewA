@@ -811,7 +811,7 @@ void FuelTransferNetwork::drawEmergencyIndicators(sf::RenderWindow& window) {
         // Draw pulsing emergency indicator
         sf::CircleShape indicator;
         indicator.setRadius(25.0f);
-        indicator.setPosition(pos.x - 25.0f, pos.y - 25.0f);
+        indicator.setPosition({pos.x - 25.0f, pos.y - 25.0f});
         indicator.setFillColor(sf::Color::Transparent);
         indicator.setOutlineColor(GameConstants::SATELLITE_EMERGENCY_COLOR);
         indicator.setOutlineThickness(3.0f);
