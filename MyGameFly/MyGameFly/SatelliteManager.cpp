@@ -375,7 +375,7 @@ void SatelliteManager::optimizeFuelDistribution() {
     transferNetwork->prioritizeMaintenanceFuel();
 }
 
-std::string SatelliteManager::generateSatelliteName(int id) {
+std::string SatelliteManager::generateSatelliteName(int id) const {
     std::stringstream ss;
     ss << "SAT-" << std::setfill('0') << std::setw(3) << id;
     return ss.str();

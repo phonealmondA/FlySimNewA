@@ -7,6 +7,8 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include "UIManager.h"
+#include "VectorHelper.h"
 
 // Forward declarations
 class VehicleManager;
@@ -17,7 +19,6 @@ class Rocket;
 class Car;
 class NetworkManager;
 
-enum class GameState;
 
 class GameInfoDisplay {
 private:

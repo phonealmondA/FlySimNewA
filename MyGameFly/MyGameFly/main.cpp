@@ -314,7 +314,6 @@ public:
             }
         }
     }
-
     void handleGameEvents(const sf::Event& event) {
         // Handle split-screen transform inputs first
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
@@ -395,7 +394,6 @@ public:
             handleWindowResize(event);
         }
     }
-
     void handleEscapeKey() {
         if (networkManager) {
             networkManager->disconnect();
@@ -424,34 +422,15 @@ public:
         lKeyPressed = true;
 
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-            // Handle in split screen manager
+            // Split screen transform is handled in splitScreenManager->handleTransformInputs()
+            // No additional logic needed here
         }
         else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
-            localPlayer->update(deltaTime);
-
-            for (auto& remotePlayer : remotePlayers) {
-                remotePlayer->update(deltaTime);
-            }
-
-            if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
-                gameView.setCenter(localPlayer->getPosition());
-            }
+            localPlayer->requestTransform();
         }
         else if (vehicleManager) {
-            vehicleManager->update(deltaTime);
-
-            // Auto-center camera on vehicle
-            sf::Vector2f vehiclePos = vehicleManager->getActiveVehicle()->getPosition();
-            gameView.setCenter(vehiclePos);
+            vehicleManager->switchVehicle();
         }
-
-        // Smooth zoom
-        zoomLevel += (targetZoom - zoomLevel) * deltaTime * 2.0f;
-        gameView.setSize(sf::Vector2f(1280.f * zoomLevel, 720.f * zoomLevel));
-
-        // Update UI Manager
-        uiManager->update(currentState, vehicleManager.get(), splitScreenManager.get(),
-            localPlayer.get(), planets, networkManager.get());
     }
 
     void renderGame() {
@@ -626,124 +605,6 @@ public:
         }
     }
 
-    void run() {
-        sf::Clock clock;
-
-        while (window.isOpen()) {
-            float deltaTime = std::min(clock.restart().asSeconds(), 0.1f);
-
-            // Handle events
-            if (std::optional<sf::Event> event = window.pollEvent()) {
-                if (event->is<sf::Event::Closed>()) {
-                    if (networkManager) {
-                        networkManager->disconnect();
-                    }
-                    window.close();
-                    continue;
-                }
-
-                switch (currentState) {
-                case GameState::MAIN_MENU:
-                case GameState::MULTIPLAYER_MENU:
-                case GameState::ONLINE_MENU:
-                    handleMenuEvents(*event);
-                    break;
-                case GameState::SINGLE_PLAYER:
-                case GameState::LOCAL_PC_MULTIPLAYER:
-                case GameState::LAN_MULTIPLAYER:
-                case GameState::ONLINE_MULTIPLAYER:
-                    handleGameEvents(*event);
-                    break;
-                default:
-                    break;
-                }
-            }
-
-            // Update game state
-            switch (currentState) {
-            case GameState::SINGLE_PLAYER:
-            case GameState::LOCAL_PC_MULTIPLAYER:
-            case GameState::LAN_MULTIPLAYER:
-            case GameState::ONLINE_MULTIPLAYER:
-                handleGameInput(deltaTime);
-                updateGame(deltaTime);
-                break;
-            default:
-                break;
-            }
-
-            // Render
-            window.clear(sf::Color::Black);
-
-            switch (currentState) {
-            case GameState::MAIN_MENU:
-            case GameState::MULTIPLAYER_MENU:
-            case GameState::ONLINE_MENU:
-                renderMenu();
-                break;
-            case GameState::SINGLE_PLAYER:
-            case GameState::LOCAL_PC_MULTIPLAYER:
-            case GameState::LAN_MULTIPLAYER:
-            case GameState::ONLINE_MULTIPLAYER:
-                renderGame();
-                break;
-            default:
-                break;
-            }
-
-            window.display();
-        }
-    }
-};
-
-// Helper function implementations
-float calculateApoapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, float G) {
-    float speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);
-    float distance = std::sqrt(pos.x * pos.x + pos.y * pos.y);
-    float energy = 0.5f * speed * speed - G * planetMass / distance;
-
-    float semiMajor = -G * planetMass / (2 * energy);
-
-    if (energy >= 0) return -1.0f;
-
-    sf::Vector2f eVec;
-    float vSquared = speed * speed;
-    eVec.x = (vSquared * pos.x - (pos.x * vel.x + pos.y * vel.y) * vel.x) / (G * planetMass) - pos.x / distance;
-    eVec.y = (vSquared * pos.y - (pos.x * vel.x + pos.y * vel.y) * vel.y) / (G * planetMass) - pos.y / distance;
-    float ecc = std::sqrt(eVec.x * eVec.x + eVec.y * eVec.y);
-
-    return semiMajor * (1 + ecc);
-}
-
-float calculatePeriapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, float G) {
-    float speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);
-    float distance = std::sqrt(pos.x * pos.x + pos.y * pos.y);
-    float energy = 0.5f * speed * speed - G * planetMass / distance;
-
-    float semiMajor = -G * planetMass / (2 * energy);
-
-    if (energy >= 0) return -1.0f;
-
-    sf::Vector2f eVec;
-    float vSquared = speed * speed;
-    eVec.x = (vSquared * pos.x - (pos.x * vel.x + pos.y * vel.y) * vel.x) / (G * planetMass) - pos.x / distance;
-    eVec.y = (vSquared * pos.y - (pos.x * vel.x + pos.y * vel.y) * vel.y) / (G * planetMass) - pos.y / distance;
-    float ecc = std::sqrt(eVec.x * eVec.x + eVec.y * eVec.y);
-
-    return semiMajor * (1 - ecc);
-}
-
-int main() {
-    Game game;
-    game.run();
-    return 0;
-}State == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
-    localPlayer->requestTransform();
-        }
-        else if (vehicleManager) {
-            vehicleManager->switchVehicle();
-            }
-    }
 
     void handleSatelliteConversion() {
         tKeyPressed = true;
@@ -797,7 +658,8 @@ int main() {
         float minDistance = std::numeric_limits<float>::max();
 
         for (auto* planet : planets) {
-            float dist = distance(position, planet->getPosition());
+            sf::Vector2f direction = planet->getPosition() - position;
+            float dist = std::sqrt(direction.x * direction.x + direction.y * direction.y);
             if (dist < minDistance) {
                 minDistance = dist;
                 nearestPlanet = planet;
@@ -805,7 +667,11 @@ int main() {
         }
 
         if (nearestPlanet) {
-            sf::Vector2f direction = normalize(position - nearestPlanet->getPosition());
+            sf::Vector2f direction = position - nearestPlanet->getPosition();
+            float length = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+            if (length > 0) {
+                direction /= length; // normalize
+            }
             return nearestPlanet->getPosition() + direction * (nearestPlanet->getRadius() + GameConstants::ROCKET_SIZE + 5.0f);
         }
 
@@ -978,14 +844,11 @@ int main() {
             }
             else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::X)) {
                 sf::Vector2f vehiclePos = vehicleManager->getActiveVehicle()->getPosition();
-                float dist1 = std::sqrt(
-                    std::pow(vehiclePos.x - planet->getPosition().x, 2) +
-                    std::pow(vehiclePos.y - planet->getPosition().y, 2)
-                );
-                float dist2 = std::sqrt(
-                    std::pow(vehiclePos.x - planet2->getPosition().x, 2) +
-                    std::pow(vehiclePos.y - planet2->getPosition().y, 2)
-                );
+                sf::Vector2f direction1 = vehiclePos - planet->getPosition();
+                sf::Vector2f direction2 = vehiclePos - planet2->getPosition();
+                float dist1 = std::sqrt(direction1.x * direction1.x + direction1.y * direction1.y);
+                float dist2 = std::sqrt(direction2.x * direction2.x + direction2.y * direction2.y);
+
                 targetZoom = minZoom + (std::min(dist1, dist2) - (planet->getRadius() + GameConstants::ROCKET_SIZE)) / 100.0f;
                 targetZoom = std::max(minZoom, std::min(targetZoom, maxZoom));
                 gameView.setCenter(vehiclePos);
@@ -996,299 +859,179 @@ int main() {
             }
         }
     }
-}
 
-void updateGame(float deltaTime) {
-    // Update network manager if active
-    if (networkManager) {
-        networkManager->update(deltaTime);
-    }
-
-    // Update simulation
-    gravitySimulator->update(deltaTime);
-    planet->update(deltaTime);
-    planet2->update(deltaTime);
-
-    // SATELLITE SYSTEM: Update satellites
-    satelliteManager->update(deltaTime);
-
-    if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-        splitScreenManager->update(deltaTime);
-
-        if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
-            gameView.setCenter(splitScreenManager->getCenterPoint());
-        }
-    }
-    else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
-        localPlayer->update(deltaTime);
-
-        for (auto& remotePlayer : remotePlayers) {
-            remotePlayer->update(deltaTime);
+    void updateGame(float deltaTime) {
+        // Update network manager if active
+        if (networkManager) {
+            networkManager->update(deltaTime);
         }
 
-        if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
-            gameView.setCenter(localPlayer->getPosition());
-        }
-    }
-    else if (vehicleManager) {
-        vehicleManager->update(deltaTime);
+        // Update simulation
+        gravitySimulator->update(deltaTime);
+        planet->update(deltaTime);
+        planet2->update(deltaTime);
 
-        // Auto-center camera on vehicle
-        sf::Vector2f vehiclePos = vehicleManager->getActiveVehicle()->getPosition();
-        gameView.setCenter(vehiclePos);
-    }
+        // SATELLITE SYSTEM: Update satellites
+        satelliteManager->update(deltaTime);
 
-    // Smooth zoom
-    zoomLevel += (targetZoom - zoomLevel) * deltaTime * 2.0f;
-    gameView.setSize(sf::Vector2f(1280.f * zoomLevel, 720.f * zoomLevel));
+        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+            splitScreenManager->update(deltaTime);
 
-    // Update UI Manager
-    uiManager->update(currentState, vehicleManager.get(), splitScreenManager.get(),
-        localPlayer.get(), planets, networkManager.get());
-}
-
-void renderGame() {
-    window.setView(gameView);
-
-    // Find closest planet for orbit path
-    Planet* closestPlanet = nullptr;
-    float closestDistance = std::numeric_limits<float>::max();
-
-    sf::Vector2f referencePos = getCameraReferencePosition();
-
-    for (auto& planetPtr : planets) {
-        sf::Vector2f direction = planetPtr->getPosition() - referencePos;
-        float dist = std::sqrt(direction.x * direction.x + direction.y * direction.y);
-
-        if (dist < closestDistance) {
-            closestDistance = dist;
-            closestPlanet = planetPtr;
-        }
-    }
-
-    // Draw orbit path for closest planet
-    if (closestPlanet) {
-        closestPlanet->drawOrbitPath(window, planets);
-    }
-
-    // Draw trajectory for rockets
-    drawTrajectories();
-
-    // Draw game objects - planets automatically draw fuel collection rings
-    planet->draw(window);
-    planet2->draw(window);
-
-    // SATELLITE SYSTEM: Draw satellites
-    satelliteManager->drawWithConstantSize(window, zoomLevel);
-
-    // Draw vehicles and fuel collection indicators
-    drawVehiclesAndFuelLines();
-
-    // Draw velocity vectors
-    drawVelocityVectors();
-
-    // Draw UI
-    uiManager->draw(window, currentState, networkManager.get());
-}
-
-sf::Vector2f getCameraReferencePosition() {
-    if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-        return splitScreenManager->getCenterPoint();
-    }
-    else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
-        return localPlayer->getPosition();
-    }
-    else if (vehicleManager) {
-        return vehicleManager->getActiveVehicle()->getPosition();
-    }
-    return sf::Vector2f(0, 0);
-}
-
-void drawTrajectories() {
-    if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-        if (splitScreenManager->getPlayer1()->getActiveVehicleType() == VehicleType::ROCKET) {
-            splitScreenManager->getPlayer1()->getRocket()->drawTrajectory(window, planets,
-                GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS, false);
-        }
-        if (splitScreenManager->getPlayer2()->getActiveVehicleType() == VehicleType::ROCKET) {
-            splitScreenManager->getPlayer2()->getRocket()->drawTrajectory(window, planets,
-                GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS, false);
-        }
-    }
-    else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
-        if (localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
-            localPlayer->getVehicleManager()->getRocket()->drawTrajectory(window, planets,
-                GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS, false);
-        }
-
-        for (auto& remotePlayer : remotePlayers) {
-            if (remotePlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
-                remotePlayer->getVehicleManager()->getRocket()->drawTrajectory(window, planets,
-                    GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS, false);
+            if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
+                gameView.setCenter(splitScreenManager->getCenterPoint());
             }
         }
-    }
-    else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
-        vehicleManager->getRocket()->drawTrajectory(window, planets,
-            GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS, false);
-    }
-}
+        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
+            localPlayer->update(deltaTime);
 
-void drawVehiclesAndFuelLines() {
-    if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-        splitScreenManager->drawWithConstantSize(window, zoomLevel);
-        uiManager->drawMultipleFuelLines(window,
-            splitScreenManager->getPlayer1(), splitScreenManager->getPlayer2());
-    }
-    else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
-        localPlayer->drawWithConstantSize(window, zoomLevel);
-
-        if (localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
-            uiManager->drawFuelCollectionLines(window, localPlayer->getVehicleManager()->getRocket());
-        }
-
-        for (auto& remotePlayer : remotePlayers) {
-            remotePlayer->drawWithConstantSize(window, zoomLevel);
-
-            if (remotePlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
-                uiManager->drawFuelCollectionLines(window, remotePlayer->getVehicleManager()->getRocket());
+            for (auto& remotePlayer : remotePlayers) {
+                remotePlayer->update(deltaTime);
             }
 
-            if (uiManager->isFontLoaded()) {
-                remotePlayer->drawPlayerLabel(window, uiManager->getFont());
+            if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
+                gameView.setCenter(localPlayer->getPosition());
             }
         }
+        else if (vehicleManager) {
+            vehicleManager->update(deltaTime);
 
-        if (uiManager->isFontLoaded()) {
-            localPlayer->drawPlayerLabel(window, uiManager->getFont());
-        }
-    }
-    else if (vehicleManager) {
-        vehicleManager->drawWithConstantSize(window, zoomLevel);
-
-        if (vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
-            uiManager->drawFuelCollectionLines(window, vehicleManager->getRocket());
-        }
-    }
-}
-
-void drawVelocityVectors() {
-    // Draw planet velocity vectors
-    planet->drawVelocityVector(window, 5.0f);
-    planet2->drawVelocityVector(window, 5.0f);
-
-    // Draw vehicle velocity vectors
-    if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-        splitScreenManager->drawVelocityVectors(window, 2.0f);
-    }
-    else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
-        localPlayer->drawVelocityVector(window, 2.0f);
-
-        for (auto& remotePlayer : remotePlayers) {
-            remotePlayer->drawVelocityVector(window, 2.0f);
-            if (remotePlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
-                remotePlayer->getVehicleManager()->getRocket()->drawGravityForceVectors(window, planets, GameConstants::GRAVITY_VECTOR_SCALE);
-            }
+            // Auto-center camera on vehicle
+            sf::Vector2f vehiclePos = vehicleManager->getActiveVehicle()->getPosition();
+            gameView.setCenter(vehiclePos);
         }
 
-        if (localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
-            localPlayer->getVehicleManager()->getRocket()->drawGravityForceVectors(window, planets, GameConstants::GRAVITY_VECTOR_SCALE);
+        // Smooth zoom
+        zoomLevel += (targetZoom - zoomLevel) * deltaTime * 2.0f;
+        gameView.setSize(sf::Vector2f(1280.f * zoomLevel, 720.f * zoomLevel));
+
+        // Update UI Manager
+        uiManager->update(currentState, vehicleManager.get(), splitScreenManager.get(),
+            localPlayer.get(), planets, networkManager.get());
+    }
+
+    // Fix the handleVehicleTransform method (it had incorrect logic)
+    void handleVehicleTransform() {
+        lKeyPressed = true;
+
+        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+            // Split screen transform is handled in splitScreenManager->handleTransformInputs()
+            // No additional logic needed here
+        }
+        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
+            localPlayer->requestTransform();
+        }
+        else if (vehicleManager) {
+            vehicleManager->switchVehicle();
         }
     }
-    else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
-        vehicleManager->drawVelocityVector(window, 2.0f);
-        vehicleManager->getRocket()->drawGravityForceVectors(window, planets, GameConstants::GRAVITY_VECTOR_SCALE);
-    }
-}
 
-void renderMenu() {
-    uiManager->setUIView(window);
-    sf::Vector2f mousePos = uiManager->getMousePosition(window);
 
-    if (currentState == GameState::MAIN_MENU) {
-        mainMenu.update(mousePos);
-        mainMenu.draw(window);
-    }
-    else if (currentState == GameState::MULTIPLAYER_MENU) {
-        multiplayerMenu->update(mousePos);
-        multiplayerMenu->draw(window);
-    }
-    else if (currentState == GameState::ONLINE_MENU) {
-        onlineMenu->update(mousePos);
-        onlineMenu->draw(window);
-    }
-}
+    void run() {
+        sf::Clock clock;
 
-void run() {
-    sf::Clock clock;
+        while (window.isOpen()) {
+            float deltaTime = std::min(clock.restart().asSeconds(), 0.1f);
 
-    while (window.isOpen()) {
-        float deltaTime = std::min(clock.restart().asSeconds(), 0.1f);
-
-        // Handle events
-        if (std::optional<sf::Event> event = window.pollEvent()) {
-            if (event->is<sf::Event::Closed>()) {
-                if (networkManager) {
-                    networkManager->disconnect();
+            // Handle events
+            if (std::optional<sf::Event> event = window.pollEvent()) {
+                if (event->is<sf::Event::Closed>()) {
+                    if (networkManager) {
+                        networkManager->disconnect();
+                    }
+                    window.close();
+                    continue;
                 }
-                window.close();
-                continue;
+
+                switch (currentState) {
+                case GameState::MAIN_MENU:
+                case GameState::MULTIPLAYER_MENU:
+                case GameState::ONLINE_MENU:
+                    handleMenuEvents(*event);
+                    break;
+                case GameState::SINGLE_PLAYER:
+                case GameState::LOCAL_PC_MULTIPLAYER:
+                case GameState::LAN_MULTIPLAYER:
+                case GameState::ONLINE_MULTIPLAYER:
+                    handleGameEvents(*event);
+                    break;
+                default:
+                    break;
+                }
             }
+
+            // Update game state
+            switch (currentState) {
+            case GameState::SINGLE_PLAYER:
+            case GameState::LOCAL_PC_MULTIPLAYER:
+            case GameState::LAN_MULTIPLAYER:
+            case GameState::ONLINE_MULTIPLAYER:
+                handleGameInput(deltaTime);
+                updateGame(deltaTime);
+                break;
+            default:
+                break;
+            }
+
+            // Render
+            window.clear(sf::Color::Black);
 
             switch (currentState) {
             case GameState::MAIN_MENU:
             case GameState::MULTIPLAYER_MENU:
             case GameState::ONLINE_MENU:
-                handleMenuEvents(*event);
+                renderMenu();
                 break;
             case GameState::SINGLE_PLAYER:
             case GameState::LOCAL_PC_MULTIPLAYER:
             case GameState::LAN_MULTIPLAYER:
             case GameState::ONLINE_MULTIPLAYER:
-                handleGameEvents(*event);
+                renderGame();
                 break;
             default:
                 break;
             }
+
+            window.display();
         }
-
-        // Update game state
-        switch (currentState) {
-        case GameState::SINGLE_PLAYER:
-        case GameState::LOCAL_PC_MULTIPLAYER:
-        case GameState::LAN_MULTIPLAYER:
-        case GameState::ONLINE_MULTIPLAYER:
-            handleGameInput(deltaTime);
-            updateGame(deltaTime);
-            break;
-        default:
-            break;
-        }
-
-        // Render
-        window.clear(sf::Color::Black);
-
-        switch (currentState) {
-        case GameState::MAIN_MENU:
-        case GameState::MULTIPLAYER_MENU:
-        case GameState::ONLINE_MENU:
-            renderMenu();
-            break;
-        case GameState::SINGLE_PLAYER:
-        case GameState::LOCAL_PC_MULTIPLAYER:
-        case GameState::LAN_MULTIPLAYER:
-        case GameState::ONLINE_MULTIPLAYER:
-            renderGame();
-            break;
-        default:
-            break;
-        }
-
-        window.display();
     }
-}
 };
 
+// Helper function implementations
+float calculateApoapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, float G) {
+    float speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);
+    float distance = std::sqrt(pos.x * pos.x + pos.y * pos.y);
+    float energy = 0.5f * speed * speed - G * planetMass / distance;
+
+    float semiMajor = -G * planetMass / (2 * energy);
+
+    if (energy >= 0) return -1.0f;
+
+    sf::Vector2f eVec;
+    float vSquared = speed * speed;
+    eVec.x = (vSquared * pos.x - (pos.x * vel.x + pos.y * vel.y) * vel.x) / (G * planetMass) - pos.x / distance;
+    eVec.y = (vSquared * pos.y - (pos.x * vel.x + pos.y * vel.y) * vel.y) / (G * planetMass) - pos.y / distance;
+    float ecc = std::sqrt(eVec.x * eVec.x + eVec.y * eVec.y);
+
+    return semiMajor * (1 + ecc);
+}
+
+float calculatePeriapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, float G) {
+    float speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);
+    float distance = std::sqrt(pos.x * pos.x + pos.y * pos.y);
+    float energy = 0.5f * speed * speed - G * planetMass / distance;
+
+    float semiMajor = -G * planetMass / (2 * energy);
+
+    if (energy >= 0) return -1.0f;
+
+    sf::Vector2f eVec;
+    float vSquared = speed * speed;
+    eVec.x = (vSquared * pos.x - (pos.x * vel.x + pos.y * vel.y) * vel.x) / (G * planetMass) - pos.x / distance;
+    eVec.y = (vSquared * pos.y - (pos.x * vel.x + pos.y * vel.y) * vel.y) / (G * planetMass) - pos.y / distance;
+    float ecc = std::sqrt(eVec.x * eVec.x + eVec.y * eVec.y);
+
+    return semiMajor * (1 - ecc);
+}
 // Helper function implementations
 float calculateApoapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, float G) {
     float speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);

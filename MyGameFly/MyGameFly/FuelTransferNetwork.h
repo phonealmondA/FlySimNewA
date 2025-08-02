@@ -32,13 +32,13 @@ struct FuelTransferRequest {
     float transferredAmount = 0.0f;  // Amount already transferred
     bool isActive = false;           // Currently being processed
     bool isComplete = false;         // Transfer completed
+    bool isAborted = false;          // Transfer was cancelled/failed
 
     FuelTransferRequest() = default;
     FuelTransferRequest(int from, int to, float amount, int prio = 5)
         : fromSatelliteID(from), toSatelliteID(to), requestedAmount(amount), priority(prio) {
     }
 };
-
 // Network connection between two satellites
 struct SatelliteConnection {
     int satellite1ID;

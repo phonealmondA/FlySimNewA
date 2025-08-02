@@ -12,6 +12,22 @@ class Satellite;
 class Planet;
 struct OrbitalElements;
 
+// ADD THIS STRUCT DEFINITION:
+struct OrbitalElements {
+    float semiMajorAxis = 0.0f;     // a - size of orbit
+    float eccentricity = 0.0f;       // e - shape of orbit (0 = circular)
+    float inclination = 0.0f;        // i - orbital plane angle
+    float longitudeOfAscendingNode = 0.0f;  // ? - orientation in space
+    float argumentOfPeriapsis = 0.0f;       // ? - orientation in orbital plane
+    float trueAnomaly = 0.0f;               // ? - position in orbit
+
+    // Convenience methods
+    float getApoapsis() const { return semiMajorAxis * (1 + eccentricity); }
+    float getPeriapsis() const { return semiMajorAxis * (1 - eccentricity); }
+    float getOrbitalPeriod(float centralMass) const;
+    float getOrbitalVelocity(float centralMass, float radius) const;
+};
+
 // Types of orbital maneuvers
 enum class ManeuverType {
     PROGRADE,           // Speed up (raise apoapsis)

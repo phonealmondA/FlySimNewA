@@ -87,7 +87,7 @@ private:
     void updateNetworkStats();
     void performNetworkFuelTransfers(float deltaTime);
     void optimizeFuelDistribution();
-    std::string generateSatelliteName(int id);
+    std::string generateSatelliteName(int id) const;
 
 public:
     SatelliteManager();

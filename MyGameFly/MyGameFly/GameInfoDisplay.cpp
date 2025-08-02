@@ -5,6 +5,7 @@
 #include "Planet.h"
 #include "Rocket.h"
 #include "Car.h"
+#include "VectorHelper.h"
 #include "NetworkManager.h"
 #include "GameConstants.h"
 #include <sstream>

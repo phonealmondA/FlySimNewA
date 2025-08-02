@@ -1114,7 +1114,7 @@ void OrbitMaintenance::drawOrbitDrift(sf::RenderWindow& window) const {
     sf::CircleShape driftIndicator;
     float radius = 15.0f + currentDrift.overallSeverity * 20.0f;
     driftIndicator.setRadius(radius);
-    driftIndicator.setPosition(satellitePos.x - radius, satellitePos.y - radius);
+    driftIndicator.setPosition({ satellitePos.x - radius, satellitePos.y - radius });
     driftIndicator.setFillColor(sf::Color::Transparent);
 
     // Color based on drift severity
@@ -1164,7 +1164,7 @@ void OrbitMaintenance::drawMaintenanceBurns(sf::RenderWindow& window) const {
         burnParticle.setRadius(3.0f);
 
         sf::Vector2f particlePos = satellitePos - burnDirection * (15.0f + i * 8.0f);
-        burnParticle.setPosition(particlePos.x - 3.0f, particlePos.y - 3.0f);
+        burnParticle.setPosition({ particlePos.x - 3.0f, particlePos.y - 3.0f });
 
         sf::Color burnColor = GameConstants::SATELLITE_MAINTENANCE_BURN_COLOR;
         burnColor.a = static_cast<uint8_t>(200 - i * 60);
