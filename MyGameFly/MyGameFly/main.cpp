@@ -418,21 +418,6 @@ public:
         std::cout << "Planet gravity " << (planetGravity ? "enabled" : "disabled") << std::endl;
     }
 
-    void handleVehicleTransform() {
-        lKeyPressed = true;
-
-        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-            // Split screen transform is handled in splitScreenManager->handleTransformInputs()
-            // No additional logic needed here
-        }
-        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
-            localPlayer->requestTransform();
-        }
-        else if (vehicleManager) {
-            vehicleManager->switchVehicle();
-        }
-    }
-
     void renderGame() {
         window.setView(gameView);
 
