@@ -83,6 +83,9 @@ public:
     void hideAllPanels();
     void showPanel(const std::string& panelName);
     void hidePanel(const std::string& panelName);
+
+    // Layout management
+    void adjustLayoutForWindowSize(sf::Vector2u windowSize);
 };
 
 #endif // GAMEINFODISPLAY_H

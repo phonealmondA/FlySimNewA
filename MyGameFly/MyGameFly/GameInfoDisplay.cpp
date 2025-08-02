@@ -17,14 +17,14 @@
 GameInfoDisplay::GameInfoDisplay(const sf::Font& gameFont, sf::Vector2u windowSize)
     : font(&gameFont), fontLoaded(true)
 {
-    // Create all panels
-    rocketInfoPanel = std::make_unique<TextPanel>(*font, 12, sf::Vector2f(10, 10), sf::Vector2f(250, 180));
-    planetInfoPanel = std::make_unique<TextPanel>(*font, 12, sf::Vector2f(10, 200), sf::Vector2f(250, 120));
-    orbitInfoPanel = std::make_unique<TextPanel>(*font, 12, sf::Vector2f(10, 330), sf::Vector2f(250, 100));
-    controlsPanel = std::make_unique<TextPanel>(*font, 12, sf::Vector2f(10, 440), sf::Vector2f(250, 150));
-    networkInfoPanel = std::make_unique<TextPanel>(*font, 12, sf::Vector2f(10, 600), sf::Vector2f(250, 80));
+    // Create all panels with better spacing and sizes
+    rocketInfoPanel = std::make_unique<TextPanel>(*font, 11, sf::Vector2f(10, 10), sf::Vector2f(270, 180));
+    planetInfoPanel = std::make_unique<TextPanel>(*font, 11, sf::Vector2f(10, 200), sf::Vector2f(270, 120));
+    orbitInfoPanel = std::make_unique<TextPanel>(*font, 11, sf::Vector2f(10, 330), sf::Vector2f(270, 100));
+    controlsPanel = std::make_unique<TextPanel>(*font, 10, sf::Vector2f(10, 440), sf::Vector2f(270, 180));
+    networkInfoPanel = std::make_unique<TextPanel>(*font, 11, sf::Vector2f(10, 630), sf::Vector2f(270, 80));
 
-    // Set up controls panel with fuel system controls
+    // Set up controls panel with satellite system controls
     controlsPanel->setText(
         "CONTROLS:\n"
         "Arrows: Move/Rotate\n"
@@ -32,7 +32,10 @@ GameInfoDisplay::GameInfoDisplay(const sf::Font& gameFont, sf::Vector2u windowSi
         ".: Collect fuel from planet\n"
         ",: Give fuel to planet\n"
         "L: Transform rocket/car\n"
+        "T: Convert rocket to satellite\n"
         "Mouse wheel: Zoom\n"
+        "F1: Toggle UI, F2: Debug\n"
+        "F3: Satellite status\n"
         "ESC: Menu"
     );
 }
@@ -242,19 +245,20 @@ std::string GameInfoDisplay::generateOrbitInfo(GameState currentState, VehicleMa
             << "Local fuel system active";
     }
     else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
-        ss << "FUEL SYSTEM ACTIVE\n"
+        ss << "SATELLITE SYSTEM ACTIVE\n"
             << ".: Collect fuel from planet\n"
             << ",: Give fuel to planet\n"
+            << "T: Convert rocket to satellite\n"
             << "1-9,0,=: Set thrust & transfer rate\n"
             << "Mouse wheel to zoom\n"
-            << "Dynamic mass affects physics!\n"
-            << "Mine planets for fuel!";
+            << "Dynamic mass affects physics!";
     }
     else {
         ss << "CAR MODE\n"
             << "No fuel system in car mode\n"
             << "Transform to rocket (L) for fuel\n"
-            << "Rockets start empty - need fuel!";
+            << "Rockets start empty - need fuel!\n"
+            << "Use T to create satellites!";
     }
 
     return ss.str();
@@ -292,9 +296,11 @@ std::string GameInfoDisplay::generateNetworkInfo(NetworkManager* networkManager,
         ss << "Fuel sync: TODO";
     }
     else {
-        ss << "NETWORK STATUS\n"
-            << "Network not active\n"
-            << "Single player fuel system active";
+        ss << "SATELLITE SYSTEM\n"
+            << "T: Convert rocket to satellite\n"
+            << "F3: Show satellite status\n"
+            << "F4: Optimize fuel network\n"
+            << "Single player active";
     }
 
     return ss.str();
@@ -373,9 +379,41 @@ float GameInfoDisplay::calculatePeriapsis(sf::Vector2f pos, sf::Vector2f vel, fl
 
 void GameInfoDisplay::repositionPanels(sf::Vector2u newWindowSize)
 {
-    // Reposition panels based on new window size if needed
-    // Current implementation uses fixed positions, but this could be enhanced
-    // to scale with window size
+    // Adjust panel positions and sizes based on window size
+    float windowHeight = static_cast<float>(newWindowSize.y);
+    float panelWidth = std::min(280.0f, static_cast<float>(newWindowSize.x) * 0.22f);
+
+    // Calculate spacing to fit all panels
+    float availableHeight = windowHeight - 20.0f; // Leave 20px margin
+    float totalPanelHeight = 180 + 120 + 100 + 180 + 80; // Sum of all panel heights
+    float spacing = std::max(10.0f, (availableHeight - totalPanelHeight) / 4.0f);
+
+    float currentY = 10.0f;
+
+    // Reposition all panels
+    rocketInfoPanel->setPosition(sf::Vector2f(10, currentY));
+    rocketInfoPanel->setSize(sf::Vector2f(panelWidth, 180));
+    currentY += 180 + spacing;
+
+    planetInfoPanel->setPosition(sf::Vector2f(10, currentY));
+    planetInfoPanel->setSize(sf::Vector2f(panelWidth, 120));
+    currentY += 120 + spacing;
+
+    orbitInfoPanel->setPosition(sf::Vector2f(10, currentY));
+    orbitInfoPanel->setSize(sf::Vector2f(panelWidth, 100));
+    currentY += 100 + spacing;
+
+    controlsPanel->setPosition(sf::Vector2f(10, currentY));
+    controlsPanel->setSize(sf::Vector2f(panelWidth, 180));
+    currentY += 180 + spacing;
+
+    networkInfoPanel->setPosition(sf::Vector2f(10, currentY));
+    networkInfoPanel->setSize(sf::Vector2f(panelWidth, 80));
+}
+
+void GameInfoDisplay::adjustLayoutForWindowSize(sf::Vector2u windowSize)
+{
+    repositionPanels(windowSize);
 }
 
 void GameInfoDisplay::showAllPanels()
