@@ -1,5 +1,4 @@
 #pragma once
-#pragma once
 #ifndef SATELLITE_H
 #define SATELLITE_H
 
@@ -12,21 +11,8 @@
 // Forward declarations
 class Rocket;
 
-// Orbital elements structure for tracking target vs actual orbit
-struct OrbitalElements {
-    float semiMajorAxis = 0.0f;     // a - size of orbit
-    float eccentricity = 0.0f;       // e - shape of orbit (0 = circular)
-    float inclination = 0.0f;        // i - orbital plane angle
-    float longitudeOfAscendingNode = 0.0f;  // ? - orientation in space
-    float argumentOfPeriapsis = 0.0f;       // ? - orientation in orbital plane
-    float trueAnomaly = 0.0f;               // ? - position in orbit
-
-    // Convenience methods
-    float getApoapsis() const { return semiMajorAxis * (1 + eccentricity); }
-    float getPeriapsis() const { return semiMajorAxis * (1 - eccentricity); }
-    float getOrbitalPeriod(float centralMass) const;
-    float getOrbitalVelocity(float centralMass, float radius) const;
-};
+// Forward declare OrbitalElements to avoid duplicate definition
+struct OrbitalElements;
 
 // Satellite status enum
 enum class SatelliteStatus {
@@ -41,8 +27,8 @@ enum class SatelliteStatus {
 class Satellite : public GameObject {
 private:
     // Orbital maintenance system
-    OrbitalElements targetOrbit;      // Desired orbital parameters
-    OrbitalElements currentOrbit;     // Actual orbital parameters
+    OrbitalElements* targetOrbit;      // Desired orbital parameters (pointer to avoid incomplete type)
+    OrbitalElements* currentOrbit;     // Actual orbital parameters (pointer to avoid incomplete type)
     float orbitToleranceRadius;       // How much drift is acceptable (units)
     float orbitToleranceEccentricity; // How much eccentricity drift is acceptable
 
@@ -97,6 +83,9 @@ public:
     Satellite(sf::Vector2f pos, sf::Vector2f vel, int id,
         sf::Color col = sf::Color::Cyan, float baseM = GameConstants::SATELLITE_BASE_MASS);
 
+    // Destructor to clean up orbital elements
+    ~Satellite();
+
     // Factory method to create satellite from existing rocket
     static std::unique_ptr<Satellite> createFromRocket(const Rocket* rocket, int id);
 
@@ -106,10 +95,7 @@ public:
     void drawWithConstantSize(sf::RenderWindow& window, float zoomLevel);
 
     // Orbital management
-    void setTargetOrbit(const OrbitalElements& orbit) { targetOrbit = orbit; }
     void setTargetOrbitFromCurrent(); // Set current state as target
-    OrbitalElements getTargetOrbit() const { return targetOrbit; }
-    OrbitalElements getCurrentOrbit() const { return currentOrbit; }
     float getOrbitAccuracy() const; // Returns percentage accuracy (0-100)
 
     // Fuel system

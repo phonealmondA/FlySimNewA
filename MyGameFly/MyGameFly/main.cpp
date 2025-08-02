@@ -40,18 +40,18 @@
 // Helper function declarations
 float calculateApoapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, float G);
 float calculatePeriapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, float G);
-
-// Game state management
-enum class GameState {
-    MAIN_MENU,
-    MULTIPLAYER_MENU,
-    ONLINE_MENU,
-    SINGLE_PLAYER,
-    LOCAL_PC_MULTIPLAYER,
-    LAN_MULTIPLAYER,
-    ONLINE_MULTIPLAYER,
-    QUIT
-};
+//
+//// Game state management
+//enum class GameState {
+//    MAIN_MENU,
+//    MULTIPLAYER_MENU,
+//    ONLINE_MENU,
+//    SINGLE_PLAYER,
+//    LOCAL_PC_MULTIPLAYER,
+//    LAN_MULTIPLAYER,
+//    ONLINE_MULTIPLAYER,
+//    QUIT
+//};
 
 // Game class to encapsulate game logic
 class Game {
@@ -981,42 +981,6 @@ public:
     }
 };
 
-// Helper function implementations
-float calculateApoapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, float G) {
-    float speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);
-    float distance = std::sqrt(pos.x * pos.x + pos.y * pos.y);
-    float energy = 0.5f * speed * speed - G * planetMass / distance;
-
-    float semiMajor = -G * planetMass / (2 * energy);
-
-    if (energy >= 0) return -1.0f;
-
-    sf::Vector2f eVec;
-    float vSquared = speed * speed;
-    eVec.x = (vSquared * pos.x - (pos.x * vel.x + pos.y * vel.y) * vel.x) / (G * planetMass) - pos.x / distance;
-    eVec.y = (vSquared * pos.y - (pos.x * vel.x + pos.y * vel.y) * vel.y) / (G * planetMass) - pos.y / distance;
-    float ecc = std::sqrt(eVec.x * eVec.x + eVec.y * eVec.y);
-
-    return semiMajor * (1 + ecc);
-}
-
-float calculatePeriapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, float G) {
-    float speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);
-    float distance = std::sqrt(pos.x * pos.x + pos.y * pos.y);
-    float energy = 0.5f * speed * speed - G * planetMass / distance;
-
-    float semiMajor = -G * planetMass / (2 * energy);
-
-    if (energy >= 0) return -1.0f;
-
-    sf::Vector2f eVec;
-    float vSquared = speed * speed;
-    eVec.x = (vSquared * pos.x - (pos.x * vel.x + pos.y * vel.y) * vel.x) / (G * planetMass) - pos.x / distance;
-    eVec.y = (vSquared * pos.y - (pos.x * vel.x + pos.y * vel.y) * vel.y) / (G * planetMass) - pos.y / distance;
-    float ecc = std::sqrt(eVec.x * eVec.x + eVec.y * eVec.y);
-
-    return semiMajor * (1 - ecc);
-}
 // Helper function implementations
 float calculateApoapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, float G) {
     float speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);

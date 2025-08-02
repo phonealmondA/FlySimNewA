@@ -30,6 +30,11 @@ OrbitMaintenance::OrbitMaintenance(Satellite* sat)
     std::cout << "OrbitMaintenance initialized for satellite " << satellite->getName() << std::endl;
 }
 
+
+float OrbitalElements::getOrbitalPeriod(float centralMass) const {
+    const float G = GameConstants::G;
+    return 2.0f * GameConstants::PI * std::sqrt(std::pow(semiMajorAxis, 3) / (G * centralMass));
+}
 void OrbitMaintenance::update(float deltaTime) {
     if (!satellite) return;
 

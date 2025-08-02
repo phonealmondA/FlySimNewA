@@ -7,7 +7,6 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include "UIManager.h"
 #include "VectorHelper.h"
 
 // Forward declarations
@@ -19,6 +18,8 @@ class Rocket;
 class Car;
 class NetworkManager;
 
+// Forward declare GameState instead of including UIManager.h to avoid circular dependency
+enum class GameState;
 
 class GameInfoDisplay {
 private:

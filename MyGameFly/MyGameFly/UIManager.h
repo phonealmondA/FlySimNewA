@@ -14,7 +14,7 @@ class Planet;
 class Rocket;
 class NetworkManager;
 
-// Game state enum (should match the one in main.cpp)
+// Game state enum - moved here to be the single source
 enum class GameState {
     MAIN_MENU,
     MULTIPLAYER_MENU,

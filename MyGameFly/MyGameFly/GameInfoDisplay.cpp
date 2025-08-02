@@ -1,4 +1,5 @@
 #include "GameInfoDisplay.h"
+#include "UIManager.h" 
 #include "VehicleManager.h"
 #include "SplitScreenManager.h"
 #include "Player.h"
