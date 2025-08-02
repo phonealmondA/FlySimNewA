@@ -91,9 +91,9 @@ void Rocket::preserveMomentumDuringMassChange(float oldMass, float newMass)
 {
     // Conservation of momentum: old_mass * old_velocity = new_mass * new_velocity
     // Therefore: new_velocity = (old_mass * old_velocity) / new_mass
-    if (newMass > 0.0f) {
+    /*if (newMass > 0.0f) {
         velocity = velocity * (oldMass / newMass);
-    }
+    }*/
 }
 
 float Rocket::calculateFuelConsumption() const
@@ -650,7 +650,7 @@ void Rocket::drawTrajectory(sf::RenderWindow& window, const std::vector<Planet*>
         // Complete the velocity update with the new acceleration
         // Update velocity with the new acceleration
         simVelocity += totalAcceleration * timeStep;
-
+        simPosition += simVelocity * timeStep;
         // Self-intersection check if enabled
         if (detectSelfIntersection) {
             for (size_t j = 0; j < previousPositions.size() - 10; j++) {

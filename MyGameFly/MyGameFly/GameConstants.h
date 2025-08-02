@@ -72,8 +72,8 @@ namespace GameConstants {
     const sf::Color FUEL_RING_ACTIVE_COLOR = sf::Color(255, 255, 0, 200);  // Yellow when actively collecting
 
     // Visualization settings
-    constexpr float GRAVITY_VECTOR_SCALE = 5.0f;
-    constexpr float VELOCITY_VECTOR_SCALE = 0.01f;
+    constexpr float GRAVITY_VECTOR_SCALE = 15.0f;
+    constexpr float VELOCITY_VECTOR_SCALE = 10.0f;
 
     // Trajectory calculation settings
     constexpr float TRAJECTORY_TIME_STEP = 0.05f;
