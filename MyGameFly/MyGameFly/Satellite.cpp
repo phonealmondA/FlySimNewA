@@ -262,16 +262,16 @@ void Satellite::transferFuelToNearbyRockets(float deltaTime) {
 
     // Find all rockets within transfer range
     std::vector<Rocket*> nearbyRockets;
-
-    // This will be populated by SatelliteManager - for now just placeholder
-    // TODO: SatelliteManager will call setNearbyRockets() to populate this list
+    // nearbyRockets is already populated by SatelliteManager::setNearbyRockets()
+    // No need to reassign - just use the member variable directly
 
     if (nearbyRockets.empty()) return;
 
     // Calculate total fuel demand from rockets
     float totalDemand = 0.0f;
     for (Rocket* rocket : nearbyRockets) {
-        if (rocket && rocket->getCurrentFuel() < rocket->getMaxFuel()) {
+        if (!rocket) continue; // Skip null rockets
+        if (rocket->getCurrentFuel() < rocket->getMaxFuel()) {
             float capacity = rocket->getMaxFuel() - rocket->getCurrentFuel();
             totalDemand += capacity;
         }

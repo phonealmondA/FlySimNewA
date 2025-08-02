@@ -56,6 +56,7 @@ private:
     // Network and communication
     std::vector<Planet*> nearbyPlanets;      // Planets for fuel collection
     std::vector<Satellite*> nearbySatellites; // Other satellites in range
+    std::vector<Rocket*> nearbyRockets;       // Rockets in range for fuel transfer
     float transferRange;                      // Maximum fuel transfer range
     bool isCollectingFuel;                   // Currently collecting from planet
     Planet* fuelSourcePlanet;                // Which planet we're collecting from
@@ -129,6 +130,7 @@ public:
     // Network management
     void setNearbyPlanets(const std::vector<Planet*>& planets) { nearbyPlanets = planets; }
     void setNearbySatellites(const std::vector<Satellite*>& satellites) { nearbySatellites = satellites; }
+    void setNearbyRockets(const std::vector<Rocket*>& rockets) { nearbyRockets = rockets; }
     float getTransferRange() const { return transferRange; }
 
     // Automated fuel collection

@@ -28,8 +28,7 @@ enum class MessageType : uint8_t {
     PLAYER_SPAWN = 2,      // Player joining game
     PLAYER_DISCONNECT = 3, // Player leaving game
     TRANSFORM = 4,         // Transform requests
-    DISCONNECT = 5
-    SATELLITE_STATE = 6      // Satellite-specific state updates
+    DISCONNECT = 5    
 };
 
 // Simplified data structures for state sync - UPDATED WITH FUEL FIELDS
