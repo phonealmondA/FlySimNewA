@@ -1,6 +1,7 @@
 #include "Player.h"
 #include "NetworkManager.h"  // Include after Player.h to get PlayerState definition
 #include "GameConstants.h"
+#include "Rocket.h"  // FIXED: Include complete Rocket definition
 #include <SFML/Window/Keyboard.hpp>
 #include <iostream>
 #include <sstream>
@@ -11,7 +12,9 @@ Player::Player(int id, sf::Vector2f spawnPos, PlayerType playerType, const std::
     type(playerType),
     planets(planetList),
     stateChanged(false),
-    timeSinceLastStateSent(0.0f) {
+    timeSinceLastStateSent(0.0f),
+    fuelIncreaseKeyPressed(false),
+    fuelDecreaseKeyPressed(false) {
 
     // Set default player name
     std::stringstream ss;
@@ -112,11 +115,65 @@ void Player::handleLocalInput(float deltaTime) {
             inputActive = true;
         }
 
+        // MANUAL FUEL TRANSFER INPUT HANDLING
+        handleFuelTransferInput(deltaTime);
+
         // Mark state as changed if any input was active
         if (inputActive) {
             stateChanged = true;
         }
     }
+}
+
+void Player::handleFuelTransferInput(float deltaTime) {
+    if (!vehicleManager || vehicleManager->getActiveVehicleType() != VehicleType::ROCKET) {
+        return; // Only rockets can transfer fuel
+    }
+
+    Rocket* rocket = vehicleManager->getRocket();
+    if (!rocket) return;
+
+    // Check current key states
+    bool fuelIncreasePressed = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Period);  // '.' key
+    bool fuelDecreasePressed = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Comma);   // ',' key
+
+    // Handle fuel increase (take fuel from planet)
+    if (fuelIncreasePressed && !fuelIncreaseKeyPressed) {
+        // Key just pressed - start fuel transfer
+        float transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * rocket->getThrustLevel() * GameConstants::FUEL_TRANSFER_THRUST_MULTIPLIER;
+        if (transferRate < GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f) {
+            transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f; // Minimum 10% rate
+        }
+
+        rocket->startFuelTransferIn(transferRate);
+        stateChanged = true;
+    }
+    else if (!fuelIncreasePressed && fuelIncreaseKeyPressed) {
+        // Key just released - stop fuel transfer
+        rocket->stopFuelTransfer();
+        stateChanged = true;
+    }
+
+    // Handle fuel decrease (give fuel to planet)
+    if (fuelDecreasePressed && !fuelDecreaseKeyPressed) {
+        // Key just pressed - start fuel transfer
+        float transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * rocket->getThrustLevel() * GameConstants::FUEL_TRANSFER_THRUST_MULTIPLIER;
+        if (transferRate < GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f) {
+            transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f; // Minimum 10% rate
+        }
+
+        rocket->startFuelTransferOut(transferRate);
+        stateChanged = true;
+    }
+    else if (!fuelDecreasePressed && fuelDecreaseKeyPressed) {
+        // Key just released - stop fuel transfer
+        rocket->stopFuelTransfer();
+        stateChanged = true;
+    }
+
+    // Update key states for next frame
+    fuelIncreaseKeyPressed = fuelIncreasePressed;
+    fuelDecreaseKeyPressed = fuelDecreasePressed;
 }
 
 PlayerState Player::getState() const {
@@ -131,24 +188,24 @@ PlayerState Player::getState() const {
         if (state.isRocket && vehicleManager->getRocket()) {
             Rocket* rocket = vehicleManager->getRocket();
             state.rotation = rocket->getRotation();
-            state.mass = rocket->getMass();
+            state.mass = rocket->getMass();  // NOW DYNAMIC!
             state.thrustLevel = rocket->getThrustLevel();
             state.isOnGround = false;
 
-            // ADD FUEL DATA TO STATE
+            // FUEL DATA TO STATE
             state.currentFuel = rocket->getCurrentFuel();
             state.maxFuel = rocket->getMaxFuel();
             state.isCollectingFuel = rocket->getIsCollectingFuel();
         }
         else if (!state.isRocket && vehicleManager->getCar()) {
             state.rotation = vehicleManager->getCar()->getRotation();
-            state.mass = GameConstants::ROCKET_MASS;
+            state.mass = GameConstants::ROCKET_BASE_MASS;  // Cars use base mass
             state.thrustLevel = 0.0f;
             state.isOnGround = vehicleManager->getCar()->isOnGround();
 
             // Cars don't use fuel (for now)
-            state.currentFuel = GameConstants::ROCKET_MAX_FUEL;
-            state.maxFuel = GameConstants::ROCKET_MAX_FUEL;
+            state.currentFuel = 0.0f;
+            state.maxFuel = 0.0f;
             state.isCollectingFuel = false;
         }
     }
@@ -169,7 +226,7 @@ void Player::applyState(const PlayerState& state) {
             if (rocket) {
                 rocket->setPosition(state.position);
                 // Apply fuel state for remote players (for visual consistency)
-                rocket->setFuel(state.currentFuel);
+                rocket->setFuel(state.currentFuel);  // This will also update mass
                 // Don't override thrust level for remote players in state sync
             }
         }
@@ -212,26 +269,26 @@ sf::Vector2f Player::getVelocity() const {
     return sf::Vector2f(0, 0);
 }
 
-// FUEL SYSTEM GETTERS
+// FUEL SYSTEM GETTERS (updated for dynamic mass)
 float Player::getCurrentFuel() const {
     if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
         return vehicleManager->getRocket()->getCurrentFuel();
     }
-    return GameConstants::ROCKET_MAX_FUEL; // Cars have "infinite" fuel
+    return 0.0f; // Cars don't have fuel
 }
 
 float Player::getMaxFuel() const {
     if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
         return vehicleManager->getRocket()->getMaxFuel();
     }
-    return GameConstants::ROCKET_MAX_FUEL;
+    return 0.0f;
 }
 
 float Player::getFuelPercentage() const {
     if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
         return vehicleManager->getRocket()->getFuelPercentage();
     }
-    return 100.0f; // Cars have "full" fuel
+    return 0.0f;
 }
 
 bool Player::canThrust() const {
@@ -246,6 +303,29 @@ bool Player::isCollectingFuel() const {
         return vehicleManager->getRocket()->getIsCollectingFuel();
     }
     return false; // Cars don't collect fuel
+}
+
+// NEW MASS SYSTEM GETTERS
+float Player::getCurrentMass() const {
+    if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+        return vehicleManager->getRocket()->getMass();
+    }
+    return GameConstants::ROCKET_BASE_MASS; // Cars use base mass
+}
+
+float Player::getMaxMass() const {
+    if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+        return vehicleManager->getRocket()->getMaxMass();
+    }
+    return GameConstants::ROCKET_BASE_MASS;
+}
+
+float Player::getMassPercentage() const {
+    if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+        Rocket* rocket = vehicleManager->getRocket();
+        return ((rocket->getMass() - rocket->getBaseMass()) / (rocket->getMaxMass() - rocket->getBaseMass())) * 100.0f;
+    }
+    return 0.0f;
 }
 
 void Player::draw(sf::RenderWindow& window) {

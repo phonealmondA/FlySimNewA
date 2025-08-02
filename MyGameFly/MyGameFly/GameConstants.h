@@ -1,5 +1,10 @@
 #pragma once
+#ifndef GAME_CONSTANTS_H
+#define GAME_CONSTANTS_H
+
+#include <SFML/Graphics.hpp>
 #include <cmath>
+
 namespace GameConstants {
     // Gravitational constants
     constexpr float G = 100.0f;  // Gravitational constant
@@ -37,22 +42,27 @@ namespace GameConstants {
     const float SECONDARY_PLANET_ORBITAL_VELOCITY =
         std::sqrt(G * MAIN_PLANET_MASS / PLANET_ORBIT_DISTANCE);
 
-    // Rocket parameters
-    constexpr float ROCKET_MASS = 1000.0f;
+    // Rocket parameters - UPDATED FOR DYNAMIC MASS SYSTEM
+    constexpr float ROCKET_BASE_MASS = 1.0f;  // Mass to make a rocket (empty)
+    constexpr float ROCKET_MAX_MASS = 101.0f;  // Maximum total rocket mass
     constexpr float ROCKET_SIZE = 15.0f;
 
-    // FUEL SYSTEM CONSTANTS
+    // FUEL SYSTEM CONSTANTS - UPDATED
     constexpr float ROCKET_MAX_FUEL = 100.0f;  // Maximum fuel capacity
-    constexpr float ROCKET_STARTING_FUEL = 100.0f;  // Starting fuel amount
+    constexpr float ROCKET_STARTING_FUEL = 0.0f;  // Starting fuel amount (empty rocket)
+
+    // Manual fuel transfer system
+    constexpr float MANUAL_FUEL_TRANSFER_RATE = 10.0f;  // Fuel units per second during manual transfer
+    constexpr float FUEL_TRANSFER_THRUST_MULTIPLIER = 0.1f;  // Multiplier for thrust level affecting transfer rate
 
     // Fuel consumption rates (units per second at different thrust levels)
     constexpr float FUEL_CONSUMPTION_BASE = 2.0f;  // Base consumption at 10% thrust
     constexpr float FUEL_CONSUMPTION_MULTIPLIER = 8.0f;  // Multiplier for higher thrust levels
     constexpr float FUEL_CONSUMPTION_MIN_THRESHOLD = 0.1f;  // Minimum thrust level that consumes fuel
 
-    // Fuel collection parameters
+    // AUTOMATIC fuel collection parameters (for future satellites)
     constexpr float FUEL_COLLECTION_RANGE = 250.0f;  // Distance from planet surface for fuel collection
-    constexpr float FUEL_COLLECTION_RATE = 15.0f;  // Fuel units per second when collecting
+    constexpr float FUEL_COLLECTION_RATE = 15.0f;  // Fuel units per second when collecting (auto mode)
     constexpr float FUEL_COLLECTION_MASS_RATIO = 1.0f;  // How much planet mass equals 1 fuel unit
     constexpr float MIN_PLANET_MASS_FOR_COLLECTION = 50.0f;  // Minimum planet mass before collection stops
 
@@ -85,3 +95,5 @@ namespace GameConstants {
     // Vehicle transformation parameters
     constexpr float TRANSFORM_VELOCITY_FACTOR = 0.1f;  // Velocity reduction when transforming from rocket to car
 }
+
+#endif // GAME_CONSTANTS_H

@@ -1,13 +1,20 @@
 #include "Rocket.h"
 #include "VectorHelper.h"
 #include "GameConstants.h"
+#include "Planet.h"
 #include <cmath>
+#include <limits>
 
-Rocket::Rocket(sf::Vector2f pos, sf::Vector2f vel, sf::Color col, float m)
-    : GameObject(pos, vel, col), rotation(0), angularVelocity(0), thrustLevel(0.0f), mass(m),
+Rocket::Rocket(sf::Vector2f pos, sf::Vector2f vel, sf::Color col, float baseM)
+    : GameObject(pos, vel, col), rotation(0), angularVelocity(0), thrustLevel(0.0f),
+    baseMass(baseM), maxMass(GameConstants::ROCKET_MAX_MASS),
     currentFuel(GameConstants::ROCKET_STARTING_FUEL), maxFuel(GameConstants::ROCKET_MAX_FUEL),
-    isCollectingFuel(false), fuelSourcePlanet(nullptr), isCurrentlyThrusting(false)  // NEW: Initialize thrusting flag
+    isCollectingFuel(false), fuelSourcePlanet(nullptr), isCurrentlyThrusting(false),
+    isTransferringFuelIn(false), isTransferringFuelOut(false), fuelTransferRate(0.0f)
 {
+    // Initialize mass based on fuel + base mass
+    updateMassFromFuel();
+
     // Create rocket body (a simple triangle)
     body.setPointCount(3);
     body.setPoint(0, { 0, -GameConstants::ROCKET_SIZE });
@@ -30,11 +37,11 @@ void Rocket::applyThrust(float amount)
 {
     // Check if we have fuel to thrust
     if (!canThrust()) {
-        isCurrentlyThrusting = false;  // NEW: No fuel, no thrusting
+        isCurrentlyThrusting = false;
         return;  // No fuel, no thrust
     }
 
-    // NEW: Mark that we're actually thrusting this frame
+    // Mark that we're actually thrusting this frame
     isCurrentlyThrusting = true;
 
     // Calculate thrust direction based on rocket rotation
@@ -44,7 +51,8 @@ void Rocket::applyThrust(float amount)
     // So we need to use -sin for x and -cos for y to get the direction
     sf::Vector2f thrustDir(std::sin(radians), -std::cos(radians));
 
-    // Apply force and convert to acceleration by dividing by mass (F=ma -> a=F/m)
+    // Apply force and convert to acceleration by dividing by CURRENT mass (F=ma -> a=F/m)
+    // This naturally handles the decreased acceleration with increased mass
     velocity += thrustDir * amount * thrustLevel / mass;
 }
 
@@ -59,6 +67,35 @@ void Rocket::setThrustLevel(float level)
     thrustLevel = std::max(0.0f, std::min(1.0f, level));
 }
 
+void Rocket::updateMassFromFuel()
+{
+    float oldMass = mass;
+
+    // Mass = base mass + fuel (assuming fuel has mass ratio of 1:1)
+    mass = baseMass + currentFuel;
+
+    // Clamp to maximum mass
+    if (mass > maxMass) {
+        mass = maxMass;
+        // If mass exceeded max, reduce fuel accordingly
+        currentFuel = maxMass - baseMass;
+    }
+
+    // Preserve momentum when mass changes (mv = constant, so if m changes, v adjusts)
+    if (oldMass > 0.0f && oldMass != mass) {
+        preserveMomentumDuringMassChange(oldMass, mass);
+    }
+}
+
+void Rocket::preserveMomentumDuringMassChange(float oldMass, float newMass)
+{
+    // Conservation of momentum: old_mass * old_velocity = new_mass * new_velocity
+    // Therefore: new_velocity = (old_mass * old_velocity) / new_mass
+    if (newMass > 0.0f) {
+        velocity = velocity * (oldMass / newMass);
+    }
+}
+
 float Rocket::calculateFuelConsumption() const
 {
     // No fuel consumption if thrust level is below minimum threshold
@@ -67,7 +104,6 @@ float Rocket::calculateFuelConsumption() const
     }
 
     // Base consumption at 10% thrust, then exponential increase
-    // This makes higher thrust levels much more fuel-intensive
     float normalizedThrust = thrustLevel; // 0.0 to 1.0
     float consumption = GameConstants::FUEL_CONSUMPTION_BASE +
         (GameConstants::FUEL_CONSUMPTION_MULTIPLIER * normalizedThrust * normalizedThrust);
@@ -77,16 +113,179 @@ float Rocket::calculateFuelConsumption() const
 
 void Rocket::consumeFuel(float deltaTime)
 {
-    // NEW: Only consume fuel if we're actually thrusting AND have enough thrust level AND have fuel
+    // Only consume fuel if we're actually thrusting AND have enough thrust level AND have fuel
     if (isCurrentlyThrusting &&
         thrustLevel > GameConstants::FUEL_CONSUMPTION_MIN_THRESHOLD &&
         currentFuel > 0.0f) {
         float consumption = calculateFuelConsumption() * deltaTime;
+        float oldFuel = currentFuel;
         currentFuel = std::max(0.0f, currentFuel - consumption);
+
+        // Update mass when fuel changes
+        if (oldFuel != currentFuel) {
+            updateMassFromFuel();
+        }
     }
 }
 
-void Rocket::collectFuelFromPlanets(float deltaTime)
+void Rocket::startFuelTransferIn(float transferRate)
+{
+    stopFuelTransfer(); // Stop any existing transfer
+    isTransferringFuelIn = true;
+    fuelTransferRate = transferRate;
+}
+
+void Rocket::startFuelTransferOut(float transferRate)
+{
+    stopFuelTransfer(); // Stop any existing transfer
+    isTransferringFuelOut = true;
+    fuelTransferRate = transferRate;
+}
+
+void Rocket::stopFuelTransfer()
+{
+    isTransferringFuelIn = false;
+    isTransferringFuelOut = false;
+    fuelTransferRate = 0.0f;
+    isCollectingFuel = false;
+    fuelSourcePlanet = nullptr;
+}
+
+bool Rocket::canTransferFuelFromPlanet(Planet* planet, float amount) const
+{
+    if (!planet) return false;
+
+    // Check if planet has enough mass
+    float requiredMass = amount * GameConstants::FUEL_COLLECTION_MASS_RATIO;
+    if (planet->getMass() - requiredMass < GameConstants::MIN_PLANET_MASS_FOR_COLLECTION) {
+        return false;
+    }
+
+    // Check if rocket has capacity for more fuel
+    if (currentFuel >= maxFuel) return false;
+
+    // Check if rocket has mass capacity
+    if (mass >= maxMass) return false;
+
+    // Check distance
+    sf::Vector2f direction = position - planet->getPosition();
+    float distance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+    return distance <= planet->getFuelCollectionRange();
+}
+
+bool Rocket::canTransferFuelToPlanet(Planet* planet, float amount) const
+{
+    if (!planet) return false;
+
+    // Check if rocket has fuel to give
+    if (currentFuel <= 0.0f) return false;
+
+    // Check distance
+    sf::Vector2f direction = position - planet->getPosition();
+    float distance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+    return distance <= planet->getFuelCollectionRange();
+}
+
+void Rocket::processManualFuelTransfer(float deltaTime)
+{
+    if (!isTransferringFuelIn && !isTransferringFuelOut) {
+        return;
+    }
+
+    // Find closest planet within range
+    Planet* targetPlanet = nullptr;
+    float closestDistance = std::numeric_limits<float>::max();
+
+    for (auto& planet : nearbyPlanets) {
+        sf::Vector2f direction = position - planet->getPosition();
+        float distance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+
+        if (distance <= planet->getFuelCollectionRange() && distance < closestDistance) {
+            closestDistance = distance;
+            targetPlanet = planet;
+        }
+    }
+
+    if (!targetPlanet) {
+        stopFuelTransfer(); // No planet in range
+        return;
+    }
+
+    float transferAmount = fuelTransferRate * deltaTime;
+
+    if (isTransferringFuelIn) {
+        // Taking fuel from planet
+        if (canTransferFuelFromPlanet(targetPlanet, transferAmount)) {
+            // Limit transfer by available capacity
+            float maxTransfer = std::min(transferAmount, maxFuel - currentFuel);
+            maxTransfer = std::min(maxTransfer, (maxMass - mass)); // Also limit by mass capacity
+
+            // Limit by available planet mass
+            float availableMass = targetPlanet->getMass() - GameConstants::MIN_PLANET_MASS_FOR_COLLECTION;
+            float maxByPlanetMass = availableMass / GameConstants::FUEL_COLLECTION_MASS_RATIO;
+            maxTransfer = std::min(maxTransfer, maxByPlanetMass);
+
+            if (maxTransfer > 0.0f) {
+                // Transfer the fuel
+                currentFuel += maxTransfer;
+
+                // Remove mass from planet
+                float massToRemove = maxTransfer * GameConstants::FUEL_COLLECTION_MASS_RATIO;
+                targetPlanet->setMass(targetPlanet->getMass() - massToRemove);
+
+                // Update rocket mass
+                updateMassFromFuel();
+
+                // Set visual feedback
+                isCollectingFuel = true;
+                fuelSourcePlanet = targetPlanet;
+            }
+        }
+        else {
+            stopFuelTransfer(); // Can't transfer anymore
+        }
+    }
+    else if (isTransferringFuelOut) {
+        // Giving fuel to planet
+        if (canTransferFuelToPlanet(targetPlanet, transferAmount)) {
+            // Limit transfer by available fuel
+            float maxTransfer = std::min(transferAmount, currentFuel);
+
+            if (maxTransfer > 0.0f) {
+                // Transfer the fuel
+                currentFuel -= maxTransfer;
+
+                // Add mass to planet
+                float massToAdd = maxTransfer * GameConstants::FUEL_COLLECTION_MASS_RATIO;
+                targetPlanet->setMass(targetPlanet->getMass() + massToAdd);
+
+                // Update rocket mass
+                updateMassFromFuel();
+
+                // Set visual feedback (fuel going out)
+                isCollectingFuel = true;
+                fuelSourcePlanet = targetPlanet;
+            }
+        }
+        else {
+            stopFuelTransfer(); // Can't transfer anymore
+        }
+    }
+}
+
+void Rocket::setFuel(float fuel)
+{
+    currentFuel = std::max(0.0f, std::min(fuel, maxFuel));
+    updateMassFromFuel();
+}
+
+void Rocket::addFuel(float fuel)
+{
+    setFuel(currentFuel + fuel);
+}
+
+// AUTOMATIC FUEL COLLECTION (for future satellites)
+void Rocket::collectFuelFromPlanetsAuto(float deltaTime)
 {
     isCollectingFuel = false;
     fuelSourcePlanet = nullptr;
@@ -125,10 +324,14 @@ void Rocket::collectFuelFromPlanets(float deltaTime)
 
             if (actualFuelCollected > 0.0f) {
                 // Collect the fuel
+                float oldFuel = currentFuel;
                 currentFuel += actualFuelCollected;
 
                 // Remove mass from planet (this will also update its radius)
                 planet->setMass(planet->getMass() - massToRemove);
+
+                // Update rocket mass
+                updateMassFromFuel();
 
                 // Set collection status
                 isCollectingFuel = true;
@@ -145,7 +348,7 @@ bool Rocket::checkCollision(const Planet& planet)
 {
     float dist = distance(position, planet.getPosition());
     // Simple collision check based on distance
-    return dist < planet.getRadius() + GameConstants::ROCKET_SIZE; // Use constant for rocket size // 15 = approximate rocket size
+    return dist < planet.getRadius() + GameConstants::ROCKET_SIZE;
 }
 
 bool Rocket::isColliding(const Planet& planet)
@@ -165,9 +368,9 @@ Rocket* Rocket::mergeWith(Rocket* other)
     // Use the color of the more massive rocket
     sf::Color mergedColor = (mass > other->getMass()) ? color : other->color;
 
-    // Create a new rocket with combined mass
-    float mergedMass = mass + other->getMass();
-    Rocket* mergedRocket = new Rocket(mergedPosition, mergedVelocity, mergedColor, mergedMass);
+    // Create a new rocket with combined base mass (THIS NEEDS REVIEW - what should base mass be for merged rockets?)
+    float mergedBaseMass = baseMass + other->getBaseMass();
+    Rocket* mergedRocket = new Rocket(mergedPosition, mergedVelocity, mergedColor, mergedBaseMass);
 
     // Combine fuel from both rockets
     float combinedFuel = currentFuel + other->getCurrentFuel();
@@ -176,8 +379,6 @@ Rocket* Rocket::mergeWith(Rocket* other)
     // Combine thrust capabilities by adding an engine with combined thrust power
     float combinedThrust = 0.0f;
 
-    // This is simplified - in a real implementation, you'd need to loop through
-    // all engines from both rockets and sum their thrust values
     for (const auto& part : parts) {
         if (auto* engine = dynamic_cast<Engine*>(part.get())) {
             combinedThrust += engine->getThrust();
@@ -203,8 +404,8 @@ void Rocket::update(float deltaTime)
     // Process fuel consumption first (will only consume if isCurrentlyThrusting is true from previous frame's input)
     consumeFuel(deltaTime);
 
-    // Process fuel collection from nearby planets
-    collectFuelFromPlanets(deltaTime);
+    // Process manual fuel transfer operations
+    processManualFuelTransfer(deltaTime);
 
     // Reset the thrusting flag AFTER fuel consumption for next frame
     isCurrentlyThrusting = false;
@@ -252,7 +453,7 @@ void Rocket::update(float deltaTime)
 
     // Update body position and rotation
     body.setPosition(position);
-    body.setRotation(sf::degrees(rotation));
+    body.setRotation(rotation);
 }
 
 void Rocket::draw(sf::RenderWindow& window)
@@ -275,7 +476,6 @@ void Rocket::drawWithConstantSize(sf::RenderWindow& window, float zoomLevel)
     float scaleMultiplier = zoomLevel;
 
     // Apply the scaling to the body shape
-    // We're adjusting the points directly to keep the rocket centered properly
     for (size_t i = 0; i < scaledBody.getPointCount(); i++) {
         sf::Vector2f point = body.getPoint(i);
         scaledBody.setPoint(i, point * scaleMultiplier);
@@ -310,7 +510,7 @@ void Rocket::drawVelocityVector(sf::RenderWindow& window, float scale)
 void Rocket::drawGravityForceVectors(sf::RenderWindow& window, const std::vector<Planet*>& planets, float scale)
 {
     // Gravitational constant - same as in GravitySimulator
-    const float G = GameConstants::G;  // Use the constant from the header
+    const float G = GameConstants::G;
 
     // Draw gravity force vector for each planet
     for (const auto& planet : planets) {
@@ -323,7 +523,7 @@ void Rocket::drawGravityForceVectors(sf::RenderWindow& window, const std::vector
             continue;
         }
 
-        // Calculate gravitational force
+        // Calculate gravitational force using CURRENT DYNAMIC MASS
         float forceMagnitude = G * planet->getMass() * mass / (dist * dist);
         sf::Vector2f forceVector = normalize(direction) * forceMagnitude;
 
@@ -358,6 +558,7 @@ void Rocket::drawTrajectory(sf::RenderWindow& window, const std::vector<Planet*>
     // Start with current position and velocity
     sf::Vector2f simPosition = position;
     sf::Vector2f simVelocity = velocity;
+    float simMass = mass; // USE CURRENT DYNAMIC MASS for trajectory
 
     // Add the starting point
     sf::Vertex startPoint;
@@ -415,7 +616,7 @@ void Rocket::drawTrajectory(sf::RenderWindow& window, const std::vector<Planet*>
             simPlanetVelocities[j] += totalPlanetAcceleration * timeStep;
         }
 
-        // Calculate gravitational forces from all planets
+        // Calculate gravitational forces from all planets using DYNAMIC MASS
         sf::Vector2f totalAcceleration(0, 0);
         bool collisionDetected = false;
 
@@ -433,44 +634,15 @@ void Rocket::drawTrajectory(sf::RenderWindow& window, const std::vector<Planet*>
                 break;
             }
 
-            // Calculate gravitational force with proper inverse square law
-            // F = G * (m1 * m2) / r^2
-            float forceMagnitude = G * planet->getMass() * mass / (distance * distance);
+            // Calculate gravitational force with CURRENT DYNAMIC MASS
+            float forceMagnitude = G * planet->getMass() * simMass / (distance * distance);
 
-            // Convert force to acceleration (a = F/m)
-            sf::Vector2f acceleration = normalize(direction) * forceMagnitude / mass;
+            // Convert force to acceleration (a = F/m) using DYNAMIC MASS
+            sf::Vector2f acceleration = normalize(direction) * forceMagnitude / simMass;
             totalAcceleration += acceleration;
         }
 
         // Stop if we hit a planet
-        if (collisionDetected) {
-            break;
-        }
-
-        // Use velocity Verlet integration for better numerical stability
-        sf::Vector2f halfStepVelocity = simVelocity + totalAcceleration * (timeStep * 0.5f);
-        simPosition += halfStepVelocity * timeStep;
-
-        // Recalculate acceleration at new position for higher accuracy
-        sf::Vector2f newAcceleration(0, 0);
-
-        for (size_t j = 0; j < planets.size(); j++) {
-            const auto& planet = planets[j];
-            sf::Vector2f planetPos = simPlanetPositions[j];
-
-            sf::Vector2f direction = planetPos - simPosition;
-            float distance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
-
-            if (distance <= planet->getRadius() + GameConstants::TRAJECTORY_COLLISION_RADIUS) {
-                collisionDetected = true;
-                break;
-            }
-
-            float forceMagnitude = G * planet->getMass() * mass / (distance * distance);
-            sf::Vector2f acceleration = normalize(direction) * forceMagnitude / mass;
-            newAcceleration += acceleration;
-        }
-
         if (collisionDetected) {
             break;
         }
@@ -481,7 +653,8 @@ void Rocket::drawTrajectory(sf::RenderWindow& window, const std::vector<Planet*>
         // Self-intersection check if enabled
         if (detectSelfIntersection) {
             for (size_t j = 0; j < previousPositions.size() - 10; j++) {
-                float distToPoint = distance(simPosition, previousPositions[j]);
+                float distToPoint = std::sqrt((simPosition.x - previousPositions[j].x) * (simPosition.x - previousPositions[j].x) +
+                    (simPosition.y - previousPositions[j].y) * (simPosition.y - previousPositions[j].y));
                 if (distToPoint < selfIntersectionThreshold) {
                     collisionDetected = true;
                     break;
@@ -499,9 +672,9 @@ void Rocket::drawTrajectory(sf::RenderWindow& window, const std::vector<Planet*>
         // Calculate color gradient from blue to pink
         float ratio = static_cast<float>(i) / steps;
         sf::Color pointColor(
-            51 + 204 * ratio,  // R: 51 (blue) to 255 (pink)
-            51 + 0 * ratio,    // G: 51 (blue) to 51 (pink)
-            255 - 155 * ratio  // B: 255 (blue) to 100 (pink)
+            51 + static_cast<uint8_t>(204 * ratio),  // R: 51 (blue) to 255 (pink)
+            51 + static_cast<uint8_t>(0 * ratio),    // G: 51 (blue) to 51 (pink)
+            255 - static_cast<uint8_t>(155 * ratio)  // B: 255 (blue) to 100 (pink)
         );
 
         // Add point to trajectory

@@ -1,4 +1,7 @@
 #pragma once
+#ifndef PLAYER_H
+#define PLAYER_H
+
 #include "VehicleManager.h"
 #include "Planet.h"
 #include <SFML/Graphics.hpp>
@@ -32,6 +35,10 @@ private:
     float timeSinceLastStateSent;
     static constexpr float STATE_SEND_INTERVAL = 1.0f / 30.0f; // 30 FPS state sync
 
+    // MANUAL FUEL TRANSFER INPUT TRACKING
+    bool fuelIncreaseKeyPressed;    // '.' key state
+    bool fuelDecreaseKeyPressed;    // ',' key state
+
 public:
     // Constructor
     Player(int id, sf::Vector2f spawnPos, PlayerType playerType, const std::vector<Planet*>& planetList);
@@ -44,6 +51,9 @@ public:
 
     // Input handling - ONLY for LOCAL players
     void handleLocalInput(float deltaTime);
+
+    // MANUAL FUEL TRANSFER INPUT HANDLING
+    void handleFuelTransferInput(float deltaTime);  // Process fuel transfer controls
 
     // State management for networking
     PlayerState getState() const;
@@ -62,12 +72,15 @@ public:
     VehicleManager* getVehicleManager() const { return vehicleManager.get(); }
     std::string getName() const { return playerName; }
 
-    // FUEL SYSTEM GETTERS
+    // FUEL SYSTEM GETTERS (updated for dynamic mass)
     float getCurrentFuel() const;
     float getMaxFuel() const;
     float getFuelPercentage() const;
     bool canThrust() const;
     bool isCollectingFuel() const;
+    float getCurrentMass() const;         // NEW: Get current rocket mass
+    float getMaxMass() const;            // NEW: Get max rocket mass
+    float getMassPercentage() const;     // NEW: Get mass as percentage
 
     // Setters
     void setType(PlayerType newType) { type = newType; }
@@ -95,3 +108,5 @@ private:
     void initializeVehicleManager();
     void updateInputFromKeyboard(float deltaTime);
 };
+
+#endif // PLAYER_H
