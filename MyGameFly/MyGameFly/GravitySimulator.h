@@ -1,4 +1,4 @@
-// GravitySimulator.h - Updated with Player Support
+// GravitySimulator.h - Updated with Player Support and Fuel System
 #pragma once
 #include "Planet.h"
 #include "Rocket.h"
@@ -24,7 +24,7 @@ private:
 public:
     void addPlanet(Planet* planet);
     void addRocket(Rocket* rocket);
-    void addVehicleManager(VehicleManager* manager);  // Now adds to the vector
+    void addVehicleManager(VehicleManager* manager);
 
     // Player support methods
     void addPlayer(Player* player);
@@ -38,6 +38,11 @@ public:
     // Player-specific gravity methods
     void applyGravityToPlayers(float deltaTime);
     void addPlayerGravityInteractions(float deltaTime);
+
+    // Fuel system integration
+    void processFuelCollectionForAllRockets(float deltaTime);
+    void processFuelCollectionForVehicleManagers(float deltaTime);
+    void processFuelCollectionForPlayers(float deltaTime);
 
     const std::vector<Planet*>& getPlanets() const { return planets; }
     void setSimulatePlanetGravity(bool enable) { simulatePlanetGravity = enable; }

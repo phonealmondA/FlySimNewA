@@ -453,7 +453,7 @@ void Rocket::update(float deltaTime)
 
     // Update body position and rotation
     body.setPosition(position);
-    body.setRotation(rotation);
+    body.setRotation(sf::degrees(rotation));
 }
 
 void Rocket::draw(sf::RenderWindow& window)
@@ -648,7 +648,8 @@ void Rocket::drawTrajectory(sf::RenderWindow& window, const std::vector<Planet*>
         }
 
         // Complete the velocity update with the new acceleration
-        simVelocity = halfStepVelocity + newAcceleration * (timeStep * 0.5f);
+        // Update velocity with the new acceleration
+        simVelocity += totalAcceleration * timeStep;
 
         // Self-intersection check if enabled
         if (detectSelfIntersection) {

@@ -1,7 +1,7 @@
 // GravitySimulator.cpp - Updated with Player Support and Fuel System
 #include "GravitySimulator.h"
 #include "VehicleManager.h"
-#include "Player.h"  // Now include Player.h since it exists
+#include "Player.h"
 
 void GravitySimulator::addPlanet(Planet* planet)
 {
@@ -58,7 +58,7 @@ void GravitySimulator::addRocketGravityInteractions(float deltaTime)
                 distance = minDistance;
             }
 
-            // Apply inverse square law for gravity
+            // Apply inverse square law for gravity using DYNAMIC MASS
             float forceMagnitude = G * rocket1->getMass() * rocket2->getMass() / (distance * distance);
 
             sf::Vector2f normalizedDir = normalize(direction);
@@ -84,6 +84,7 @@ void GravitySimulator::applyGravityToPlayers(float deltaTime)
 
                     // Avoid division by zero and very small distances
                     if (distance > planet->getRadius() + GameConstants::TRAJECTORY_COLLISION_RADIUS) {
+                        // Use rocket's DYNAMIC MASS for gravity calculation
                         float forceMagnitude = G * planet->getMass() * rocket->getMass() / (distance * distance);
                         sf::Vector2f acceleration = normalize(direction) * forceMagnitude / rocket->getMass();
                         sf::Vector2f velocityChange = acceleration * deltaTime;
@@ -120,7 +121,7 @@ void GravitySimulator::addPlayerGravityInteractions(float deltaTime)
                     distance = minDistance;
                 }
 
-                // Apply inverse square law for gravity
+                // Apply inverse square law for gravity using DYNAMIC MASS
                 float forceMagnitude = G * rocket1->getMass() * rocket2->getMass() / (distance * distance);
 
                 sf::Vector2f normalizedDir = normalize(direction);
@@ -129,6 +130,51 @@ void GravitySimulator::addPlayerGravityInteractions(float deltaTime)
 
                 rocket1->setVelocity(rocket1->getVelocity() + accel1 * deltaTime);
                 rocket2->setVelocity(rocket2->getVelocity() + accel2 * deltaTime);
+            }
+        }
+    }
+}
+
+void GravitySimulator::processFuelCollectionForAllRockets(float deltaTime)
+{
+    // Process fuel collection for individual rockets (legacy single-player mode)
+    for (auto rocket : rockets) {
+        if (rocket) {
+            // Set nearby planets for fuel collection
+            rocket->setNearbyPlanets(planets);
+            // Fuel collection is now handled inside rocket->update()
+            // No additional processing needed here since manual transfer is handled by input
+        }
+    }
+}
+
+void GravitySimulator::processFuelCollectionForVehicleManagers(float deltaTime)
+{
+    // Process fuel collection for all vehicle managers (split-screen mode)
+    for (VehicleManager* vm : vehicleManagers) {
+        if (vm && vm->getActiveVehicleType() == VehicleType::ROCKET) {
+            Rocket* rocket = vm->getRocket();
+            if (rocket) {
+                // Set nearby planets for fuel collection
+                rocket->setNearbyPlanets(planets);
+                // Fuel collection is now handled inside rocket->update()
+                // No additional processing needed here since manual transfer is handled by input
+            }
+        }
+    }
+}
+
+void GravitySimulator::processFuelCollectionForPlayers(float deltaTime)
+{
+    // Process fuel collection for all players (network multiplayer mode)
+    for (Player* player : players) {
+        if (player && player->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+            Rocket* rocket = player->getVehicleManager()->getRocket();
+            if (rocket) {
+                // Set nearby planets for fuel collection
+                rocket->setNearbyPlanets(planets);
+                // Fuel collection is now handled inside rocket->update() and Player::handleFuelTransferInput()
+                // No additional processing needed here since manual transfer is handled by input
             }
         }
     }
@@ -174,16 +220,17 @@ void GravitySimulator::update(float deltaTime)
         }
     }
 
-    // Player gravity system - now active
+    // FUEL SYSTEM INTEGRATION: Process fuel collection for all game modes
     if (!players.empty()) {
-        // Apply gravity to all players (replaces VehicleManager system for multiplayer)
+        // Network multiplayer mode - handle players
         applyGravityToPlayers(deltaTime);
         addPlayerGravityInteractions(deltaTime);
+        processFuelCollectionForPlayers(deltaTime);
     }
     else {
-        // Fallback to legacy VehicleManager system for single-player/split-screen
+        // Local modes - handle vehicle managers and individual rockets
 
-        // Apply gravity to ALL vehicle managers (LEGACY SYSTEM)
+        // Apply gravity to ALL vehicle managers (split-screen and single-player)
         for (VehicleManager* vm : vehicleManagers) {
             if (vm && vm->getActiveVehicleType() == VehicleType::ROCKET) {
                 Rocket* rocket = vm->getRocket();
@@ -194,6 +241,7 @@ void GravitySimulator::update(float deltaTime)
 
                         // Avoid division by zero and very small distances
                         if (distance > planet->getRadius() + GameConstants::TRAJECTORY_COLLISION_RADIUS) {
+                            // Use rocket's DYNAMIC MASS for gravity calculation
                             float forceMagnitude = G * planet->getMass() * rocket->getMass() / (distance * distance);
                             sf::Vector2f acceleration = normalize(direction) * forceMagnitude / rocket->getMass();
                             sf::Vector2f velocityChange = acceleration * deltaTime;
@@ -205,6 +253,9 @@ void GravitySimulator::update(float deltaTime)
             // Car gravity is handled internally in Car::update
         }
 
+        // Process fuel collection for vehicle managers
+        processFuelCollectionForVehicleManagers(deltaTime);
+
         // Legacy code for handling individual rockets (still needed for single-player mode)
         for (auto rocket : rockets) {
             for (auto planet : planets) {
@@ -213,6 +264,7 @@ void GravitySimulator::update(float deltaTime)
 
                 // Avoid division by zero and very small distances
                 if (distance > planet->getRadius() + GameConstants::TRAJECTORY_COLLISION_RADIUS) {
+                    // Use rocket's DYNAMIC MASS for gravity calculation
                     float forceMagnitude = G * planet->getMass() * rocket->getMass() / (distance * distance);
                     sf::Vector2f acceleration = normalize(direction) * forceMagnitude / rocket->getMass();
                     sf::Vector2f velocityChange = acceleration * deltaTime;
@@ -221,11 +273,14 @@ void GravitySimulator::update(float deltaTime)
             }
         }
 
-        // Add rocket-to-rocket gravity interactions
+        // Process fuel collection for individual rockets
+        processFuelCollectionForAllRockets(deltaTime);
+
+        // Add rocket-to-rocket gravity interactions using DYNAMIC MASS
         addRocketGravityInteractions(deltaTime);
     }
 
     // FUEL SYSTEM: The fuel consumption and collection is handled automatically 
-    // in each Rocket's update() method, so no additional code needed here.
-    // Planet mass reduction from fuel collection is also handled in Rocket::collectFuelFromPlanets()
+    // in each Rocket's update() method and Player's handleFuelTransferInput() method
+    // Planet mass reduction from fuel collection is handled in Rocket's manual transfer methods
 }
