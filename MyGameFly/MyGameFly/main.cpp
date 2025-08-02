@@ -603,42 +603,57 @@ public:
     void handleSatelliteConversion() {
         tKeyPressed = true;
 
+        std::cout << "DEBUG: Attempting satellite conversion..." << std::endl;
+
         if (currentState == GameState::SINGLE_PLAYER && vehicleManager &&
             vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
 
             Rocket* rocket = vehicleManager->getRocket();
+            if (!rocket) {
+                std::cout << "ERROR: Rocket is null!" << std::endl;
+                return;
+            }
+
+            std::cout << "DEBUG: Rocket found, checking conversion eligibility..." << std::endl;
 
             if (satelliteManager->canConvertRocketToSatellite(rocket)) {
-                // Get optimal conversion configuration
-                SatelliteConversionConfig config = satelliteManager->getOptimalConversionConfig(rocket);
+                try {
+                    std::cout << "DEBUG: Conversion eligible, creating satellite..." << std::endl;
 
-                // Create satellite from rocket
-                int satelliteID = satelliteManager->createSatelliteFromRocket(rocket, config);
+                    // Get optimal conversion configuration
+                    SatelliteConversionConfig config = satelliteManager->getOptimalConversionConfig(rocket);
 
-                if (satelliteID >= 0) {
-                    std::cout << "Successfully converted rocket to satellite (ID: " << satelliteID << ")" << std::endl;
+                    // Create satellite from rocket
+                    int satelliteID = satelliteManager->createSatelliteFromRocket(rocket, config);
 
-                    // Create new rocket at nearest planet surface
-                    sf::Vector2f newRocketPos = findNearestPlanetSurface(rocket->getPosition());
-                    vehicleManager = std::make_unique<VehicleManager>(newRocketPos, planets);
+                    if (satelliteID >= 0) {
+                        std::cout << "Successfully converted rocket to satellite (ID: " << satelliteID << ")" << std::endl;
 
-                    if (vehicleManager->getRocket()) {
-                        vehicleManager->getRocket()->setNearbyPlanets(planets);
+                        // Create new rocket at nearest planet surface
+                        sf::Vector2f newRocketPos = findNearestPlanetSurface(rocket->getPosition());
+                        vehicleManager = std::make_unique<VehicleManager>(newRocketPos, planets);
+
+                        if (vehicleManager->getRocket()) {
+                            vehicleManager->getRocket()->setNearbyPlanets(planets);
+                        }
+
+                        // Update gravity simulator
+                        gravitySimulator->addVehicleManager(vehicleManager.get());
+
+                        // SATELLITE SYSTEM: Update rocket reference after conversion
+                        satelliteManager->setNearbyRockets({ vehicleManager->getRocket() });
+
+                        // Update camera to follow new rocket
+                        gameView.setCenter(newRocketPos);
+
+                        std::cout << "New rocket spawned at (" << newRocketPos.x << ", " << newRocketPos.y << ")" << std::endl;
                     }
-
-                    // Update gravity simulator
-                    gravitySimulator->addVehicleManager(vehicleManager.get());
-
-                    // SATELLITE SYSTEM: Update rocket reference after conversion
-                    satelliteManager->setNearbyRockets({ vehicleManager->getRocket() });
-
-                    // Update camera to follow new rocket
-                    gameView.setCenter(newRocketPos);
-
-                    std::cout << "New rocket spawned at (" << newRocketPos.x << ", " << newRocketPos.y << ")" << std::endl;
+                    else {
+                        std::cout << "Failed to convert rocket to satellite" << std::endl;
+                    }
                 }
-                else {
-                    std::cout << "Failed to convert rocket to satellite" << std::endl;
+                catch (const std::exception& e) {
+                    std::cerr << "Exception during satellite conversion: " << e.what() << std::endl;
                 }
             }
             else {
@@ -649,6 +664,8 @@ public:
             std::cout << "Satellite conversion only available for rockets in single player mode" << std::endl;
         }
     }
+
+
 
     sf::Vector2f findNearestPlanetSurface(sf::Vector2f position) {
         Planet* nearestPlanet = nullptr;

@@ -7,7 +7,7 @@
 #include <algorithm>
 #include <iostream>
 #include <sstream>
-
+#include <stdexcept>
 OrbitMaintenance::OrbitMaintenance(Satellite* sat)
     : satellite(sat), maneuverExecutionTimer(0.0f), timeSinceLastCheck(0.0f),
     timeSinceLastCorrection(0.0f), nextScheduledCheck(0.0f),
@@ -16,8 +16,7 @@ OrbitMaintenance::OrbitMaintenance(Satellite* sat)
     predictionTimeHorizon(3600.0f), predictionSteps(GameConstants::SATELLITE_PREDICTION_STEPS)
 {
     if (!satellite) {
-        std::cerr << "OrbitMaintenance: Cannot initialize with null satellite" << std::endl;
-        return;
+        throw std::invalid_argument("OrbitMaintenance: Cannot initialize with null satellite");
     }
 
     // Initialize with current orbital state
@@ -29,7 +28,6 @@ OrbitMaintenance::OrbitMaintenance(Satellite* sat)
 
     std::cout << "OrbitMaintenance initialized for satellite " << satellite->getName() << std::endl;
 }
-
 
 float OrbitalElements::getOrbitalPeriod(float centralMass) const {
     const float G = GameConstants::G;

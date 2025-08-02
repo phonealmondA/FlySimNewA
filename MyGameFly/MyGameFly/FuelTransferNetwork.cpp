@@ -501,10 +501,11 @@ bool FuelTransferNetwork::transferFuelToRocket(int fromSatelliteID, Rocket* rock
 
     return requestTransfer(request);
 }
+
 void FuelTransferNetwork::processAutomaticRocketTransfers(float deltaTime) {
     // Process automatic fuel transfers from satellites to rockets
     for (Satellite* satellite : satellites) {
-        if (!satellite || !satellite->isOperational()) continue;
+        if (!satellite || !satellite->isOperational()) continue; // Add null check
 
         float availableFuel = satellite->getAvailableFuel();
         if (availableFuel < 1.0f) continue; // Need minimum fuel to transfer
@@ -516,7 +517,8 @@ void FuelTransferNetwork::processAutomaticRocketTransfers(float deltaTime) {
         // Calculate total rocket fuel demand
         float totalDemand = 0.0f;
         for (Rocket* rocket : rocketsInRange) {
-            if (rocket && rocket->getCurrentFuel() < rocket->getMaxFuel()) {
+            if (!rocket) continue; // Add null check
+            if (rocket->getCurrentFuel() < rocket->getMaxFuel()) {
                 totalDemand += (rocket->getMaxFuel() - rocket->getCurrentFuel());
             }
         }
@@ -527,7 +529,7 @@ void FuelTransferNetwork::processAutomaticRocketTransfers(float deltaTime) {
         float transferRate = std::min(baseTransferRate * deltaTime, availableFuel * 0.1f);
 
         for (Rocket* rocket : rocketsInRange) {
-            if (!rocket || rocket->getCurrentFuel() >= rocket->getMaxFuel()) continue;
+            if (!rocket || rocket->getCurrentFuel() >= rocket->getMaxFuel()) continue; // Add null check
 
             float rocketCapacity = rocket->getMaxFuel() - rocket->getCurrentFuel();
             float proportion = rocketCapacity / totalDemand;

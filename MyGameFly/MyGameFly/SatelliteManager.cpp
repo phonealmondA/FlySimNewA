@@ -155,39 +155,44 @@ int SatelliteManager::createSatelliteFromRocket(const Rocket* rocket, const Sate
         return -1;
     }
 
-    // Create satellite from rocket
-    auto satellite = Satellite::createFromRocket(rocket, nextSatelliteID);
-    if (!satellite) {
-        std::cout << "Failed to create satellite from rocket" << std::endl;
+    try {
+        // Create satellite from rocket
+        auto satellite = Satellite::createFromRocket(rocket, nextSatelliteID);
+        if (!satellite) {
+            std::cout << "Failed to create satellite from rocket" << std::endl;
+            return -1;
+        }
+
+        // Apply configuration
+        if (!config.customName.empty()) {
+            satellite->setName(config.customName);
+        }
+
+        satellite->setStationKeepingEfficiency(config.stationKeepingEfficiency);
+
+        // Set target orbit based on configuration
+        if (config.maintainCurrentOrbit) {
+            satellite->setTargetOrbitFromCurrent();
+        }
+
+        // Store satellite
+        int satelliteID = satellite->getID();
+        satelliteMap[satelliteID] = satellite.get();
+        satellites.push_back(std::move(satellite));
+
+        // Update next ID
+        nextSatelliteID++;
+
+        std::cout << "Created satellite " << satelliteMap[satelliteID]->getName()
+            << " (ID: " << satelliteID << ") from rocket conversion" << std::endl;
+
+        return satelliteID;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Exception during satellite creation: " << e.what() << std::endl;
         return -1;
     }
-
-    // Apply configuration
-    if (!config.customName.empty()) {
-        satellite->setName(config.customName);
-    }
-
-    satellite->setStationKeepingEfficiency(config.stationKeepingEfficiency);
-
-    // Set target orbit based on configuration
-    if (config.maintainCurrentOrbit) {
-        satellite->setTargetOrbitFromCurrent();
-    }
-
-    // Store satellite
-    int satelliteID = satellite->getID();
-    satelliteMap[satelliteID] = satellite.get();
-    satellites.push_back(std::move(satellite));
-
-    // Update next ID
-    nextSatelliteID++;
-
-    std::cout << "Created satellite " << satelliteMap[satelliteID]->getName()
-        << " (ID: " << satelliteID << ") from rocket conversion" << std::endl;
-
-    return satelliteID;
 }
-
 int SatelliteManager::createSatellite(sf::Vector2f position, sf::Vector2f velocity, const SatelliteConversionConfig& config) {
     auto satellite = std::make_unique<Satellite>(
         position, velocity, nextSatelliteID, sf::Color::Cyan, GameConstants::SATELLITE_BASE_MASS

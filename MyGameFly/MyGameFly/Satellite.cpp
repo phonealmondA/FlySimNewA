@@ -8,6 +8,68 @@
 #include <iostream>
 #include <algorithm>
 
+//Satellite::Satellite(sf::Vector2f pos, sf::Vector2f vel, int id, sf::Color col, float baseM)
+//    : GameObject(pos, vel, col), satelliteID(id), baseMass(baseM), maxMass(GameConstants::SATELLITE_MAX_MASS),
+//    currentFuel(GameConstants::SATELLITE_STARTING_FUEL), maxFuel(GameConstants::SATELLITE_MAX_FUEL),
+//    maintenanceFuelReserve(0.0f), mass(baseM), status(SatelliteStatus::ACTIVE),
+//    orbitToleranceRadius(GameConstants::SATELLITE_ORBIT_TOLERANCE),
+//    orbitToleranceEccentricity(GameConstants::SATELLITE_ECCENTRICITY_TOLERANCE),
+//    lastMaintenanceTime(0.0f), maintenanceInterval(GameConstants::SATELLITE_MAINTENANCE_CHECK_INTERVAL),
+//    needsOrbitalCorrection(false), plannedCorrectionBurn(0.0f, 0.0f),
+//    transferRange(GameConstants::SATELLITE_TRANSFER_RANGE), isCollectingFuel(false),
+//    fuelSourcePlanet(nullptr), stationKeepingEfficiency(GameConstants::SATELLITE_FUEL_EFFICIENCY),
+//    maxCorrectionBurn(GameConstants::SATELLITE_MAX_SINGLE_BURN),
+//    fuelConsumptionRate(GameConstants::SATELLITE_MAINTENANCE_FUEL_RATE)
+//{
+//    // Initialize orbital elements
+//    targetOrbit = new OrbitalElements();
+//    currentOrbit = new OrbitalElements();
+//
+//    // Generate default name
+//    std::stringstream ss;
+//    ss << "SAT-" << std::setfill('0') << std::setw(3) << satelliteID;
+//    name = ss.str();
+//
+//    // Initialize mass and fuel reserve
+//    updateMassFromFuel();
+//
+//    // Create satellite body (circular shape) - FIXED for SFML 3.0
+//    body.setRadius(GameConstants::SATELLITE_SIZE);
+//    body.setFillColor(GameConstants::SATELLITE_BODY_COLOR);
+//    body.setOrigin(sf::Vector2f(GameConstants::SATELLITE_SIZE, GameConstants::SATELLITE_SIZE));
+//    body.setPosition(position);
+//
+//    // Create solar panels (rectangular shapes)
+//    for (int i = 0; i < 2; i++) {
+//        solarPanels[i].setPointCount(4);
+//        float panelWidth = GameConstants::SATELLITE_PANEL_SIZE * 3;
+//        float panelHeight = GameConstants::SATELLITE_PANEL_SIZE;
+//
+//        // Left panel
+//        if (i == 0) {
+//            solarPanels[i].setPoint(0, sf::Vector2f(-panelWidth - GameConstants::SATELLITE_SIZE, -panelHeight / 2));
+//            solarPanels[i].setPoint(1, sf::Vector2f(-GameConstants::SATELLITE_SIZE, -panelHeight / 2));
+//            solarPanels[i].setPoint(2, sf::Vector2f(-GameConstants::SATELLITE_SIZE, panelHeight / 2));
+//            solarPanels[i].setPoint(3, sf::Vector2f(-panelWidth - GameConstants::SATELLITE_SIZE, panelHeight / 2));
+//        }
+//        // Right panel
+//        else {
+//            solarPanels[i].setPoint(0, sf::Vector2f(GameConstants::SATELLITE_SIZE, -panelHeight / 2));
+//            solarPanels[i].setPoint(1, sf::Vector2f(GameConstants::SATELLITE_SIZE + panelWidth, -panelHeight / 2));
+//            solarPanels[i].setPoint(2, sf::Vector2f(GameConstants::SATELLITE_SIZE + panelWidth, panelHeight / 2));
+//            solarPanels[i].setPoint(3, sf::Vector2f(GameConstants::SATELLITE_SIZE, panelHeight / 2));
+//        }
+//
+//        solarPanels[i].setFillColor(GameConstants::SATELLITE_PANEL_COLOR);
+//        solarPanels[i].setPosition(position);
+//    }
+//
+//    // Set target orbit to current state initially
+//    setTargetOrbitFromCurrent();
+//
+//    std::cout << "Created satellite " << name << " at position (" << pos.x << ", " << pos.y << ")" << std::endl;
+//}
+
 Satellite::Satellite(sf::Vector2f pos, sf::Vector2f vel, int id, sf::Color col, float baseM)
     : GameObject(pos, vel, col), satelliteID(id), baseMass(baseM), maxMass(GameConstants::SATELLITE_MAX_MASS),
     currentFuel(GameConstants::SATELLITE_STARTING_FUEL), maxFuel(GameConstants::SATELLITE_MAX_FUEL),
@@ -70,35 +132,43 @@ Satellite::Satellite(sf::Vector2f pos, sf::Vector2f vel, int id, sf::Color col, 
     std::cout << "Created satellite " << name << " at position (" << pos.x << ", " << pos.y << ")" << std::endl;
 }
 
+
 Satellite::~Satellite() {
     delete targetOrbit;
     delete currentOrbit;
 }
 
+
 std::unique_ptr<Satellite> Satellite::createFromRocket(const Rocket* rocket, int id) {
     if (!rocket) return nullptr;
 
-    // Create satellite at rocket's position and velocity
-    auto satellite = std::make_unique<Satellite>(
-        rocket->getPosition(),
-        rocket->getVelocity(),
-        id,
-        sf::Color::Cyan,
-        GameConstants::SATELLITE_BASE_MASS
-    );
+    try {
+        // Create satellite at rocket's position and velocity
+        auto satellite = std::make_unique<Satellite>(
+            rocket->getPosition(),
+            rocket->getVelocity(),
+            id,
+            sf::Color::Cyan,
+            GameConstants::SATELLITE_BASE_MASS
+        );
 
-    // Transfer fuel with conversion efficiency
-    float transferredFuel = rocket->getCurrentFuel() * GameConstants::SATELLITE_CONVERSION_FUEL_RETENTION;
-    transferredFuel = std::min(transferredFuel, GameConstants::SATELLITE_MAX_FUEL);
-    satellite->setFuel(transferredFuel);
+        // Transfer fuel with conversion efficiency
+        float transferredFuel = rocket->getCurrentFuel() * GameConstants::SATELLITE_CONVERSION_FUEL_RETENTION;
+        transferredFuel = std::min(transferredFuel, GameConstants::SATELLITE_MAX_FUEL);
+        satellite->setFuel(transferredFuel);
 
-    // Set target orbit based on rocket's current trajectory
-    satellite->setTargetOrbitFromCurrent();
+        // Set target orbit based on rocket's current trajectory
+        satellite->setTargetOrbitFromCurrent();
 
-    std::cout << "Converted rocket to satellite " << satellite->getName()
-        << " with " << transferredFuel << " fuel units" << std::endl;
+        std::cout << "Converted rocket to satellite " << satellite->getName()
+            << " with " << transferredFuel << " fuel units" << std::endl;
 
-    return satellite;
+        return satellite;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Exception during rocket to satellite conversion: " << e.what() << std::endl;
+        return nullptr;
+    }
 }
 
 void Satellite::updateOrbitalElements() {
@@ -317,6 +387,7 @@ void Satellite::collectFuelFromPlanets(float deltaTime) {
     if (currentFuel >= maxFuel) return;
 
     for (auto* planet : nearbyPlanets) {
+        if (!planet) continue; // Add null check
         if (!planet->canCollectFuel()) continue;
 
         float distanceToSurface = distance(position, planet->getPosition()) - planet->getRadius();
