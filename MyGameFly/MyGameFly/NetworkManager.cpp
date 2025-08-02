@@ -297,6 +297,9 @@ void NetworkManager::serializePlayerState(sf::Packet& packet, const PlayerState&
 
     // ADD FUEL SYSTEM SERIALIZATION
     packet << state.currentFuel << state.maxFuel << state.isCollectingFuel;
+
+    // ADD SATELLITE SYSTEM SERIALIZATION
+    packet << state.isSatellite << state.satelliteID << state.orbitAccuracy << state.needsMaintenance;
 }
 
 void NetworkManager::deserializePlayerState(sf::Packet& packet, PlayerState& state) {
@@ -307,6 +310,9 @@ void NetworkManager::deserializePlayerState(sf::Packet& packet, PlayerState& sta
 
     // ADD FUEL SYSTEM DESERIALIZATION
     packet >> state.currentFuel >> state.maxFuel >> state.isCollectingFuel;
+
+    // ADD SATELLITE SYSTEM DESERIALIZATION
+    packet >> state.isSatellite >> state.satelliteID >> state.orbitAccuracy >> state.needsMaintenance;
 }
 
 void NetworkManager::serializePlayerSpawnInfo(sf::Packet& packet, const PlayerSpawnInfo& spawnInfo) {
@@ -386,4 +392,44 @@ void NetworkManager::disconnect() {
 
 void NetworkManager::resetConnection() {
     disconnect();
+}
+
+bool NetworkManager::sendSatelliteCreated(int satelliteID, sf::Vector2f position, sf::Vector2f velocity, float fuel) {
+    if (!isConnected()) return false;
+
+    sf::Packet packet;
+    packet << satelliteID << position.x << position.y << velocity.x << velocity.y << fuel;
+
+    return sendMessage(MessageType::PLAYER_SPAWN, packet); // Reuse spawn message type
+}
+
+bool NetworkManager::sendSatelliteState(const PlayerState& satelliteState) {
+    if (!isConnected() || !satelliteState.isSatellite) return false;
+
+    sf::Packet packet;
+    serializePlayerState(packet, satelliteState);
+    return sendMessage(MessageType::PLAYER_STATE, packet);
+}
+
+bool NetworkManager::receiveSatelliteState(int satelliteID, PlayerState& outState) {
+    if (!isConnected()) return false;
+
+    auto it = lastReceivedStates.find(satelliteID);
+    if (it != lastReceivedStates.end() && it->second.isSatellite) {
+        outState = it->second;
+        return true;
+    }
+    return false;
+}
+
+void NetworkManager::syncSatelliteStates(const std::vector<PlayerState>& satelliteStates) {
+    if (!isConnected()) return;
+
+    for (const auto& state : satelliteStates) {
+        if (state.isSatellite) {
+            sendSatelliteState(state);
+        }
+    }
+
+    std::cout << "Synchronized " << satelliteStates.size() << " satellite states" << std::endl;
 }

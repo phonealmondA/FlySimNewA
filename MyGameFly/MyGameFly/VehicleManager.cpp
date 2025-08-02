@@ -49,6 +49,8 @@ void VehicleManager::update(float deltaTime) {
         rocket->setNearbyPlanets(planets);
         rocket->update(deltaTime);
     }
+    // Note: Satellite fuel transfer integration happens in main.cpp
+    // where SatelliteManager gets updated rocket references
     else {
         car->checkGrounding(planets);
         car->update(deltaTime);
@@ -105,4 +107,11 @@ GameObject* VehicleManager::getActiveVehicle() {
     else {
         return car.get();
     }
+}
+
+Rocket* VehicleManager::getCurrentRocket() const {
+    if (activeVehicle == VehicleType::ROCKET) {
+        return rocket.get();
+    }
+    return nullptr;
 }

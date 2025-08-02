@@ -29,6 +29,7 @@ enum class MessageType : uint8_t {
     PLAYER_DISCONNECT = 3, // Player leaving game
     TRANSFORM = 4,         // Transform requests
     DISCONNECT = 5
+    SATELLITE_STATE = 6      // Satellite-specific state updates
 };
 
 // Simplified data structures for state sync - UPDATED WITH FUEL FIELDS
@@ -46,6 +47,12 @@ struct PlayerState {
     float currentFuel = 100.0f;
     float maxFuel = 100.0f;
     bool isCollectingFuel = false;
+
+    // Satellite state fields
+    bool isSatellite = false;
+    int satelliteID = -1;
+    float orbitAccuracy = 100.0f;
+    bool needsMaintenance = false;
 };
 
 struct PlayerSpawnInfo {
@@ -99,6 +106,12 @@ public:
     bool sendPlayerSpawn(const PlayerSpawnInfo& spawnInfo);
     bool sendPlayerDisconnect(int playerID);
     bool sendTransformRequest(int playerID, bool toRocket);
+
+    // Satellite network synchronization
+    bool sendSatelliteCreated(int satelliteID, sf::Vector2f position, sf::Vector2f velocity, float fuel);
+    bool sendSatelliteState(const PlayerState& satelliteState);
+    bool receiveSatelliteState(int satelliteID, PlayerState& outState);
+    void syncSatelliteStates(const std::vector<PlayerState>& satelliteStates);
 
     // Player ID management
     int getLocalPlayerID() const { return localPlayerID; }

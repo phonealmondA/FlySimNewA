@@ -257,6 +257,59 @@ bool Satellite::transferFuelToRocket(Rocket* rocket, float amount) {
     return true;
 }
 
+void Satellite::transferFuelToNearbyRockets(float deltaTime) {
+    if (!isOperational() || getAvailableFuel() < 1.0f) return;
+
+    // Find all rockets within transfer range
+    std::vector<Rocket*> nearbyRockets;
+
+    // This will be populated by SatelliteManager - for now just placeholder
+    // TODO: SatelliteManager will call setNearbyRockets() to populate this list
+
+    if (nearbyRockets.empty()) return;
+
+    // Calculate total fuel demand from rockets
+    float totalDemand = 0.0f;
+    for (Rocket* rocket : nearbyRockets) {
+        if (rocket && rocket->getCurrentFuel() < rocket->getMaxFuel()) {
+            float capacity = rocket->getMaxFuel() - rocket->getCurrentFuel();
+            totalDemand += capacity;
+        }
+    }
+
+    if (totalDemand <= 0.0f) return;
+
+    // Calculate transfer rate (units per second)
+    float baseTransferRate = GameConstants::SATELLITE_BASE_TRANSFER_RATE;
+    float availableFuel = getAvailableFuel();
+    float maxTransferThisFrame = baseTransferRate * deltaTime;
+    float actualTransfer = std::min(maxTransferThisFrame, availableFuel);
+
+    // Distribute fuel proportionally based on demand
+    for (Rocket* rocket : nearbyRockets) {
+        if (!rocket || rocket->getCurrentFuel() >= rocket->getMaxFuel()) continue;
+
+        float rocketCapacity = rocket->getMaxFuel() - rocket->getCurrentFuel();
+        float proportion = rocketCapacity / totalDemand;
+        float fuelForThisRocket = actualTransfer * proportion;
+
+        if (fuelForThisRocket > 0.1f) { // Minimum transfer threshold
+            if (transferFuelToRocket(rocket, fuelForThisRocket)) {
+                status = SatelliteStatus::TRANSFER_MODE;
+                std::cout << "Satellite " << name << " transferred " << fuelForThisRocket
+                    << " fuel to rocket" << std::endl;
+            }
+        }
+    }
+}
+
+bool Satellite::isRocketInTransferRange(const Rocket* rocket) const {
+    if (!rocket) return false;
+
+    float dist = distance(position, rocket->getPosition());
+    return dist <= GameConstants::SATELLITE_ROCKET_DOCKING_RANGE;
+}
+
 void Satellite::collectFuelFromPlanets(float deltaTime) {
     isCollectingFuel = false;
     fuelSourcePlanet = nullptr;
@@ -339,6 +392,7 @@ void Satellite::update(float deltaTime) {
     }
 
     performStationKeeping(deltaTime);
+    transferFuelToNearbyRockets(deltaTime);
     updateStatus();
 }
 

@@ -34,5 +34,7 @@ public:
     Rocket* getRocket() { return rocket.get(); }
     Car* getCar() { return car.get(); }
     GameObject* getActiveVehicle();
+    // Satellite integration
+    Rocket* getCurrentRocket() const;
     VehicleType getActiveVehicleType() const { return activeVehicle; }
 };

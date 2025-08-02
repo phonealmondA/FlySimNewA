@@ -44,6 +44,7 @@ void FuelTransferNetwork::update(float deltaTime) {
 
     // Optimize network performance
     optimizeTransferRoutes();
+    processAutomaticRocketTransfers(deltaTime);
 }
 
 void FuelTransferNetwork::addSatellite(Satellite* satellite) {
@@ -499,6 +500,108 @@ bool FuelTransferNetwork::transferFuelToRocket(int fromSatelliteID, Rocket* rock
     request.targetRocket = rocket;
 
     return requestTransfer(request);
+}
+void FuelTransferNetwork::processAutomaticRocketTransfers(float deltaTime) {
+    // Process automatic fuel transfers from satellites to rockets
+    for (Satellite* satellite : satellites) {
+        if (!satellite || !satellite->isOperational()) continue;
+
+        float availableFuel = satellite->getAvailableFuel();
+        if (availableFuel < 1.0f) continue; // Need minimum fuel to transfer
+
+        // Find rockets in range of this satellite
+        std::vector<Rocket*> rocketsInRange = getRocketsInRange(satellite->getID());
+        if (rocketsInRange.empty()) continue;
+
+        // Calculate total rocket fuel demand
+        float totalDemand = 0.0f;
+        for (Rocket* rocket : rocketsInRange) {
+            if (rocket && rocket->getCurrentFuel() < rocket->getMaxFuel()) {
+                totalDemand += (rocket->getMaxFuel() - rocket->getCurrentFuel());
+            }
+        }
+
+        if (totalDemand <= 0.0f) continue;
+
+        // Transfer fuel proportionally to rockets
+        float transferRate = std::min(baseTransferRate * deltaTime, availableFuel * 0.1f);
+
+        for (Rocket* rocket : rocketsInRange) {
+            if (!rocket || rocket->getCurrentFuel() >= rocket->getMaxFuel()) continue;
+
+            float rocketCapacity = rocket->getMaxFuel() - rocket->getCurrentFuel();
+            float proportion = rocketCapacity / totalDemand;
+            float transferAmount = transferRate * proportion;
+
+            if (transferAmount > 0.1f) {
+                // Create transfer request
+                FuelTransferRequest request;
+                request.fromSatelliteID = satellite->getID();
+                request.toSatelliteID = -1; // Rocket target
+                request.requestedAmount = transferAmount;
+                request.targetRocket = rocket;
+                request.priority = 3; // Medium priority
+                request.maxTransferRate = baseTransferRate * 1.5f; // Faster for rockets
+
+                requestTransfer(request);
+            }
+        }
+    }
+}
+
+void FuelTransferNetwork::addNearbyRocket(Rocket* rocket) {
+    if (!rocket) return;
+
+    auto it = std::find(nearbyRockets.begin(), nearbyRockets.end(), rocket);
+    if (it == nearbyRockets.end()) {
+        nearbyRockets.push_back(rocket);
+        std::cout << "Added rocket to fuel transfer network" << std::endl;
+    }
+}
+
+void FuelTransferNetwork::removeNearbyRocket(Rocket* rocket) {
+    if (!rocket) return;
+
+    nearbyRockets.erase(
+        std::remove(nearbyRockets.begin(), nearbyRockets.end(), rocket),
+        nearbyRockets.end()
+    );
+
+    // Cancel any active transfers to this rocket
+    for (auto& transfer : activeTransfers) {
+        if (transfer.targetRocket == rocket) {
+            transfer.isAborted = true;
+        }
+    }
+
+    std::cout << "Removed rocket from fuel transfer network" << std::endl;
+}
+
+std::vector<Rocket*> FuelTransferNetwork::getRocketsInRange(int satelliteID) const {
+    std::vector<Rocket*> rocketsInRange;
+
+    // Find the satellite
+    Satellite* satellite = nullptr;
+    for (Satellite* sat : satellites) {
+        if (sat && sat->getID() == satelliteID) {
+            satellite = sat;
+            break;
+        }
+    }
+
+    if (!satellite) return rocketsInRange;
+
+    // Check each rocket for proximity
+    for (Rocket* rocket : nearbyRockets) {
+        if (!rocket) continue;
+
+        float dist = distance(satellite->getPosition(), rocket->getPosition());
+        if (dist <= GameConstants::SATELLITE_ROCKET_DOCKING_RANGE) {
+            rocketsInRange.push_back(rocket);
+        }
+    }
+
+    return rocketsInRange;
 }
 
 bool FuelTransferNetwork::areSatellitesConnected(int satellite1ID, int satellite2ID) {

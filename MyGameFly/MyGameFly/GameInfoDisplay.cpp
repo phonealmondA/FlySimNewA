@@ -50,6 +50,7 @@ void GameInfoDisplay::updateAllPanels(GameState currentState, VehicleManager* ve
     updatePlanetInfoPanel(currentState, vehicleManager, splitScreenManager, localPlayer, planets);
     updateOrbitInfoPanel(currentState, vehicleManager, splitScreenManager, networkManager, localPlayer);
     updateNetworkInfoPanel(networkManager, localPlayer);
+    updateSatelliteInfoPanel(currentState, vehicleManager, splitScreenManager, localPlayer);
 }
 
 void GameInfoDisplay::updateVehicleInfoPanel(GameState currentState, VehicleManager* vehicleManager,
@@ -78,6 +79,15 @@ void GameInfoDisplay::updateNetworkInfoPanel(NetworkManager* networkManager, Pla
 {
     std::string content = generateNetworkInfo(networkManager, localPlayer);
     networkInfoPanel->setText(content);
+}
+
+void GameInfoDisplay::updateSatelliteInfoPanel(GameState currentState, VehicleManager* vehicleManager,
+    SplitScreenManager* splitScreenManager, Player* localPlayer)
+{
+    std::string content = generateSatelliteInfo(currentState, vehicleManager, splitScreenManager, localPlayer);
+    // For now, append to existing network panel - could create separate panel later
+    std::string currentContent = generateNetworkInfo(nullptr, localPlayer);
+    networkInfoPanel->setText(currentContent + "\n" + content);
 }
 
 std::string GameInfoDisplay::generateVehicleInfo(GameState currentState, VehicleManager* vehicleManager,
@@ -301,6 +311,58 @@ std::string GameInfoDisplay::generateNetworkInfo(NetworkManager* networkManager,
             << "F3: Show satellite status\n"
             << "F4: Optimize fuel network\n"
             << "Single player active";
+    }
+
+    return ss.str();
+}
+
+std::string GameInfoDisplay::generateSatelliteInfo(GameState currentState, VehicleManager* vehicleManager,
+    SplitScreenManager* splitScreenManager, Player* localPlayer) const
+{
+    std::stringstream ss;
+
+    // Show satellite fuel transfer status
+    if (currentState == GameState::SINGLE_PLAYER && vehicleManager &&
+        vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+
+        Rocket* rocket = vehicleManager->getRocket();
+        if (rocket) {
+            ss << "SATELLITE FUEL SUPPORT\n";
+            ss << "Rocket fuel: " << std::fixed << std::setprecision(1)
+                << rocket->getCurrentFuel() << "/" << rocket->getMaxFuel() << "\n";
+            ss << "Satellites active for auto-fuel\n";
+            ss << "T: Convert rocket to satellite";
+        }
+    }
+    else if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+        ss << "SATELLITE SYSTEM\n";
+        ss << "Auto-fueling both players\n";
+
+        if (splitScreenManager->getPlayer1()->getActiveVehicleType() == VehicleType::ROCKET) {
+            Rocket* p1Rocket = splitScreenManager->getPlayer1()->getRocket();
+            ss << "P1: " << std::setprecision(0) << p1Rocket->getFuelPercentage() << "% fuel\n";
+        }
+
+        if (splitScreenManager->getPlayer2()->getActiveVehicleType() == VehicleType::ROCKET) {
+            Rocket* p2Rocket = splitScreenManager->getPlayer2()->getRocket();
+            ss << "P2: " << std::setprecision(0) << p2Rocket->getFuelPercentage() << "% fuel";
+        }
+    }
+    else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
+        ss << "SATELLITE NETWORK\n";
+        if (localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+            Rocket* rocket = localPlayer->getVehicleManager()->getRocket();
+            ss << "Fuel: " << std::setprecision(0) << rocket->getFuelPercentage() << "%\n";
+            ss << "Auto-fuel from satellites active";
+        }
+        else {
+            ss << "Switch to rocket for satellite fuel";
+        }
+    }
+    else {
+        ss << "SATELLITE SYSTEM\n";
+        ss << "Create satellites with T key\n";
+        ss << "Satellites auto-fuel rockets";
     }
 
     return ss.str();

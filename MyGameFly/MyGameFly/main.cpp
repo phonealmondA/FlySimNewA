@@ -137,6 +137,9 @@ public:
         // SATELLITE SYSTEM: Set planets for satellite manager
         satelliteManager->setPlanets(planets);
 
+        // SATELLITE SYSTEM: Set up rocket integration
+        satelliteManager->setNearbyRockets({ vehicleManager->getRocket() });
+
         // Create vehicle manager
         sf::Vector2f planetPos = planet->getPosition();
         float planetRadius = planet->getRadius();
@@ -191,6 +194,12 @@ public:
 
         // SATELLITE SYSTEM: Set planets for satellite manager
         satelliteManager->setPlanets(planets);
+        // SATELLITE SYSTEM: Set up rocket integration for split screen
+        std::vector<Rocket*> splitScreenRockets = {
+            splitScreenManager->getPlayer1()->getRocket(),
+            splitScreenManager->getPlayer2()->getRocket()
+        };
+        satelliteManager->setNearbyRockets(splitScreenRockets);
 
         // Create spawn positions for both players
         sf::Vector2f planetPos = planet->getPosition();
@@ -620,6 +629,9 @@ public:
                     // Update gravity simulator
                     gravitySimulator->addVehicleManager(vehicleManager.get());
 
+                    // SATELLITE SYSTEM: Update rocket reference after conversion
+                    satelliteManager->setNearbyRockets({ vehicleManager->getRocket() });
+
                     // Update camera to follow new rocket
                     gameView.setCenter(newRocketPos);
 
@@ -858,6 +870,22 @@ public:
 
         // SATELLITE SYSTEM: Update satellites
         satelliteManager->update(deltaTime);
+
+        // SATELLITE SYSTEM: Update rocket references for single player
+        if (currentState == GameState::SINGLE_PLAYER && vehicleManager) {
+            satelliteManager->setNearbyRockets({ vehicleManager->getRocket() });
+        }
+        // SATELLITE SYSTEM: Update rocket references for split screen
+        else if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+            std::vector<Rocket*> activeRockets;
+            if (splitScreenManager->getPlayer1()->getActiveVehicleType() == VehicleType::ROCKET) {
+                activeRockets.push_back(splitScreenManager->getPlayer1()->getRocket());
+            }
+            if (splitScreenManager->getPlayer2()->getActiveVehicleType() == VehicleType::ROCKET) {
+                activeRockets.push_back(splitScreenManager->getPlayer2()->getRocket());
+            }
+            satelliteManager->setNearbyRockets(activeRockets);
+        }
 
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
             splitScreenManager->update(deltaTime);

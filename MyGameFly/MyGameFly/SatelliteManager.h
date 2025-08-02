@@ -57,6 +57,7 @@ private:
     std::vector<std::unique_ptr<Satellite>> satellites;
     std::map<int, Satellite*> satelliteMap;     // Fast ID-based lookup
     std::vector<Planet*> planets;               // Reference to game planets
+    std::vector<Rocket*> nearbyRockets;         // Rockets available for fuel transfer
     int nextSatelliteID;                        // Auto-incrementing ID counter
 
     // Fuel transfer network
@@ -179,6 +180,11 @@ public:
     void integrateWithGravitySimulator(class GravitySimulator* gravSim);
     void integrateWithPlayer(Player* player);
     void integrateWithVehicleManager(VehicleManager* vehicleManager);
+    // Rocket management for fuel transfers
+    void addNearbyRocket(Rocket* rocket);
+    void removeNearbyRocket(Rocket* rocket);
+    void setNearbyRockets(const std::vector<Rocket*>& rocketList);
+    void updateRocketProximity();
 };
 
 #endif // SATELLITE_MANAGER_H

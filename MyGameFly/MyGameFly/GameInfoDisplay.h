@@ -45,6 +45,10 @@ private:
         Player* localPlayer) const;
     std::string generateNetworkInfo(NetworkManager* networkManager, Player* localPlayer) const;
 
+    // Satellite system info generation
+    std::string generateSatelliteInfo(GameState currentState, VehicleManager* vehicleManager,
+        SplitScreenManager* splitScreenManager, Player* localPlayer) const;
+
     // Utility methods for calculations
     float calculateApoapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, float G) const;
     float calculatePeriapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, float G) const;
@@ -72,6 +76,9 @@ public:
         SplitScreenManager* splitScreenManager, NetworkManager* networkManager,
         Player* localPlayer);
     void updateNetworkInfoPanel(NetworkManager* networkManager, Player* localPlayer);
+
+    void updateSatelliteInfoPanel(GameState currentState, VehicleManager* vehicleManager,
+        SplitScreenManager* splitScreenManager, Player* localPlayer);
 
     // Panel management
     void repositionPanels(sf::Vector2u newWindowSize);

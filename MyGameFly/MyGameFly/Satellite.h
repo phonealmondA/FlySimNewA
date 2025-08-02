@@ -111,6 +111,9 @@ public:
     bool transferFuelTo(Satellite* target, float amount);
     bool transferFuelToRocket(Rocket* rocket, float amount);
 
+    void transferFuelToNearbyRockets(float deltaTime);
+    bool isRocketInTransferRange(const Rocket* rocket) const;
+
     // Mass system
     float getMass() const { return mass; }
     float getBaseMass() const { return baseMass; }

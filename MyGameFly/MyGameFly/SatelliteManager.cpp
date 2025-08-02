@@ -54,6 +54,7 @@ void SatelliteManager::update(float deltaTime) {
 
     // Update statistics
     if (timeSinceStatsUpdate >= statsUpdateInterval) {
+        updateRocketProximity();
         updateNetworkStats();
         timeSinceStatsUpdate = 0.0f;
     }
@@ -651,6 +652,50 @@ void SatelliteManager::integrateWithVehicleManager(VehicleManager* vehicleManage
             if (satellite->getAvailableFuel() > 10.0f) {
                 // Potential for automatic fuel transfer
             }
+        }
+    }
+}
+
+void SatelliteManager::addNearbyRocket(Rocket* rocket) {
+    if (!rocket) return;
+
+    // Update all satellites with nearby rockets
+    updateRocketProximity();
+}
+
+void SatelliteManager::removeNearbyRocket(Rocket* rocket) {
+    if (!rocket) return;
+
+    // Update all satellites to remove this rocket
+    updateRocketProximity();
+}
+
+void SatelliteManager::setNearbyRockets(const std::vector<Rocket*>& rocketList) {
+    nearbyRockets = rocketList;
+    updateRocketProximity();
+}
+
+void SatelliteManager::updateRocketProximity() {
+    // For each satellite, find rockets within transfer range
+    for (auto& satellite : satellites) {
+        if (!satellite || !satellite->isOperational()) continue;
+
+        std::vector<Rocket*> rocketsInRange;
+
+        for (Rocket* rocket : nearbyRockets) {
+            if (!rocket) continue;
+
+            if (satellite->isRocketInTransferRange(rocket)) {
+                rocketsInRange.push_back(rocket);
+            }
+        }
+
+        // Set the nearby rockets for this satellite
+        satellite->setNearbyRockets(rocketsInRange);
+
+        if (!rocketsInRange.empty()) {
+            std::cout << "Satellite " << satellite->getName() << " has "
+                << rocketsInRange.size() << " rockets in transfer range" << std::endl;
         }
     }
 }

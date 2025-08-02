@@ -158,6 +158,12 @@ public:
     bool transferFuelFromPlanet(Planet* planet, int toSatelliteID, float amount);
     bool transferFuelToRocket(int fromSatelliteID, Rocket* rocket, float amount);
 
+    // Automatic rocket fuel transfers
+    void processAutomaticRocketTransfers(float deltaTime);
+    void addNearbyRocket(Rocket* rocket);
+    void removeNearbyRocket(Rocket* rocket);
+    std::vector<Rocket*> getRocketsInRange(int satelliteID) const;
+
     // Network queries
     bool areSatellitesConnected(int satellite1ID, int satellite2ID);
     float getConnectionDistance(int satellite1ID, int satellite2ID);
@@ -216,6 +222,8 @@ public:
 private:
     // Custom priority storage
     std::map<int, float> customPriorities;
+
+    std::vector<Rocket*> nearbyRockets;        // Rockets available for fuel transfer
 
     // Advanced algorithms
     void dijkstraFuelPath(int startSatelliteID, std::map<int, float>& distances, std::map<int, int>& previous);
