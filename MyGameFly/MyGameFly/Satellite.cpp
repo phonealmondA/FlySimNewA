@@ -306,7 +306,22 @@ float Satellite::getMaintenanceFuelCost() const {
 
 void Satellite::update(float deltaTime) {
     lastMaintenanceTime += deltaTime;
+    // Apply gravity forces from nearby planets (same as rockets)
+    for (auto* planet : nearbyPlanets) {
+        sf::Vector2f direction = planet->getPosition() - position;
+        float distance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
 
+        // Avoid division by zero and very small distances
+        if (distance > planet->getRadius() + GameConstants::TRAJECTORY_COLLISION_RADIUS) {
+            // Use satellite's DYNAMIC MASS for gravity calculation (same as rockets)
+            float forceMagnitude = GameConstants::G * planet->getMass() * mass / (distance * distance);
+            sf::Vector2f acceleration = normalize(direction) * forceMagnitude / mass;
+            sf::Vector2f velocityChange = acceleration * deltaTime;
+            velocity += velocityChange;
+        }
+    }
+
+    // Update position after gravity effects
     position += velocity * deltaTime;
 
     body.setPosition(position);

@@ -2,6 +2,8 @@
 #include "GravitySimulator.h"
 #include "VehicleManager.h"
 #include "Player.h"
+#include "Satellite.h"
+#include "SatelliteManager.h"
 
 void GravitySimulator::addPlanet(Planet* planet)
 {
@@ -25,6 +27,15 @@ void GravitySimulator::addVehicleManager(VehicleManager* manager)
 void GravitySimulator::addPlayer(Player* player)
 {
     players.push_back(player);
+}
+void GravitySimulator::addSatellite(Satellite* satellite)
+{
+    satellites.push_back(satellite);
+}
+
+void GravitySimulator::addSatelliteManager(SatelliteManager* satManager)
+{
+    satelliteManager = satManager;
 }
 
 void GravitySimulator::removePlayer(int playerID)
@@ -219,6 +230,36 @@ void GravitySimulator::update(float deltaTime)
             }
         }
     }
+    // Apply gravity to satellites from planets
+    if (satelliteManager) {
+        auto satellites = satelliteManager->getAllSatellites();
+        for (auto* satellite : satellites) {
+            if (satellite && satellite->isOperational()) {
+                satellite->setNearbyPlanets(planets);
+                // Satellite will handle its own gravity in its update() method
+                // but we can also apply satellite-to-satellite gravity here if needed
+
+                // Apply satellite-to-satellite gravity
+                for (auto* otherSat : satellites) {
+                    if (otherSat && otherSat != satellite && otherSat->isOperational()) {
+                        sf::Vector2f direction = otherSat->getPosition() - satellite->getPosition();
+                        float distance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+
+                        const float minDistance = GameConstants::TRAJECTORY_COLLISION_RADIUS;
+                        if (distance < minDistance) {
+                            distance = minDistance;
+                        }
+
+                        float forceMagnitude = G * satellite->getMass() * otherSat->getMass() / (distance * distance);
+                        sf::Vector2f normalizedDir = normalize(direction);
+                        sf::Vector2f accel = normalizedDir * forceMagnitude / satellite->getMass();
+                        satellite->setVelocity(satellite->getVelocity() + accel * deltaTime);
+                    }
+                }
+            }
+        }
+    }
+
 
     // FUEL SYSTEM INTEGRATION: Process fuel collection for all game modes
     if (!players.empty()) {

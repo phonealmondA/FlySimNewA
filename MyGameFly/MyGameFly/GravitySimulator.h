@@ -2,6 +2,7 @@
 #pragma once
 #include "Planet.h"
 #include "Rocket.h"
+#include "Satellite.h"
 #include "VectorHelper.h"
 #include "GameConstants.h"
 #include <vector>
@@ -9,6 +10,8 @@
 // Forward declarations
 class VehicleManager;
 class Player;
+class Satellite;
+class SatelliteManager;
 
 class GravitySimulator {
 private:
@@ -20,6 +23,8 @@ private:
 
     const float G = GameConstants::G;
     bool simulatePlanetGravity = true;
+    SatelliteManager* satelliteManager = nullptr;
+    std::vector<Satellite*> satellites;
 
 public:
     void addPlanet(Planet* planet);
@@ -46,4 +51,7 @@ public:
 
     const std::vector<Planet*>& getPlanets() const { return planets; }
     void setSimulatePlanetGravity(bool enable) { simulatePlanetGravity = enable; }
+
+    void addSatellite(Satellite* satellite);
+    void addSatelliteManager(SatelliteManager* satManager);
 };
