@@ -12,6 +12,9 @@
 #include "SplitScreenManager.h"
 #include "NetworkManager.h"
 #include "Player.h"
+#include "UIManager.h"
+#include "SatelliteManager.h"
+#include "Satellite.h"
 #include <memory>
 #include <vector>
 #include <cstdint>
@@ -34,38 +37,7 @@
 #pragma comment(lib, "sfml-network.lib")
 #endif
 
-// Define a simple TextPanel class to display information
-class TextPanel {
-private:
-    sf::Text text;
-    sf::RectangleShape background;
-
-public:
-    TextPanel(const sf::Font& font, unsigned int characterSize, sf::Vector2f position,
-        sf::Vector2f size, sf::Color bgColor = sf::Color(0, 0, 0, 180))
-        : text(font) {
-        background.setPosition(position);
-        background.setSize(size);
-        background.setFillColor(bgColor);
-        background.setOutlineColor(sf::Color::White);
-        background.setOutlineThickness(1.0f);
-
-        text.setCharacterSize(characterSize);
-        text.setFillColor(sf::Color::White);
-        text.setPosition(sf::Vector2f(position.x + 5.f, position.y + 5.f));
-    }
-
-    void setText(const std::string& str) {
-        text.setString(str);
-    }
-
-    void draw(sf::RenderWindow& window) {
-        window.draw(background);
-        window.draw(text);
-    }
-};
-
-// Forward declarations for helper functions
+// Helper function declarations
 float calculateApoapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, float G);
 float calculatePeriapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, float G);
 
@@ -89,13 +61,14 @@ private:
     std::unique_ptr<MultiplayerMenu> multiplayerMenu;
     std::unique_ptr<OnlineMultiplayerMenu> onlineMenu;
     GameState currentState;
-    sf::Font font;
-    bool fontLoaded;
 
-    // Network manager for LAN multiplayer
+    // UI Management - UPDATED
+    std::unique_ptr<UIManager> uiManager;
+
+    // Network manager for multiplayer
     std::unique_ptr<NetworkManager> networkManager;
 
-    // Game objects (will be initialized when entering game modes)
+    // Game objects
     std::unique_ptr<Planet> planet;
     std::unique_ptr<Planet> planet2;
     std::vector<Planet*> planets;
@@ -103,28 +76,25 @@ private:
     std::unique_ptr<SplitScreenManager> splitScreenManager;
     std::unique_ptr<GravitySimulator> gravitySimulator;
 
+    // SATELLITE SYSTEM - NEW
+    std::unique_ptr<SatelliteManager> satelliteManager;
+
     // Player management for network multiplayer
     std::vector<std::unique_ptr<Player>> players;
     std::unique_ptr<Player> localPlayer;
     std::vector<std::unique_ptr<Player>> remotePlayers;
 
-    // Camera and UI
+    // Camera and visual settings
     sf::View gameView;
     sf::View uiView;
     float zoomLevel;
     float targetZoom;
 
-    // UI panels
-    std::unique_ptr<TextPanel> rocketInfoPanel;
-    std::unique_ptr<TextPanel> planetInfoPanel;
-    std::unique_ptr<TextPanel> orbitInfoPanel;
-    std::unique_ptr<TextPanel> controlsPanel;
-    std::unique_ptr<TextPanel> networkInfoPanel;
-
-    // Input tracking - UPDATED FOR FUEL SYSTEM
+    // Input tracking - UPDATED FOR SATELLITE SYSTEM
     bool lKeyPressed;
-    bool fuelIncreaseKeyPressed;  // '.' key
-    bool fuelDecreaseKeyPressed;  // ',' key
+    bool tKeyPressed;  // NEW: Transform to satellite key
+    bool fuelIncreaseKeyPressed;
+    bool fuelDecreaseKeyPressed;
 
 public:
     Game() : window(sf::VideoMode({ 1280, 720 }), "Katie's Space Program"),
@@ -134,65 +104,15 @@ public:
         currentState(GameState::MAIN_MENU),
         gameView(sf::Vector2f(640.f, 360.f), sf::Vector2f(1280.f, 720.f)),
         uiView(sf::Vector2f(640.f, 360.f), sf::Vector2f(1280.f, 720.f)),
-        zoomLevel(1.0f),
-        targetZoom(1.0f),
-        lKeyPressed(false),
-        fuelIncreaseKeyPressed(false),
-        fuelDecreaseKeyPressed(false),
-        fontLoaded(false) {
+        zoomLevel(1.0f), targetZoom(1.0f),
+        lKeyPressed(false), tKeyPressed(false),
+        fuelIncreaseKeyPressed(false), fuelDecreaseKeyPressed(false)
+    {
+        // Initialize UI Manager
+        uiManager = std::make_unique<UIManager>(sf::Vector2u(1280, 720));
 
-        loadFont();
-        setupUI();
-    }
-
-    void loadFont() {
-#ifdef _WIN32
-        if (font.openFromFile("arial.ttf") ||
-            font.openFromFile("C:/Windows/Fonts/arial.ttf") ||
-            font.openFromFile("C:/Windows/Fonts/Arial.ttf")) {
-            fontLoaded = true;
-        }
-#elif defined(__APPLE__)
-        if (font.openFromFile("arial.ttf") ||
-            font.openFromFile("/Library/Fonts/Arial.ttf") ||
-            font.openFromFile("/System/Library/Fonts/Arial.ttf")) {
-            fontLoaded = true;
-        }
-#elif defined(__linux__)
-        if (font.openFromFile("arial.ttf") ||
-            font.openFromFile("/usr/share/fonts/truetype/msttcorefonts/Arial.ttf") ||
-            font.openFromFile("/usr/share/fonts/TTF/arial.ttf")) {
-            fontLoaded = true;
-        }
-#else
-        fontLoaded = font.openFromFile("arial.ttf");
-#endif
-
-        if (!fontLoaded) {
-            std::cerr << "Warning: Could not load font file. Text won't display correctly." << std::endl;
-        }
-    }
-
-    void setupUI() {
-        if (fontLoaded) {
-            rocketInfoPanel = std::make_unique<TextPanel>(font, 12, sf::Vector2f(10, 10), sf::Vector2f(250, 180));
-            planetInfoPanel = std::make_unique<TextPanel>(font, 12, sf::Vector2f(10, 200), sf::Vector2f(250, 120));
-            orbitInfoPanel = std::make_unique<TextPanel>(font, 12, sf::Vector2f(10, 330), sf::Vector2f(250, 100));
-            controlsPanel = std::make_unique<TextPanel>(font, 12, sf::Vector2f(10, 440), sf::Vector2f(250, 150));
-            networkInfoPanel = std::make_unique<TextPanel>(font, 12, sf::Vector2f(10, 600), sf::Vector2f(250, 80));
-
-            // UPDATED CONTROLS for fuel system
-            controlsPanel->setText(
-                "CONTROLS:\n"
-                "Arrows: Move/Rotate\n"
-                "1-9,0,=: Thrust level & fuel rate\n"
-                ".: Collect fuel from planet\n"
-                ",: Give fuel to planet\n"
-                "L: Transform rocket/car\n"
-                "Mouse wheel: Zoom\n"
-                "ESC: Menu"
-            );
-        }
+        // Initialize Satellite Manager
+        satelliteManager = std::make_unique<SatelliteManager>();
     }
 
     void initializeSinglePlayer() {
@@ -213,6 +133,9 @@ public:
         planets.clear();
         planets.push_back(planet.get());
         planets.push_back(planet2.get());
+
+        // SATELLITE SYSTEM: Set planets for satellite manager
+        satelliteManager->setPlanets(planets);
 
         // Create vehicle manager
         sf::Vector2f planetPos = planet->getPosition();
@@ -244,8 +167,8 @@ public:
         targetZoom = 1.0f;
         gameView.setCenter(rocketPos);
 
-        std::cout << "Single Player mode initialized with fuel system!" << std::endl;
-        std::cout << "Use '.' to collect fuel, ',' to give fuel, 1-9,0,= for thrust/transfer rate" << std::endl;
+        std::cout << "Single Player mode initialized with satellite system!" << std::endl;
+        std::cout << "Use 'T' to convert rocket to satellite, '.' to collect fuel, ',' to give fuel" << std::endl;
     }
 
     void initializeLocalPCMultiplayer() {
@@ -266,6 +189,9 @@ public:
         planets.push_back(planet.get());
         planets.push_back(planet2.get());
 
+        // SATELLITE SYSTEM: Set planets for satellite manager
+        satelliteManager->setPlanets(planets);
+
         // Create spawn positions for both players
         sf::Vector2f planetPos = planet->getPosition();
         float planetRadius = planet->getRadius();
@@ -275,10 +201,6 @@ public:
         sf::Vector2f player2Pos = planetPos + sf::Vector2f(0, 1) * (planetRadius + rocketSize);
 
         splitScreenManager = std::make_unique<SplitScreenManager>(player1Pos, player2Pos, planets);
-
-        // FUEL SYSTEM: Set up fuel collection for both rockets
-        // TODO: Update SplitScreenManager to handle individual fuel transfer controls
-        // Player 1 will use '.' and ',' keys, Player 2 will need different keys (maybe '[' and ']')
 
         gravitySimulator = std::make_unique<GravitySimulator>();
         gravitySimulator->addPlanet(planet.get());
@@ -294,27 +216,21 @@ public:
         targetZoom = 1.0f;
         gameView.setCenter(splitScreenManager->getCenterPoint());
 
-        std::cout << "Local PC Split-Screen Multiplayer initialized!" << std::endl;
-        std::cout << "TODO: Implement individual fuel transfer controls for each player" << std::endl;
+        std::cout << "Local PC Split-Screen Multiplayer initialized with satellite system!" << std::endl;
     }
 
     void initializeLANMultiplayer() {
-        // TODO: Implement fuel transfer synchronization for network multiplayer
-        // Each player will need to send fuel transfer state to other players
-        // Planet mass changes need to be synchronized across all clients
-        std::cout << "LAN Multiplayer fuel system not yet implemented" << std::endl;
+        std::cout << "LAN Multiplayer satellite system not yet fully implemented" << std::endl;
         initializeSinglePlayer(); // Fallback for now
     }
 
     void initializeOnlineMultiplayer(const ConnectionInfo& connectionInfo) {
-        // TODO: Implement fuel transfer synchronization for online multiplayer
-        // Same requirements as LAN but with custom IP/port support
-        std::cout << "Online Multiplayer fuel system not yet implemented" << std::endl;
+        std::cout << "Online Multiplayer satellite system not yet fully implemented" << std::endl;
         initializeSinglePlayer(); // Fallback for now
     }
 
     void handleMenuEvents(const sf::Event& event) {
-        sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window), uiView);
+        sf::Vector2f mousePos = uiManager->getMousePosition(window);
 
         if (currentState == GameState::MAIN_MENU) {
             mainMenu.handleEvent(event, mousePos);
@@ -403,73 +319,51 @@ public:
         // Handle split-screen transform inputs first
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
             splitScreenManager->handleTransformInputs(event);
-            // TODO: Add fuel transfer input handling for split-screen mode
         }
 
         if (event.is<sf::Event::KeyPressed>()) {
             const auto* keyEvent = event.getIf<sf::Event::KeyPressed>();
             if (keyEvent) {
                 if (keyEvent->code == sf::Keyboard::Key::Escape) {
-                    if (networkManager) {
-                        networkManager->disconnect();
-                        networkManager.reset();
-                    }
-
-                    remotePlayers.clear();
-                    players.clear();
-                    localPlayer.reset();
-
-                    currentState = GameState::MAIN_MENU;
-                    mainMenu.show();
+                    handleEscapeKey();
                     return;
                 }
                 else if (keyEvent->code == sf::Keyboard::Key::P) {
-                    static bool planetGravity = true;
-                    planetGravity = !planetGravity;
-                    gravitySimulator->setSimulatePlanetGravity(planetGravity);
+                    togglePlanetGravity();
                 }
                 else if (keyEvent->code == sf::Keyboard::Key::L && !lKeyPressed) {
-                    lKeyPressed = true;
-                    if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-                        // Handle in split screen manager
-                    }
-                    else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
-                        localPlayer->requestTransform();
-                    }
-                    else if (vehicleManager) {
-                        vehicleManager->switchVehicle();
-                    }
+                    handleVehicleTransform();
                 }
-                // FUEL TRANSFER INPUT HANDLING - SINGLE PLAYER ONLY FOR NOW
+                // SATELLITE CONVERSION - NEW
+                else if (keyEvent->code == sf::Keyboard::Key::T && !tKeyPressed) {
+                    handleSatelliteConversion();
+                }
+                // FUEL TRANSFER INPUT HANDLING
                 else if (keyEvent->code == sf::Keyboard::Key::Period && !fuelIncreaseKeyPressed) {
-                    fuelIncreaseKeyPressed = true;
-                    if (currentState == GameState::SINGLE_PLAYER && vehicleManager &&
-                        vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
-                        Rocket* rocket = vehicleManager->getRocket();
-                        float transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * rocket->getThrustLevel();
-                        if (transferRate < GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f) {
-                            transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f;
-                        }
-                        rocket->startFuelTransferIn(transferRate);
-                        std::cout << "Started fuel collection at rate: " << transferRate << std::endl;
-                    }
+                    handleFuelTransferStart(true);
                 }
                 else if (keyEvent->code == sf::Keyboard::Key::Comma && !fuelDecreaseKeyPressed) {
-                    fuelDecreaseKeyPressed = true;
-                    if (currentState == GameState::SINGLE_PLAYER && vehicleManager &&
-                        vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
-                        Rocket* rocket = vehicleManager->getRocket();
-                        float transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * rocket->getThrustLevel();
-                        if (transferRate < GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f) {
-                            transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f;
-                        }
-                        rocket->startFuelTransferOut(transferRate);
-                        std::cout << "Started fuel transfer out at rate: " << transferRate << std::endl;
-                    }
+                    handleFuelTransferStart(false);
                 }
+                // DEBUG KEYS
                 else if (keyEvent->code == sf::Keyboard::Key::H && networkManager) {
                     networkManager->sendHello();
                     std::cout << "Sent hello message to network!" << std::endl;
+                }
+                // UI CONTROLS
+                else if (keyEvent->code == sf::Keyboard::Key::F1) {
+                    uiManager->toggleUI();
+                }
+                else if (keyEvent->code == sf::Keyboard::Key::F2) {
+                    uiManager->toggleDebugInfo();
+                }
+                // SATELLITE DEBUG CONTROLS
+                else if (keyEvent->code == sf::Keyboard::Key::F3) {
+                    satelliteManager->printNetworkStatus();
+                }
+                else if (keyEvent->code == sf::Keyboard::Key::F4) {
+                    satelliteManager->optimizeNetworkFuelDistribution();
+                    std::cout << "Triggered satellite fuel optimization" << std::endl;
                 }
             }
         }
@@ -480,207 +374,59 @@ public:
                 if (keyEvent->code == sf::Keyboard::Key::L) {
                     lKeyPressed = false;
                 }
-                // FUEL TRANSFER KEY RELEASES
+                else if (keyEvent->code == sf::Keyboard::Key::T) {
+                    tKeyPressed = false;
+                }
                 else if (keyEvent->code == sf::Keyboard::Key::Period) {
-                    fuelIncreaseKeyPressed = false;
-                    if (currentState == GameState::SINGLE_PLAYER && vehicleManager &&
-                        vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
-                        vehicleManager->getRocket()->stopFuelTransfer();
-                        std::cout << "Stopped fuel transfer" << std::endl;
-                    }
+                    handleFuelTransferStop();
                 }
                 else if (keyEvent->code == sf::Keyboard::Key::Comma) {
-                    fuelDecreaseKeyPressed = false;
-                    if (currentState == GameState::SINGLE_PLAYER && vehicleManager &&
-                        vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
-                        vehicleManager->getRocket()->stopFuelTransfer();
-                        std::cout << "Stopped fuel transfer" << std::endl;
-                    }
+                    handleFuelTransferStop();
                 }
             }
         }
 
         // Handle mouse wheel for zooming
         if (event.is<sf::Event::MouseWheelScrolled>()) {
-            const auto* scrollEvent = event.getIf<sf::Event::MouseWheelScrolled>();
-            if (scrollEvent && scrollEvent->wheel == sf::Mouse::Wheel::Vertical) {
-                const float zoomFactor = 1.1f;
-                if (scrollEvent->delta > 0) {
-                    targetZoom /= zoomFactor;
-                }
-                else {
-                    targetZoom *= zoomFactor;
-                }
-                targetZoom = std::max(0.5f, std::min(targetZoom, 50.0f));
-
-                if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-                    gameView.setCenter(splitScreenManager->getCenterPoint());
-                }
-                else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
-                    gameView.setCenter(localPlayer->getPosition());
-                }
-                else if (vehicleManager) {
-                    gameView.setCenter(vehicleManager->getActiveVehicle()->getPosition());
-                }
-            }
+            handleMouseWheelZoom(event);
         }
 
         if (event.is<sf::Event::Resized>()) {
-            const auto* resizeEvent = event.getIf<sf::Event::Resized>();
-            if (resizeEvent) {
-                float aspectRatio = static_cast<float>(resizeEvent->size.x) / static_cast<float>(resizeEvent->size.y);
-                gameView.setSize(sf::Vector2f(
-                    resizeEvent->size.y * aspectRatio * zoomLevel,
-                    resizeEvent->size.y * zoomLevel
-                ));
-
-                uiView.setSize(sf::Vector2f(
-                    static_cast<float>(resizeEvent->size.x),
-                    static_cast<float>(resizeEvent->size.y)
-                ));
-                uiView.setCenter(sf::Vector2f(
-                    static_cast<float>(resizeEvent->size.x) / 2.0f,
-                    static_cast<float>(resizeEvent->size.y) / 2.0f
-                ));
-
-                window.setView(gameView);
-            }
+            handleWindowResize(event);
         }
     }
 
-    void handleGameInput(float deltaTime) {
-        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-            splitScreenManager->handlePlayer1Input(deltaTime);
-            splitScreenManager->handlePlayer2Input(deltaTime);
-
-            // Synced thrust level controls (also affects fuel transfer rate)
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num0))
-                splitScreenManager->setSyncedThrustLevel(0.0f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num1))
-                splitScreenManager->setSyncedThrustLevel(0.1f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num2))
-                splitScreenManager->setSyncedThrustLevel(0.2f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num3))
-                splitScreenManager->setSyncedThrustLevel(0.3f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num4))
-                splitScreenManager->setSyncedThrustLevel(0.4f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num5))
-                splitScreenManager->setSyncedThrustLevel(0.5f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num6))
-                splitScreenManager->setSyncedThrustLevel(0.6f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num7))
-                splitScreenManager->setSyncedThrustLevel(0.7f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num8))
-                splitScreenManager->setSyncedThrustLevel(0.8f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num9))
-                splitScreenManager->setSyncedThrustLevel(0.9f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Equal))
-                splitScreenManager->setSyncedThrustLevel(1.0f);
-
-            // TODO: Handle fuel transfer inputs for split-screen players
-        }
-        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
-            // TODO: Network player input will include fuel transfer controls
-            localPlayer->handleLocalInput(deltaTime);
-        }
-        else if (vehicleManager) {
-            // Single player input handling - UPDATED FOR FUEL SYSTEM
-
-            // Thrust level controls (also affects fuel transfer rate)
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num0))
-                vehicleManager->getRocket()->setThrustLevel(0.0f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num1))
-                vehicleManager->getRocket()->setThrustLevel(0.1f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num2))
-                vehicleManager->getRocket()->setThrustLevel(0.2f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num3))
-                vehicleManager->getRocket()->setThrustLevel(0.3f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num4))
-                vehicleManager->getRocket()->setThrustLevel(0.4f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num5))
-                vehicleManager->getRocket()->setThrustLevel(0.5f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num6))
-                vehicleManager->getRocket()->setThrustLevel(0.6f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num7))
-                vehicleManager->getRocket()->setThrustLevel(0.7f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num8))
-                vehicleManager->getRocket()->setThrustLevel(0.8f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num9))
-                vehicleManager->getRocket()->setThrustLevel(0.9f);
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Equal))
-                vehicleManager->getRocket()->setThrustLevel(1.0f);
-
-            // Movement controls
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Up))
-                vehicleManager->applyThrust(vehicleManager->getRocket()->getThrustLevel());
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Down))
-                vehicleManager->applyThrust(-vehicleManager->getRocket()->getThrustLevel());
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left))
-                vehicleManager->rotate(-6.0f * deltaTime * 60.0f);
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right))
-                vehicleManager->rotate(6.0f * deltaTime * 60.0f);
-
-            handleCameraControls();
-        }
-    }
-
-    void handleCameraControls() {
-        if (currentState == GameState::SINGLE_PLAYER && vehicleManager) {
-            const float minZoom = 1.0f;
-            const float maxZoom = 1000.0f;
-
-            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Z)) {
-                targetZoom = std::min(maxZoom, targetZoom * 1.05f);
-                gameView.setCenter(vehicleManager->getActiveVehicle()->getPosition());
-            }
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::X)) {
-                sf::Vector2f vehiclePos = vehicleManager->getActiveVehicle()->getPosition();
-                float dist1 = std::sqrt(
-                    std::pow(vehiclePos.x - planet->getPosition().x, 2) +
-                    std::pow(vehiclePos.y - planet->getPosition().y, 2)
-                );
-                float dist2 = std::sqrt(
-                    std::pow(vehiclePos.x - planet2->getPosition().x, 2) +
-                    std::pow(vehiclePos.y - planet2->getPosition().y, 2)
-                );
-                targetZoom = minZoom + (std::min(dist1, dist2) - (planet->getRadius() + GameConstants::ROCKET_SIZE)) / 100.0f;
-                targetZoom = std::max(minZoom, std::min(targetZoom, maxZoom));
-                gameView.setCenter(vehiclePos);
-            }
-            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
-                targetZoom = 10.0f;
-                gameView.setCenter(planet2->getPosition());
-            }
-        }
-    }
-
-    void updateGame(float deltaTime) {
-        // Update network manager if active
+    void handleEscapeKey() {
         if (networkManager) {
-            // TODO: Update network manager for fuel system synchronization
-            // - Send/receive fuel transfer states
-            // - Synchronize planet mass changes
-            // - Handle fuel transfer conflicts between players
-            networkManager->update(deltaTime);
+            networkManager->disconnect();
+            networkManager.reset();
         }
 
-        // Update simulation
-        gravitySimulator->update(deltaTime);
-        planet->update(deltaTime);
-        planet2->update(deltaTime);
+        remotePlayers.clear();
+        players.clear();
+        localPlayer.reset();
+
+        // Clear satellite system
+        satelliteManager->removeAllSatellites();
+
+        currentState = GameState::MAIN_MENU;
+        mainMenu.show();
+    }
+
+    void togglePlanetGravity() {
+        static bool planetGravity = true;
+        planetGravity = !planetGravity;
+        gravitySimulator->setSimulatePlanetGravity(planetGravity);
+        std::cout << "Planet gravity " << (planetGravity ? "enabled" : "disabled") << std::endl;
+    }
+
+    void handleVehicleTransform() {
+        lKeyPressed = true;
 
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-            splitScreenManager->update(deltaTime);
-
-            // TODO: Process fuel transfers for both split-screen players
-            // Need to handle separate fuel transfer controls for each player
-
-            if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
-                gameView.setCenter(splitScreenManager->getCenterPoint());
-            }
+            // Handle in split screen manager
         }
         else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
-            // TODO: Network multiplayer fuel system updates
             localPlayer->update(deltaTime);
 
             for (auto& remotePlayer : remotePlayers) {
@@ -702,228 +448,10 @@ public:
         // Smooth zoom
         zoomLevel += (targetZoom - zoomLevel) * deltaTime * 2.0f;
         gameView.setSize(sf::Vector2f(1280.f * zoomLevel, 720.f * zoomLevel));
-    }
 
-    void updateInfoPanels() {
-        if (!fontLoaded) return;
-
-        updateVehicleInfoPanel();
-        updatePlanetInfoPanel();
-        updateOrbitInfoPanel();
-        updateNetworkInfoPanel();
-    }
-
-    void updateNetworkInfoPanel() {
-        if (!networkInfoPanel) return;
-
-        std::stringstream ss;
-        if (networkManager) {
-            // TODO: Add fuel system network status
-            std::string roleStr = "NONE";
-            std::string statusStr = "DISCONNECTED";
-
-            switch (networkManager->getRole()) {
-            case NetworkRole::HOST: roleStr = "HOST"; break;
-            case NetworkRole::CLIENT: roleStr = "CLIENT"; break;
-            case NetworkRole::NONE: roleStr = "NONE"; break;
-            }
-
-            switch (networkManager->getStatus()) {
-            case ConnectionStatus::CONNECTED: statusStr = "CONNECTED"; break;
-            case ConnectionStatus::CONNECTING: statusStr = "CONNECTING"; break;
-            case ConnectionStatus::FAILED: statusStr = "FAILED"; break;
-            case ConnectionStatus::DISCONNECTED: statusStr = "DISCONNECTED"; break;
-            }
-
-            ss << "NETWORK STATUS\n"
-                << "Role: " << roleStr << "\n"
-                << "Status: " << statusStr << "\n";
-
-            if (localPlayer) {
-                ss << "Player ID: " << localPlayer->getID() << "\n";
-            }
-
-            ss << "Fuel sync: TODO";
-        }
-        else {
-            ss << "NETWORK STATUS\n"
-                << "Network not active\n"
-                << "Single player fuel system active";
-        }
-
-        networkInfoPanel->setText(ss.str());
-    }
-
-    void updateVehicleInfoPanel() {
-        std::stringstream ss;
-
-        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-            // TODO: Update for fuel system in split-screen
-            VehicleManager* p1 = splitScreenManager->getPlayer1();
-            VehicleManager* p2 = splitScreenManager->getPlayer2();
-
-            ss << "SPLIT-SCREEN MODE\n";
-            ss << "Player 1 (Arrows + L): " << (p1->getActiveVehicleType() == VehicleType::ROCKET ? "ROCKET" : "CAR") << "\n";
-            ss << "Player 2 (WASD + K): " << (p2->getActiveVehicleType() == VehicleType::ROCKET ? "ROCKET" : "CAR") << "\n";
-
-            if (p1->getActiveVehicleType() == VehicleType::ROCKET) {
-                Rocket* rocket = p1->getRocket();
-                float thrustLevel = rocket->getThrustLevel();
-                ss << "Shared Thrust: " << std::fixed << std::setprecision(0) << thrustLevel * 100.0f << "%\n";
-                ss << "P1 Fuel: " << std::setprecision(1) << rocket->getCurrentFuel() << "/"
-                    << rocket->getMaxFuel() << " (" << std::setprecision(0) << rocket->getFuelPercentage() << "%)\n";
-                ss << "P1 Mass: " << std::setprecision(1) << rocket->getMass() << "/" << rocket->getMaxMass() << "\n";
-            }
-
-            if (p2->getActiveVehicleType() == VehicleType::ROCKET) {
-                Rocket* rocket2 = p2->getRocket();
-                ss << "P2 Fuel: " << std::setprecision(1) << rocket2->getCurrentFuel() << "/"
-                    << rocket2->getMaxFuel() << " (" << std::setprecision(0) << rocket2->getFuelPercentage() << "%)\n";
-                ss << "P2 Mass: " << std::setprecision(1) << rocket2->getMass() << "/" << rocket2->getMaxMass() << "\n";
-            }
-
-            ss << "TODO: Individual fuel controls";
-        }
-        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
-            // TODO: Network multiplayer fuel info
-            std::string modeStr = (currentState == GameState::LAN_MULTIPLAYER) ? "LAN" : "ONLINE";
-
-            if (localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
-                Rocket* rocket = localPlayer->getVehicleManager()->getRocket();
-                float speed = std::sqrt(rocket->getVelocity().x * rocket->getVelocity().x +
-                    rocket->getVelocity().y * rocket->getVelocity().y);
-
-                ss << modeStr << " MULTIPLAYER\n"
-                    << "Player: " << localPlayer->getName() << "\n"
-                    << "Speed: " << std::fixed << std::setprecision(1) << speed << " units/s\n"
-                    << "Thrust: " << std::setprecision(0) << rocket->getThrustLevel() * 100.0f << "%\n"
-                    << "Fuel: " << std::setprecision(1) << rocket->getCurrentFuel() << "/"
-                    << rocket->getMaxFuel() << " (" << std::setprecision(0) << rocket->getFuelPercentage() << "%)\n"
-                    << "Mass: " << std::setprecision(1) << rocket->getMass() << "/" << rocket->getMaxMass() << "\n"
-                    << "Collecting: " << (rocket->getIsCollectingFuel() ? "YES" : "NO");
-            }
-            else {
-                Car* car = localPlayer->getVehicleManager()->getCar();
-                ss << modeStr << " MULTIPLAYER (CAR)\n"
-                    << "Player: " << localPlayer->getName() << "\n"
-                    << "On Ground: " << (car->isOnGround() ? "Yes" : "No");
-            }
-        }
-        else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
-            // UPDATED: Single player rocket info with fuel system
-            Rocket* rocket = vehicleManager->getRocket();
-            float speed = std::sqrt(rocket->getVelocity().x * rocket->getVelocity().x +
-                rocket->getVelocity().y * rocket->getVelocity().y);
-
-            ss << "ROCKET INFO (FUEL SYSTEM)\n"
-                << "Speed: " << std::fixed << std::setprecision(1) << speed << " units/s\n"
-                << "Thrust Level: " << std::setprecision(0) << rocket->getThrustLevel() * 100.0f << "%\n"
-                << "Fuel: " << std::setprecision(1) << rocket->getCurrentFuel() << "/"
-                << rocket->getMaxFuel() << " (" << std::setprecision(0) << rocket->getFuelPercentage() << "%)\n"
-                << "Mass: " << std::setprecision(1) << rocket->getMass() << "/" << rocket->getMaxMass() << "\n"
-                << "Transferring: " << (rocket->isTransferringFuel() ? "YES" : "NO") << "\n"
-                << "Rate: " << std::setprecision(1) << rocket->getCurrentTransferRate() << " units/s\n"
-                << "Can Thrust: " << (rocket->canThrust() ? "YES" : "NO");
-        }
-        else if (vehicleManager) {
-            Car* car = vehicleManager->getCar();
-            ss << "CAR INFO\n"
-                << "On Ground: " << (car->isOnGround() ? "Yes" : "No") << "\n"
-                << "Position: (" << std::fixed << std::setprecision(1)
-                << car->getPosition().x << ", " << car->getPosition().y << ")\n"
-                << "Orientation: " << std::setprecision(1) << car->getRotation() << " degrees\n"
-                << "Press L to transform to rocket\n"
-                << "Cars don't use fuel system";
-        }
-        rocketInfoPanel->setText(ss.str());
-    }
-
-    void updatePlanetInfoPanel() {
-        std::stringstream ss;
-        Planet* closestPlanet = nullptr;
-        float closestDistance = std::numeric_limits<float>::max();
-
-        GameObject* activeVehicle = nullptr;
-        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-            activeVehicle = splitScreenManager->getPlayer1()->getActiveVehicle();
-        }
-        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
-            activeVehicle = localPlayer->getVehicleManager()->getActiveVehicle();
-        }
-        else if (vehicleManager) {
-            activeVehicle = vehicleManager->getActiveVehicle();
-        }
-
-        if (activeVehicle) {
-            for (const auto& planetPtr : planets) {
-                sf::Vector2f direction = planetPtr->getPosition() - activeVehicle->getPosition();
-                float centerDistance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
-
-                if (centerDistance < closestDistance) {
-                    closestDistance = centerDistance;
-                    closestPlanet = planetPtr;
-                }
-            }
-
-            if (closestPlanet) {
-                std::string planetName = (closestPlanet == planet.get()) ? "Blue Planet" : "Green Planet";
-                float speed = std::sqrt(closestPlanet->getVelocity().x * closestPlanet->getVelocity().x +
-                    closestPlanet->getVelocity().y * closestPlanet->getVelocity().y);
-                float surfaceDistance = closestDistance - closestPlanet->getRadius() - GameConstants::ROCKET_SIZE;
-                float fuelRange = closestPlanet->getFuelCollectionRange();
-                bool inFuelRange = closestDistance <= fuelRange;
-
-                ss << "NEAREST PLANET: " << planetName << "\n"
-                    << "Distance: " << std::fixed << std::setprecision(0) << surfaceDistance << " units\n"
-                    << "Mass: " << std::setprecision(0) << closestPlanet->getMass() << " units\n"
-                    << "Radius: " << std::setprecision(0) << closestPlanet->getRadius() << " units\n"
-                    << "Speed: " << std::setprecision(1) << speed << " units/s\n"
-                    << "Can collect fuel: " << (closestPlanet->canCollectFuel() ? "YES" : "NO") << "\n"
-                    << "In fuel range: " << (inFuelRange ? "YES" : "NO") << "\n"
-                    << "Fuel range: " << std::setprecision(0) << (fuelRange - closestPlanet->getRadius()) << " units";
-            }
-        }
-        planetInfoPanel->setText(ss.str());
-    }
-
-    void updateOrbitInfoPanel() {
-        std::stringstream ss;
-
-        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-            ss << "SPLIT-SCREEN MODE\n"
-                << "Camera centered between players\n"
-                << "Mouse wheel to zoom\n"
-                << "Numbers 1-9,0,= control thrust\n"
-                << "TODO: Individual fuel controls\n"
-                << "Fuel mining from planets!";
-        }
-        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && networkManager) {
-            std::string modeStr = (currentState == GameState::LAN_MULTIPLAYER) ? "LAN" : "ONLINE";
-            ss << modeStr << " MULTIPLAYER\n"
-                << "Role: " << (networkManager->getRole() == NetworkRole::HOST ? "HOST" : "CLIENT") << "\n"
-                << "Status: " << (networkManager->isConnected() ? "CONNECTED" : "DISCONNECTED") << "\n";
-            if (localPlayer) {
-                ss << "Playing as: " << localPlayer->getName() << "\n";
-            }
-            ss << "TODO: Fuel sync implementation\n"
-                << "Local fuel system active";
-        }
-        else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
-            ss << "FUEL SYSTEM ACTIVE\n"
-                << ".: Collect fuel from planet\n"
-                << ",: Give fuel to planet\n"
-                << "1-9,0,=: Set thrust & transfer rate\n"
-                << "Mouse wheel to zoom\n"
-                << "Dynamic mass affects physics!\n"
-                << "Mine planets for fuel!";
-        }
-        else {
-            ss << "CAR MODE\n"
-                << "No fuel system in car mode\n"
-                << "Transform to rocket (L) for fuel\n"
-                << "Rockets start empty - need fuel!";
-        }
-        orbitInfoPanel->setText(ss.str());
+        // Update UI Manager
+        uiManager->update(currentState, vehicleManager.get(), splitScreenManager.get(),
+            localPlayer.get(), planets, networkManager.get());
     }
 
     void renderGame() {
@@ -933,16 +461,7 @@ public:
         Planet* closestPlanet = nullptr;
         float closestDistance = std::numeric_limits<float>::max();
 
-        sf::Vector2f referencePos;
-        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-            referencePos = splitScreenManager->getCenterPoint();
-        }
-        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
-            referencePos = localPlayer->getPosition();
-        }
-        else if (vehicleManager) {
-            referencePos = vehicleManager->getActiveVehicle()->getPosition();
-        }
+        sf::Vector2f referencePos = getCameraReferencePosition();
 
         for (auto& planetPtr : planets) {
             sf::Vector2f direction = planetPtr->getPosition() - referencePos;
@@ -960,6 +479,39 @@ public:
         }
 
         // Draw trajectory for rockets
+        drawTrajectories();
+
+        // Draw game objects - planets automatically draw fuel collection rings
+        planet->draw(window);
+        planet2->draw(window);
+
+        // SATELLITE SYSTEM: Draw satellites
+        satelliteManager->drawWithConstantSize(window, zoomLevel);
+
+        // Draw vehicles and fuel collection indicators
+        drawVehiclesAndFuelLines();
+
+        // Draw velocity vectors
+        drawVelocityVectors();
+
+        // Draw UI
+        uiManager->draw(window, currentState, networkManager.get());
+    }
+
+    sf::Vector2f getCameraReferencePosition() {
+        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+            return splitScreenManager->getCenterPoint();
+        }
+        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
+            return localPlayer->getPosition();
+        }
+        else if (vehicleManager) {
+            return vehicleManager->getActiveVehicle()->getPosition();
+        }
+        return sf::Vector2f(0, 0);
+    }
+
+    void drawTrajectories() {
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
             if (splitScreenManager->getPlayer1()->getActiveVehicleType() == VehicleType::ROCKET) {
                 splitScreenManager->getPlayer1()->getRocket()->drawTrajectory(window, planets,
@@ -987,46 +539,52 @@ public:
             vehicleManager->getRocket()->drawTrajectory(window, planets,
                 GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS, false);
         }
+    }
 
-        // Draw game objects - planets automatically draw fuel collection rings
-        planet->draw(window);
-        planet2->draw(window);
-
-        // Draw fuel collection indicators and players/vehicles
+    void drawVehiclesAndFuelLines() {
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
             splitScreenManager->drawWithConstantSize(window, zoomLevel);
-            // FUEL COLLECTION LINES for split-screen
-            drawFuelCollectionLines(splitScreenManager->getPlayer1()->getRocket());
-            drawFuelCollectionLines(splitScreenManager->getPlayer2()->getRocket());
+            uiManager->drawMultipleFuelLines(window,
+                splitScreenManager->getPlayer1(), splitScreenManager->getPlayer2());
         }
         else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
             localPlayer->drawWithConstantSize(window, zoomLevel);
-            drawFuelCollectionLines(localPlayer->getVehicleManager()->getRocket());
+
+            if (localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+                uiManager->drawFuelCollectionLines(window, localPlayer->getVehicleManager()->getRocket());
+            }
 
             for (auto& remotePlayer : remotePlayers) {
                 remotePlayer->drawWithConstantSize(window, zoomLevel);
-                drawFuelCollectionLines(remotePlayer->getVehicleManager()->getRocket());
-                if (fontLoaded) {
-                    remotePlayer->drawPlayerLabel(window, font);
+
+                if (remotePlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+                    uiManager->drawFuelCollectionLines(window, remotePlayer->getVehicleManager()->getRocket());
+                }
+
+                if (uiManager->isFontLoaded()) {
+                    remotePlayer->drawPlayerLabel(window, uiManager->getFont());
                 }
             }
 
-            if (fontLoaded) {
-                localPlayer->drawPlayerLabel(window, font);
+            if (uiManager->isFontLoaded()) {
+                localPlayer->drawPlayerLabel(window, uiManager->getFont());
             }
         }
         else if (vehicleManager) {
             vehicleManager->drawWithConstantSize(window, zoomLevel);
-            // FUEL COLLECTION LINES for single player
+
             if (vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
-                drawFuelCollectionLines(vehicleManager->getRocket());
+                uiManager->drawFuelCollectionLines(window, vehicleManager->getRocket());
             }
         }
+    }
 
-        // Draw velocity vectors
+    void drawVelocityVectors() {
+        // Draw planet velocity vectors
         planet->drawVelocityVector(window, 5.0f);
         planet2->drawVelocityVector(window, 5.0f);
 
+        // Draw vehicle velocity vectors
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
             splitScreenManager->drawVelocityVectors(window, 2.0f);
         }
@@ -1048,46 +606,11 @@ public:
             vehicleManager->drawVelocityVector(window, 2.0f);
             vehicleManager->getRocket()->drawGravityForceVectors(window, planets, GameConstants::GRAVITY_VECTOR_SCALE);
         }
-
-        // Switch to UI view for panels
-        window.setView(uiView);
-
-        if (fontLoaded) {
-            rocketInfoPanel->draw(window);
-            planetInfoPanel->draw(window);
-            orbitInfoPanel->draw(window);
-            controlsPanel->draw(window);
-
-            if (networkManager || currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) {
-                networkInfoPanel->draw(window);
-            }
-        }
-    }
-
-    // FUEL SYSTEM: Helper method to draw fuel collection lines
-    void drawFuelCollectionLines(Rocket* rocket) {
-        if (!rocket || !rocket->isTransferringFuel()) return;
-
-        Planet* sourcePlanet = rocket->getFuelSourcePlanet();
-        if (!sourcePlanet) return;
-
-        sf::VertexArray fuelLine(sf::PrimitiveType::LineStrip);
-        sf::Vertex startVertex;
-        startVertex.position = rocket->getPosition();
-        startVertex.color = GameConstants::FUEL_RING_ACTIVE_COLOR;
-        fuelLine.append(startVertex);
-
-        sf::Vertex endVertex;
-        endVertex.position = sourcePlanet->getPosition();
-        endVertex.color = GameConstants::FUEL_RING_ACTIVE_COLOR;
-        fuelLine.append(endVertex);
-
-        window.draw(fuelLine);
     }
 
     void renderMenu() {
-        window.setView(uiView);
-        sf::Vector2f mousePos = window.mapPixelToCoords(sf::Mouse::getPosition(window), uiView);
+        uiManager->setUIView(window);
+        sf::Vector2f mousePos = uiManager->getMousePosition(window);
 
         if (currentState == GameState::MAIN_MENU) {
             mainMenu.update(mousePos);
@@ -1144,7 +667,6 @@ public:
             case GameState::ONLINE_MULTIPLAYER:
                 handleGameInput(deltaTime);
                 updateGame(deltaTime);
-                updateInfoPanels();
                 break;
             default:
                 break;
@@ -1215,4 +737,599 @@ int main() {
     Game game;
     game.run();
     return 0;
+}State == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
+    localPlayer->requestTransform();
+        }
+        else if (vehicleManager) {
+            vehicleManager->switchVehicle();
+            }
+    }
+
+    void handleSatelliteConversion() {
+        tKeyPressed = true;
+
+        if (currentState == GameState::SINGLE_PLAYER && vehicleManager &&
+            vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+
+            Rocket* rocket = vehicleManager->getRocket();
+
+            if (satelliteManager->canConvertRocketToSatellite(rocket)) {
+                // Get optimal conversion configuration
+                SatelliteConversionConfig config = satelliteManager->getOptimalConversionConfig(rocket);
+
+                // Create satellite from rocket
+                int satelliteID = satelliteManager->createSatelliteFromRocket(rocket, config);
+
+                if (satelliteID >= 0) {
+                    std::cout << "Successfully converted rocket to satellite (ID: " << satelliteID << ")" << std::endl;
+
+                    // Create new rocket at nearest planet surface
+                    sf::Vector2f newRocketPos = findNearestPlanetSurface(rocket->getPosition());
+                    vehicleManager = std::make_unique<VehicleManager>(newRocketPos, planets);
+
+                    if (vehicleManager->getRocket()) {
+                        vehicleManager->getRocket()->setNearbyPlanets(planets);
+                    }
+
+                    // Update gravity simulator
+                    gravitySimulator->addVehicleManager(vehicleManager.get());
+
+                    // Update camera to follow new rocket
+                    gameView.setCenter(newRocketPos);
+
+                    std::cout << "New rocket spawned at (" << newRocketPos.x << ", " << newRocketPos.y << ")" << std::endl;
+                }
+                else {
+                    std::cout << "Failed to convert rocket to satellite" << std::endl;
+                }
+            }
+            else {
+                std::cout << "Cannot convert rocket to satellite - check fuel and altitude requirements" << std::endl;
+            }
+        }
+        else {
+            std::cout << "Satellite conversion only available for rockets in single player mode" << std::endl;
+        }
+    }
+
+    sf::Vector2f findNearestPlanetSurface(sf::Vector2f position) {
+        Planet* nearestPlanet = nullptr;
+        float minDistance = std::numeric_limits<float>::max();
+
+        for (auto* planet : planets) {
+            float dist = distance(position, planet->getPosition());
+            if (dist < minDistance) {
+                minDistance = dist;
+                nearestPlanet = planet;
+            }
+        }
+
+        if (nearestPlanet) {
+            sf::Vector2f direction = normalize(position - nearestPlanet->getPosition());
+            return nearestPlanet->getPosition() + direction * (nearestPlanet->getRadius() + GameConstants::ROCKET_SIZE + 5.0f);
+        }
+
+        // Fallback to original planet
+        return sf::Vector2f(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y - 150.0f);
+    }
+
+    void handleFuelTransferStart(bool isIncrease) {
+        if (isIncrease) {
+            fuelIncreaseKeyPressed = true;
+            if (currentState == GameState::SINGLE_PLAYER && vehicleManager &&
+                vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+                Rocket* rocket = vehicleManager->getRocket();
+                float transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * rocket->getThrustLevel() * GameConstants::FUEL_TRANSFER_THRUST_MULTIPLIER;
+                if (transferRate < GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f) {
+                    transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f;
+                }
+                rocket->startFuelTransferIn(transferRate);
+            }
+        }
+        else {
+            fuelDecreaseKeyPressed = true;
+            if (currentState == GameState::SINGLE_PLAYER && vehicleManager &&
+                vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+                Rocket* rocket = vehicleManager->getRocket();
+                float transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * rocket->getThrustLevel() * GameConstants::FUEL_TRANSFER_THRUST_MULTIPLIER;
+                if (transferRate < GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f) {
+                    transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f;
+                }
+                rocket->startFuelTransferOut(transferRate);
+            }
+        }
+    }
+
+    void handleFuelTransferStop() {
+        fuelIncreaseKeyPressed = false;
+        fuelDecreaseKeyPressed = false;
+
+        if (currentState == GameState::SINGLE_PLAYER && vehicleManager &&
+            vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+            vehicleManager->getRocket()->stopFuelTransfer();
+        }
+    }
+
+    void handleMouseWheelZoom(const sf::Event& event) {
+        const auto* scrollEvent = event.getIf<sf::Event::MouseWheelScrolled>();
+        if (scrollEvent && scrollEvent->wheel == sf::Mouse::Wheel::Vertical) {
+            const float zoomFactor = 1.1f;
+            if (scrollEvent->delta > 0) {
+                targetZoom /= zoomFactor;
+            }
+            else {
+                targetZoom *= zoomFactor;
+            }
+            targetZoom = std::max(0.5f, std::min(targetZoom, 50.0f));
+
+            updateCameraCenter();
+        }
+    }
+
+    void handleWindowResize(const sf::Event& event) {
+        const auto* resizeEvent = event.getIf<sf::Event::Resized>();
+        if (resizeEvent) {
+            sf::Vector2u newSize(resizeEvent->size.x, resizeEvent->size.y);
+
+            float aspectRatio = static_cast<float>(newSize.x) / static_cast<float>(newSize.y);
+            gameView.setSize(sf::Vector2f(
+                newSize.y * aspectRatio * zoomLevel,
+                newSize.y * zoomLevel
+            ));
+
+            uiView.setSize(sf::Vector2f(
+                static_cast<float>(newSize.x),
+                static_cast<float>(newSize.y)
+            ));
+            uiView.setCenter(sf::Vector2f(
+                static_cast<float>(newSize.x) / 2.0f,
+                static_cast<float>(newSize.y) / 2.0f
+            ));
+
+            // Update UI Manager
+            uiManager->handleWindowResize(newSize);
+
+            window.setView(gameView);
+        }
+    }
+
+    void updateCameraCenter() {
+        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+            gameView.setCenter(splitScreenManager->getCenterPoint());
+        }
+        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
+            gameView.setCenter(localPlayer->getPosition());
+        }
+        else if (vehicleManager) {
+            gameView.setCenter(vehicleManager->getActiveVehicle()->getPosition());
+        }
+    }
+
+    void handleGameInput(float deltaTime) {
+        if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+            handleSplitScreenInput(deltaTime);
+        }
+        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
+            localPlayer->handleLocalInput(deltaTime);
+        }
+        else if (vehicleManager) {
+            handleSinglePlayerInput(deltaTime);
+        }
+    }
+
+    void handleSplitScreenInput(float deltaTime) {
+        splitScreenManager->handlePlayer1Input(deltaTime);
+        splitScreenManager->handlePlayer2Input(deltaTime);
+
+        // Synced thrust level controls
+        handleThrustLevelControls(deltaTime, true);
+    }
+
+    void handleSinglePlayerInput(float deltaTime) {
+        // Thrust level controls
+        handleThrustLevelControls(deltaTime, false);
+
+        // Movement controls
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Up))
+            vehicleManager->applyThrust(vehicleManager->getRocket()->getThrustLevel());
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Down))
+            vehicleManager->applyThrust(-vehicleManager->getRocket()->getThrustLevel());
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left))
+            vehicleManager->rotate(-6.0f * deltaTime * 60.0f);
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right))
+            vehicleManager->rotate(6.0f * deltaTime * 60.0f);
+
+        handleCameraControls();
+    }
+
+    void handleThrustLevelControls(float deltaTime, bool isSplitScreen) {
+        float newThrustLevel = -1.0f;
+
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num0)) newThrustLevel = 0.0f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num1)) newThrustLevel = 0.1f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num2)) newThrustLevel = 0.2f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num3)) newThrustLevel = 0.3f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num4)) newThrustLevel = 0.4f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num5)) newThrustLevel = 0.5f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num6)) newThrustLevel = 0.6f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num7)) newThrustLevel = 0.7f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num8)) newThrustLevel = 0.8f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num9)) newThrustLevel = 0.9f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Equal)) newThrustLevel = 1.0f;
+
+        if (newThrustLevel >= 0.0f) {
+            if (isSplitScreen && splitScreenManager) {
+                splitScreenManager->setSyncedThrustLevel(newThrustLevel);
+            }
+            else if (vehicleManager && vehicleManager->getRocket()) {
+                vehicleManager->getRocket()->setThrustLevel(newThrustLevel);
+            }
+        }
+    }
+
+    void handleCameraControls() {
+        if (currentState == GameState::SINGLE_PLAYER && vehicleManager) {
+            const float minZoom = 1.0f;
+            const float maxZoom = 1000.0f;
+
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Z)) {
+                targetZoom = std::min(maxZoom, targetZoom * 1.05f);
+                gameView.setCenter(vehicleManager->getActiveVehicle()->getPosition());
+            }
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::X)) {
+                sf::Vector2f vehiclePos = vehicleManager->getActiveVehicle()->getPosition();
+                float dist1 = std::sqrt(
+                    std::pow(vehiclePos.x - planet->getPosition().x, 2) +
+                    std::pow(vehiclePos.y - planet->getPosition().y, 2)
+                );
+                float dist2 = std::sqrt(
+                    std::pow(vehiclePos.x - planet2->getPosition().x, 2) +
+                    std::pow(vehiclePos.y - planet2->getPosition().y, 2)
+                );
+                targetZoom = minZoom + (std::min(dist1, dist2) - (planet->getRadius() + GameConstants::ROCKET_SIZE)) / 100.0f;
+                targetZoom = std::max(minZoom, std::min(targetZoom, maxZoom));
+                gameView.setCenter(vehiclePos);
+            }
+            else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
+                targetZoom = 10.0f;
+                gameView.setCenter(planet2->getPosition());
+            }
+        }
+    }
 }
+
+void updateGame(float deltaTime) {
+    // Update network manager if active
+    if (networkManager) {
+        networkManager->update(deltaTime);
+    }
+
+    // Update simulation
+    gravitySimulator->update(deltaTime);
+    planet->update(deltaTime);
+    planet2->update(deltaTime);
+
+    // SATELLITE SYSTEM: Update satellites
+    satelliteManager->update(deltaTime);
+
+    if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+        splitScreenManager->update(deltaTime);
+
+        if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
+            gameView.setCenter(splitScreenManager->getCenterPoint());
+        }
+    }
+    else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
+        localPlayer->update(deltaTime);
+
+        for (auto& remotePlayer : remotePlayers) {
+            remotePlayer->update(deltaTime);
+        }
+
+        if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
+            gameView.setCenter(localPlayer->getPosition());
+        }
+    }
+    else if (vehicleManager) {
+        vehicleManager->update(deltaTime);
+
+        // Auto-center camera on vehicle
+        sf::Vector2f vehiclePos = vehicleManager->getActiveVehicle()->getPosition();
+        gameView.setCenter(vehiclePos);
+    }
+
+    // Smooth zoom
+    zoomLevel += (targetZoom - zoomLevel) * deltaTime * 2.0f;
+    gameView.setSize(sf::Vector2f(1280.f * zoomLevel, 720.f * zoomLevel));
+
+    // Update UI Manager
+    uiManager->update(currentState, vehicleManager.get(), splitScreenManager.get(),
+        localPlayer.get(), planets, networkManager.get());
+}
+
+void renderGame() {
+    window.setView(gameView);
+
+    // Find closest planet for orbit path
+    Planet* closestPlanet = nullptr;
+    float closestDistance = std::numeric_limits<float>::max();
+
+    sf::Vector2f referencePos = getCameraReferencePosition();
+
+    for (auto& planetPtr : planets) {
+        sf::Vector2f direction = planetPtr->getPosition() - referencePos;
+        float dist = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+
+        if (dist < closestDistance) {
+            closestDistance = dist;
+            closestPlanet = planetPtr;
+        }
+    }
+
+    // Draw orbit path for closest planet
+    if (closestPlanet) {
+        closestPlanet->drawOrbitPath(window, planets);
+    }
+
+    // Draw trajectory for rockets
+    drawTrajectories();
+
+    // Draw game objects - planets automatically draw fuel collection rings
+    planet->draw(window);
+    planet2->draw(window);
+
+    // SATELLITE SYSTEM: Draw satellites
+    satelliteManager->drawWithConstantSize(window, zoomLevel);
+
+    // Draw vehicles and fuel collection indicators
+    drawVehiclesAndFuelLines();
+
+    // Draw velocity vectors
+    drawVelocityVectors();
+
+    // Draw UI
+    uiManager->draw(window, currentState, networkManager.get());
+}
+
+sf::Vector2f getCameraReferencePosition() {
+    if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+        return splitScreenManager->getCenterPoint();
+    }
+    else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
+        return localPlayer->getPosition();
+    }
+    else if (vehicleManager) {
+        return vehicleManager->getActiveVehicle()->getPosition();
+    }
+    return sf::Vector2f(0, 0);
+}
+
+void drawTrajectories() {
+    if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+        if (splitScreenManager->getPlayer1()->getActiveVehicleType() == VehicleType::ROCKET) {
+            splitScreenManager->getPlayer1()->getRocket()->drawTrajectory(window, planets,
+                GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS, false);
+        }
+        if (splitScreenManager->getPlayer2()->getActiveVehicleType() == VehicleType::ROCKET) {
+            splitScreenManager->getPlayer2()->getRocket()->drawTrajectory(window, planets,
+                GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS, false);
+        }
+    }
+    else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
+        if (localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+            localPlayer->getVehicleManager()->getRocket()->drawTrajectory(window, planets,
+                GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS, false);
+        }
+
+        for (auto& remotePlayer : remotePlayers) {
+            if (remotePlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+                remotePlayer->getVehicleManager()->getRocket()->drawTrajectory(window, planets,
+                    GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS, false);
+            }
+        }
+    }
+    else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+        vehicleManager->getRocket()->drawTrajectory(window, planets,
+            GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS, false);
+    }
+}
+
+void drawVehiclesAndFuelLines() {
+    if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+        splitScreenManager->drawWithConstantSize(window, zoomLevel);
+        uiManager->drawMultipleFuelLines(window,
+            splitScreenManager->getPlayer1(), splitScreenManager->getPlayer2());
+    }
+    else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
+        localPlayer->drawWithConstantSize(window, zoomLevel);
+
+        if (localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+            uiManager->drawFuelCollectionLines(window, localPlayer->getVehicleManager()->getRocket());
+        }
+
+        for (auto& remotePlayer : remotePlayers) {
+            remotePlayer->drawWithConstantSize(window, zoomLevel);
+
+            if (remotePlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+                uiManager->drawFuelCollectionLines(window, remotePlayer->getVehicleManager()->getRocket());
+            }
+
+            if (uiManager->isFontLoaded()) {
+                remotePlayer->drawPlayerLabel(window, uiManager->getFont());
+            }
+        }
+
+        if (uiManager->isFontLoaded()) {
+            localPlayer->drawPlayerLabel(window, uiManager->getFont());
+        }
+    }
+    else if (vehicleManager) {
+        vehicleManager->drawWithConstantSize(window, zoomLevel);
+
+        if (vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+            uiManager->drawFuelCollectionLines(window, vehicleManager->getRocket());
+        }
+    }
+}
+
+void drawVelocityVectors() {
+    // Draw planet velocity vectors
+    planet->drawVelocityVector(window, 5.0f);
+    planet2->drawVelocityVector(window, 5.0f);
+
+    // Draw vehicle velocity vectors
+    if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+        splitScreenManager->drawVelocityVectors(window, 2.0f);
+    }
+    else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
+        localPlayer->drawVelocityVector(window, 2.0f);
+
+        for (auto& remotePlayer : remotePlayers) {
+            remotePlayer->drawVelocityVector(window, 2.0f);
+            if (remotePlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+                remotePlayer->getVehicleManager()->getRocket()->drawGravityForceVectors(window, planets, GameConstants::GRAVITY_VECTOR_SCALE);
+            }
+        }
+
+        if (localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+            localPlayer->getVehicleManager()->getRocket()->drawGravityForceVectors(window, planets, GameConstants::GRAVITY_VECTOR_SCALE);
+        }
+    }
+    else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
+        vehicleManager->drawVelocityVector(window, 2.0f);
+        vehicleManager->getRocket()->drawGravityForceVectors(window, planets, GameConstants::GRAVITY_VECTOR_SCALE);
+    }
+}
+
+void renderMenu() {
+    uiManager->setUIView(window);
+    sf::Vector2f mousePos = uiManager->getMousePosition(window);
+
+    if (currentState == GameState::MAIN_MENU) {
+        mainMenu.update(mousePos);
+        mainMenu.draw(window);
+    }
+    else if (currentState == GameState::MULTIPLAYER_MENU) {
+        multiplayerMenu->update(mousePos);
+        multiplayerMenu->draw(window);
+    }
+    else if (currentState == GameState::ONLINE_MENU) {
+        onlineMenu->update(mousePos);
+        onlineMenu->draw(window);
+    }
+}
+
+void run() {
+    sf::Clock clock;
+
+    while (window.isOpen()) {
+        float deltaTime = std::min(clock.restart().asSeconds(), 0.1f);
+
+        // Handle events
+        if (std::optional<sf::Event> event = window.pollEvent()) {
+            if (event->is<sf::Event::Closed>()) {
+                if (networkManager) {
+                    networkManager->disconnect();
+                }
+                window.close();
+                continue;
+            }
+
+            switch (currentState) {
+            case GameState::MAIN_MENU:
+            case GameState::MULTIPLAYER_MENU:
+            case GameState::ONLINE_MENU:
+                handleMenuEvents(*event);
+                break;
+            case GameState::SINGLE_PLAYER:
+            case GameState::LOCAL_PC_MULTIPLAYER:
+            case GameState::LAN_MULTIPLAYER:
+            case GameState::ONLINE_MULTIPLAYER:
+                handleGameEvents(*event);
+                break;
+            default:
+                break;
+            }
+        }
+
+        // Update game state
+        switch (currentState) {
+        case GameState::SINGLE_PLAYER:
+        case GameState::LOCAL_PC_MULTIPLAYER:
+        case GameState::LAN_MULTIPLAYER:
+        case GameState::ONLINE_MULTIPLAYER:
+            handleGameInput(deltaTime);
+            updateGame(deltaTime);
+            break;
+        default:
+            break;
+        }
+
+        // Render
+        window.clear(sf::Color::Black);
+
+        switch (currentState) {
+        case GameState::MAIN_MENU:
+        case GameState::MULTIPLAYER_MENU:
+        case GameState::ONLINE_MENU:
+            renderMenu();
+            break;
+        case GameState::SINGLE_PLAYER:
+        case GameState::LOCAL_PC_MULTIPLAYER:
+        case GameState::LAN_MULTIPLAYER:
+        case GameState::ONLINE_MULTIPLAYER:
+            renderGame();
+            break;
+        default:
+            break;
+        }
+
+        window.display();
+    }
+}
+};
+
+// Helper function implementations
+float calculateApoapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, float G) {
+    float speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);
+    float distance = std::sqrt(pos.x * pos.x + pos.y * pos.y);
+    float energy = 0.5f * speed * speed - G * planetMass / distance;
+
+    float semiMajor = -G * planetMass / (2 * energy);
+
+    if (energy >= 0) return -1.0f;
+
+    sf::Vector2f eVec;
+    float vSquared = speed * speed;
+    eVec.x = (vSquared * pos.x - (pos.x * vel.x + pos.y * vel.y) * vel.x) / (G * planetMass) - pos.x / distance;
+    eVec.y = (vSquared * pos.y - (pos.x * vel.x + pos.y * vel.y) * vel.y) / (G * planetMass) - pos.y / distance;
+    float ecc = std::sqrt(eVec.x * eVec.x + eVec.y * eVec.y);
+
+    return semiMajor * (1 + ecc);
+}
+
+float calculatePeriapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, float G) {
+    float speed = std::sqrt(vel.x * vel.x + vel.y * vel.y);
+    float distance = std::sqrt(pos.x * pos.x + pos.y * pos.y);
+    float energy = 0.5f * speed * speed - G * planetMass / distance;
+
+    float semiMajor = -G * planetMass / (2 * energy);
+
+    if (energy >= 0) return -1.0f;
+
+    sf::Vector2f eVec;
+    float vSquared = speed * speed;
+    eVec.x = (vSquared * pos.x - (pos.x * vel.x + pos.y * vel.y) * vel.x) / (G * planetMass) - pos.x / distance;
+    eVec.y = (vSquared * pos.y - (pos.x * vel.x + pos.y * vel.y) * vel.y) / (G * planetMass) - pos.y / distance;
+    float ecc = std::sqrt(eVec.x * eVec.x + eVec.y * eVec.y);
+
+    return semiMajor * (1 - ecc);
+}
+
+int main() {
+    Game game;
+    game.run();
+    return 0;
+}
+
+
