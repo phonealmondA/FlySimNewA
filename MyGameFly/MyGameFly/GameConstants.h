@@ -94,6 +94,97 @@ namespace GameConstants {
 
     // Vehicle transformation parameters
     constexpr float TRANSFORM_VELOCITY_FACTOR = 0.1f;  // Velocity reduction when transforming from rocket to car
+
+    // SATELLITE SYSTEM CONSTANTS
+
+    // Satellite basic parameters
+    constexpr float SATELLITE_BASE_MASS = 0.8f;              // Empty satellite mass (lighter than rocket)
+    constexpr float SATELLITE_MAX_MASS = 80.0f;              // Maximum total satellite mass
+    constexpr float SATELLITE_MAX_FUEL = 80.0f;              // Maximum fuel capacity (slightly less than rocket)
+    constexpr float SATELLITE_STARTING_FUEL = 60.0f;         // Starting fuel when converted from rocket
+    constexpr float SATELLITE_SIZE = 12.0f;                  // Visual size for collision detection
+
+    // Station-keeping and orbital maintenance
+    constexpr float SATELLITE_MAINTENANCE_FUEL_PERCENT = 0.2f; // 20% of fuel reserved for maintenance
+    constexpr float SATELLITE_ORBIT_TOLERANCE = 50.0f;        // Default acceptable orbit drift (units)
+    constexpr float SATELLITE_ECCENTRICITY_TOLERANCE = 0.01f; // Acceptable eccentricity change
+    constexpr float SATELLITE_INCLINATION_TOLERANCE = 0.017f; // ~1 degree in radians
+    constexpr float SATELLITE_PERIOD_TOLERANCE = 10.0f;       // Acceptable orbital period change (seconds)
+
+    // Maintenance timing
+    constexpr float SATELLITE_MAINTENANCE_CHECK_INTERVAL = 30.0f; // Check orbit every 30 seconds
+    constexpr float SATELLITE_CORRECTION_DELAY = 5.0f;           // Wait 5 seconds before executing corrections
+    constexpr float SATELLITE_MAX_SINGLE_BURN = 3.0f;           // Maximum delta-V per correction burn
+
+    // Fuel efficiency and consumption
+    constexpr float SATELLITE_FUEL_EFFICIENCY = 1.2f;           // Better fuel efficiency than rockets
+    constexpr float SATELLITE_MAINTENANCE_FUEL_RATE = 0.5f;     // Fuel consumption rate for maintenance (units/second)
+    constexpr float SATELLITE_THRUST_TO_WEIGHT_RATIO = 0.08f;   // Lower thrust than rockets (more efficient)
+
+    // Fuel transfer network
+    constexpr float SATELLITE_TRANSFER_RANGE = 500.0f;          // Maximum fuel transfer distance
+    constexpr float SATELLITE_BASE_TRANSFER_RATE = 5.0f;        // Base fuel transfer rate between satellites
+    constexpr float SATELLITE_TRANSFER_EFFICIENCY = 0.8f;       // Distance-based efficiency factor
+    constexpr int SATELLITE_MAX_SIMULTANEOUS_TRANSFERS = 5;     // Maximum concurrent fuel transfers
+
+    // Emergency thresholds
+    constexpr float SATELLITE_EMERGENCY_FUEL_THRESHOLD = 0.1f;  // 10% fuel = emergency
+    constexpr float SATELLITE_CRITICAL_FUEL_THRESHOLD = 0.05f;  // 5% fuel = critical
+    constexpr float SATELLITE_MINIMUM_MAINTENANCE_FUEL = 5.0f;  // Minimum fuel for basic maintenance
+
+    // Visual and UI constants
+    constexpr float SATELLITE_PANEL_SIZE = 8.0f;               // Solar panel visual size
+    const sf::Color SATELLITE_BODY_COLOR = sf::Color(100, 200, 255, 255);     // Light blue
+    const sf::Color SATELLITE_PANEL_COLOR = sf::Color(50, 50, 200, 255);      // Dark blue
+    const sf::Color SATELLITE_STATUS_ACTIVE = sf::Color(0, 255, 0, 200);      // Green for active
+    const sf::Color SATELLITE_STATUS_LOW_FUEL = sf::Color(255, 255, 0, 200);  // Yellow for low fuel
+    const sf::Color SATELLITE_STATUS_CRITICAL = sf::Color(255, 100, 0, 200);  // Orange for critical
+    const sf::Color SATELLITE_STATUS_DEPLETED = sf::Color(255, 0, 0, 200);    // Red for depleted
+
+    // Orbit visualization
+    const sf::Color SATELLITE_ORBIT_PATH_COLOR = sf::Color(0, 255, 255, 128);     // Cyan orbit path
+    const sf::Color SATELLITE_TARGET_ORBIT_COLOR = sf::Color(255, 255, 0, 128);   // Yellow target orbit
+    const sf::Color SATELLITE_MAINTENANCE_BURN_COLOR = sf::Color(255, 0, 255, 255); // Magenta burns
+    constexpr float SATELLITE_ORBIT_PATH_THICKNESS = 2.0f;
+
+    // Network visualization
+    const sf::Color SATELLITE_CONNECTION_COLOR = sf::Color(100, 255, 100, 100);   // Light green connections
+    const sf::Color SATELLITE_TRANSFER_FLOW_COLOR = sf::Color(255, 255, 100, 200); // Yellow fuel flow
+    const sf::Color SATELLITE_EMERGENCY_COLOR = sf::Color(255, 50, 50, 255);      // Bright red emergency
+    constexpr float SATELLITE_CONNECTION_THICKNESS = 1.5f;
+    constexpr float SATELLITE_TRANSFER_THICKNESS = 3.0f;
+
+    // Conversion parameters
+    constexpr float SATELLITE_CONVERSION_FUEL_RETENTION = 0.8f; // Retain 80% of rocket's fuel
+    constexpr float SATELLITE_CONVERSION_MASS_EFFICIENCY = 0.9f; // 90% mass efficiency during conversion
+    constexpr float SATELLITE_MIN_CONVERSION_ALTITUDE = 100.0f;  // Minimum altitude above planet for conversion
+
+    // Orbital prediction and simulation
+    constexpr float SATELLITE_PREDICTION_TIME_STEP = 1.0f;      // Prediction simulation time step
+    constexpr int SATELLITE_PREDICTION_STEPS = 3600;            // Predict 1 hour ahead (3600 seconds)
+    constexpr float SATELLITE_DRIFT_DETECTION_SENSITIVITY = 0.1f; // How sensitive drift detection is
+
+    // Network optimization
+    constexpr float SATELLITE_NETWORK_UPDATE_INTERVAL = 2.0f;   // Update network every 2 seconds
+    constexpr float SATELLITE_FUEL_BALANCE_THRESHOLD = 0.15f;   // 15% difference triggers balancing
+    constexpr float SATELLITE_PRIORITY_DISTANCE_FACTOR = 0.001f; // Distance factor for priority calculation
+
+    // Performance and limits
+    constexpr int SATELLITE_MAX_NETWORK_SIZE = 50;              // Maximum satellites in network
+    constexpr int SATELLITE_MAX_MANEUVERS_QUEUED = 10;          // Maximum planned maneuvers per satellite
+    constexpr float SATELLITE_MANEUVER_TIMEOUT = 300.0f;        // Cancel maneuvers after 5 minutes
+
+    // Advanced features
+    constexpr float SATELLITE_ADAPTIVE_LEARNING_RATE = 0.01f;   // Learning rate for adaptive maintenance
+    constexpr float SATELLITE_COLLABORATIVE_RANGE = 1000.0f;    // Range for collaborative maintenance
+    constexpr float SATELLITE_RESONANCE_DETECTION_THRESHOLD = 0.05f; // Threshold for orbital resonance detection
+
+    // Integration with existing systems
+    constexpr float SATELLITE_GRAVITY_INFLUENCE_FACTOR = 0.1f;  // How much satellites affect each other gravitationally
+    constexpr float SATELLITE_ROCKET_DOCKING_RANGE = 30.0f;     // Range for fuel transfer to rockets
+    constexpr float SATELLITE_PLANET_COLLECTION_EFFICIENCY = 1.2f; // More efficient collection than rockets
 }
+
+
 
 #endif // GAME_CONSTANTS_H
