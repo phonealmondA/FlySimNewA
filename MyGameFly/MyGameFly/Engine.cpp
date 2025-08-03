@@ -6,13 +6,12 @@ Engine::Engine(sf::Vector2f relPos, float thrustPower, sf::Color col)
     : RocketPart(relPos, col), thrust(thrustPower)
 {
     // Create engine shape (a simple triangle)
-    // Create engine shape (a simple triangle)
     shape.setPointCount(3);
-    shape.setPoint(0, { 0, -GameConstants::ROCKET_SIZE * 2 / 3 });
-    shape.setPoint(1, { -GameConstants::ROCKET_SIZE / 3, GameConstants::ROCKET_SIZE * 2 / 3 });
-    shape.setPoint(2, { GameConstants::ROCKET_SIZE / 3, GameConstants::ROCKET_SIZE * 2 / 3 });
+    shape.setPoint(0, sf::Vector2f(0, -GameConstants::ROCKET_SIZE * 2 / 3));
+    shape.setPoint(1, sf::Vector2f(-GameConstants::ROCKET_SIZE / 3, GameConstants::ROCKET_SIZE * 2 / 3));
+    shape.setPoint(2, sf::Vector2f(GameConstants::ROCKET_SIZE / 3, GameConstants::ROCKET_SIZE * 2 / 3));
     shape.setFillColor(color);
-    shape.setOrigin({ 0, 0 });
+    shape.setOrigin(sf::Vector2f(0, 0)); // FIXED: Use sf::Vector2f instead of braces
 }
 
 void Engine::draw(sf::RenderWindow& window, sf::Vector2f rocketPos, float rotation, float scale)
@@ -36,7 +35,10 @@ void Engine::draw(sf::RenderWindow& window, sf::Vector2f rocketPos, float rotati
     );
 
     scaledShape.setPosition(rocketPos + rotatedRelPos * scale);
+
+    // FIXED: Use sf::degrees for SFML 3.0 compatibility
     scaledShape.setRotation(sf::degrees(rotation));
+
     window.draw(scaledShape);
 }
 

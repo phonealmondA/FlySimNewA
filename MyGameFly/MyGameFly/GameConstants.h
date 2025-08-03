@@ -122,9 +122,9 @@ namespace GameConstants {
     constexpr float SATELLITE_THRUST_TO_WEIGHT_RATIO = 0.08f;   // Lower thrust than rockets (more efficient)
 
     // Fuel transfer network
-    constexpr float SATELLITE_TRANSFER_RANGE = 500.0f;          // Maximum fuel transfer distance
-    constexpr float SATELLITE_BASE_TRANSFER_RATE = 5.0f;        // Base fuel transfer rate between satellites
-    constexpr float SATELLITE_TRANSFER_EFFICIENCY = 0.8f;       // Distance-based efficiency factor
+    constexpr float SATELLITE_TRANSFER_RANGE = 2500.0f;          // Maximum fuel transfer distance
+    constexpr float SATELLITE_BASE_TRANSFER_RATE = 25.0f;        // Base fuel transfer rate between satellites
+    constexpr float SATELLITE_TRANSFER_EFFICIENCY = 1.0f;       // Distance-based efficiency factor
     constexpr int SATELLITE_MAX_SIMULTANEOUS_TRANSFERS = 5;     // Maximum concurrent fuel transfers
 
     // Emergency thresholds

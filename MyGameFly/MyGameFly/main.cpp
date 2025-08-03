@@ -134,13 +134,10 @@ public:
         planets.push_back(planet.get());
         planets.push_back(planet2.get());
 
-        // SATELLITE SYSTEM: Set planets for satellite manager
+        // SATELLITE SYSTEM: Set planets for satellite manager FIRST
         satelliteManager->setPlanets(planets);
 
-        // SATELLITE SYSTEM: Set up rocket integration
-        satelliteManager->setNearbyRockets({ vehicleManager->getRocket() });
-
-        // Create vehicle manager
+        // Create vehicle manager - MOVED BEFORE satellite setup
         sf::Vector2f planetPos = planet->getPosition();
         float planetRadius = planet->getRadius();
         float rocketSize = GameConstants::ROCKET_SIZE;
@@ -152,6 +149,11 @@ public:
         // FUEL SYSTEM: Set up fuel collection for the rocket
         if (vehicleManager->getRocket()) {
             vehicleManager->getRocket()->setNearbyPlanets(planets);
+        }
+
+        // SATELLITE SYSTEM: Set up rocket integration AFTER vehicleManager is created
+        if (vehicleManager && vehicleManager->getRocket()) {
+            satelliteManager->setNearbyRockets({ vehicleManager->getRocket() });
         }
 
         // Setup gravity simulator
@@ -174,6 +176,7 @@ public:
         std::cout << "Use 'T' to convert rocket to satellite, '.' to collect fuel, ',' to give fuel" << std::endl;
     }
 
+
     void initializeLocalPCMultiplayer() {
         // Create planets (same as single player)
         planet = std::make_unique<Planet>(
@@ -192,14 +195,8 @@ public:
         planets.push_back(planet.get());
         planets.push_back(planet2.get());
 
-        // SATELLITE SYSTEM: Set planets for satellite manager
+        // SATELLITE SYSTEM: Set planets for satellite manager FIRST
         satelliteManager->setPlanets(planets);
-        // SATELLITE SYSTEM: Set up rocket integration for split screen
-        std::vector<Rocket*> splitScreenRockets = {
-            splitScreenManager->getPlayer1()->getRocket(),
-            splitScreenManager->getPlayer2()->getRocket()
-        };
-        satelliteManager->setNearbyRockets(splitScreenRockets);
 
         // Create spawn positions for both players
         sf::Vector2f planetPos = planet->getPosition();
@@ -209,13 +206,28 @@ public:
         sf::Vector2f player1Pos = planetPos + sf::Vector2f(0, -1) * (planetRadius + rocketSize);
         sf::Vector2f player2Pos = planetPos + sf::Vector2f(0, 1) * (planetRadius + rocketSize);
 
+        // Create split screen manager FIRST
         splitScreenManager = std::make_unique<SplitScreenManager>(player1Pos, player2Pos, planets);
+
+        // SATELLITE SYSTEM: Set up rocket integration for split screen AFTER creation
+        if (splitScreenManager) {
+            std::vector<Rocket*> splitScreenRockets;
+            if (splitScreenManager->getPlayer1() && splitScreenManager->getPlayer1()->getRocket()) {
+                splitScreenRockets.push_back(splitScreenManager->getPlayer1()->getRocket());
+            }
+            if (splitScreenManager->getPlayer2() && splitScreenManager->getPlayer2()->getRocket()) {
+                splitScreenRockets.push_back(splitScreenManager->getPlayer2()->getRocket());
+            }
+            satelliteManager->setNearbyRockets(splitScreenRockets);
+        }
 
         gravitySimulator = std::make_unique<GravitySimulator>();
         gravitySimulator->addPlanet(planet.get());
         gravitySimulator->addPlanet(planet2.get());
-        gravitySimulator->addVehicleManager(splitScreenManager->getPlayer1());
-        gravitySimulator->addVehicleManager(splitScreenManager->getPlayer2());
+        if (splitScreenManager) {
+            gravitySimulator->addVehicleManager(splitScreenManager->getPlayer1());
+            gravitySimulator->addVehicleManager(splitScreenManager->getPlayer2());
+        }
 
         players.clear();
         localPlayer.reset();
@@ -223,7 +235,9 @@ public:
 
         zoomLevel = 1.0f;
         targetZoom = 1.0f;
-        gameView.setCenter(splitScreenManager->getCenterPoint());
+        if (splitScreenManager) {
+            gameView.setCenter(splitScreenManager->getCenterPoint());
+        }
 
         std::cout << "Local PC Split-Screen Multiplayer initialized with satellite system!" << std::endl;
     }
@@ -329,80 +343,145 @@ public:
             splitScreenManager->handleTransformInputs(event);
         }
 
-        if (event.is<sf::Event::KeyPressed>()) {
-            const auto* keyEvent = event.getIf<sf::Event::KeyPressed>();
-            if (keyEvent) {
-                if (keyEvent->code == sf::Keyboard::Key::Escape) {
-                    handleEscapeKey();
-                    return;
-                }
-                else if (keyEvent->code == sf::Keyboard::Key::P) {
-                    togglePlanetGravity();
-                }
-                else if (keyEvent->code == sf::Keyboard::Key::L && !lKeyPressed) {
+        //if (event.is<sf::Event::KeyPressed>()) {
+        //    const auto* keyEvent = event.getIf<sf::Event::KeyPressed>();
+        //    if (keyEvent) {
+        //        if (keyEvent->code == sf::Keyboard::Key::Escape) {
+        //            handleEscapeKey();
+        //            return;
+        //        }
+        //        else if (keyEvent->code == sf::Keyboard::Key::P) {
+        //            togglePlanetGravity();
+        //        }
+        //        else if (keyEvent->code == sf::Keyboard::Key::L && !lKeyPressed) {
+        //            handleVehicleTransform();
+        //        }
+        //        // SATELLITE CONVERSION - NEW
+        //        else if (keyEvent->code == sf::Keyboard::Key::T && !tKeyPressed) {
+        //            handleSatelliteConversion();
+        //        }
+        //        // FUEL TRANSFER INPUT HANDLING
+        //        else if (keyEvent->code == sf::Keyboard::Key::Period && !fuelIncreaseKeyPressed) {
+        //            handleFuelTransferStart(true);
+        //        }
+        //        else if (keyEvent->code == sf::Keyboard::Key::Comma && !fuelDecreaseKeyPressed) {
+        //            handleFuelTransferStart(false);
+        //        }
+        //        // DEBUG KEYS
+        //        else if (keyEvent->code == sf::Keyboard::Key::H && networkManager) {
+        //            networkManager->sendHello();
+        //            std::cout << "Sent hello message to network!" << std::endl;
+        //        }
+        //        // UI CONTROLS
+        //        else if (keyEvent->code == sf::Keyboard::Key::F1) {
+        //            uiManager->toggleUI();
+        //        }
+        //        else if (keyEvent->code == sf::Keyboard::Key::F2) {
+        //            uiManager->toggleDebugInfo();
+        //        }
+        //        // SATELLITE DEBUG CONTROLS
+        //        else if (keyEvent->code == sf::Keyboard::Key::F3) {
+        //            satelliteManager->printNetworkStatus();
+        //        }
+        //        else if (keyEvent->code == sf::Keyboard::Key::F4) {
+        //            satelliteManager->optimizeNetworkFuelDistribution();
+        //            std::cout << "Triggered satellite fuel optimization" << std::endl;
+        //        }
+        //    }
+        //}
+
+
+        if (auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
+            switch (keyPressed->code) {
+            case sf::Keyboard::Key::Escape:
+                handleEscapeKey();
+                return;
+            case sf::Keyboard::Key::P:
+                togglePlanetGravity();
+                break;
+            case sf::Keyboard::Key::L:
+                if (!lKeyPressed) {
                     handleVehicleTransform();
+                    lKeyPressed = true;
                 }
-                // SATELLITE CONVERSION - NEW
-                else if (keyEvent->code == sf::Keyboard::Key::T && !tKeyPressed) {
+                break;
+            case sf::Keyboard::Key::T:
+                if (!tKeyPressed) {
                     handleSatelliteConversion();
+                    tKeyPressed = true;
                 }
-                // FUEL TRANSFER INPUT HANDLING
-                else if (keyEvent->code == sf::Keyboard::Key::Period && !fuelIncreaseKeyPressed) {
+                break;
+            case sf::Keyboard::Key::Period:
+                if (!fuelIncreaseKeyPressed) {
                     handleFuelTransferStart(true);
+                    fuelIncreaseKeyPressed = true;
                 }
-                else if (keyEvent->code == sf::Keyboard::Key::Comma && !fuelDecreaseKeyPressed) {
+                break;
+            case sf::Keyboard::Key::Comma:
+                if (!fuelDecreaseKeyPressed) {
                     handleFuelTransferStart(false);
+                    fuelDecreaseKeyPressed = true;
                 }
-                // DEBUG KEYS
-                else if (keyEvent->code == sf::Keyboard::Key::H && networkManager) {
+                break;
+            case sf::Keyboard::Key::H:
+                if (networkManager) {
                     networkManager->sendHello();
                     std::cout << "Sent hello message to network!" << std::endl;
                 }
-                // UI CONTROLS
-                else if (keyEvent->code == sf::Keyboard::Key::F1) {
-                    uiManager->toggleUI();
-                }
-                else if (keyEvent->code == sf::Keyboard::Key::F2) {
-                    uiManager->toggleDebugInfo();
-                }
-                // SATELLITE DEBUG CONTROLS
-                else if (keyEvent->code == sf::Keyboard::Key::F3) {
-                    satelliteManager->printNetworkStatus();
-                }
-                else if (keyEvent->code == sf::Keyboard::Key::F4) {
-                    satelliteManager->optimizeNetworkFuelDistribution();
-                    std::cout << "Triggered satellite fuel optimization" << std::endl;
-                }
+                break;
+            case sf::Keyboard::Key::F1:
+                uiManager->toggleUI();
+                break;
+            case sf::Keyboard::Key::F2:
+                uiManager->toggleDebugInfo();
+                break;
+            case sf::Keyboard::Key::F3:
+                satelliteManager->printNetworkStatus();
+                break;
+            case sf::Keyboard::Key::F4:
+                satelliteManager->optimizeNetworkFuelDistribution();
+                std::cout << "Triggered satellite fuel optimization" << std::endl;
+                break;
+            default:
+                break;
             }
         }
 
-        if (event.is<sf::Event::KeyReleased>()) {
-            const auto* keyEvent = event.getIf<sf::Event::KeyReleased>();
-            if (keyEvent) {
-                if (keyEvent->code == sf::Keyboard::Key::L) {
-                    lKeyPressed = false;
-                }
-                else if (keyEvent->code == sf::Keyboard::Key::T) {
-                    tKeyPressed = false;
-                }
-                else if (keyEvent->code == sf::Keyboard::Key::Period) {
-                    handleFuelTransferStop();
-                }
-                else if (keyEvent->code == sf::Keyboard::Key::Comma) {
-                    handleFuelTransferStop();
-                }
+        if (auto* keyReleased = event.getIf<sf::Event::KeyReleased>()) {
+            switch (keyReleased->code) {
+            case sf::Keyboard::Key::L:
+                lKeyPressed = false;
+                break;
+            case sf::Keyboard::Key::T:
+                tKeyPressed = false;
+                break;
+            case sf::Keyboard::Key::Period:
+                handleFuelTransferStop();
+                fuelIncreaseKeyPressed = false;
+                break;
+            case sf::Keyboard::Key::Comma:
+                handleFuelTransferStop();
+                fuelDecreaseKeyPressed = false;
+                break;
+            default:
+                break;
             }
         }
 
-        // Handle mouse wheel for zooming
-        if (event.is<sf::Event::MouseWheelScrolled>()) {
+        if (auto* mouseWheel = event.getIf<sf::Event::MouseWheelScrolled>()) {
             handleMouseWheelZoom(event);
         }
 
-        if (event.is<sf::Event::Resized>()) {
+        // Handle window resize - FIXED for SFML 3.0
+        if (auto* resized = event.getIf<sf::Event::Resized>()) {
             handleWindowResize(event);
         }
     }
+
+
+
+
+
     void handleEscapeKey() {
         if (networkManager) {
             networkManager->disconnect();
@@ -599,11 +678,16 @@ public:
         }
     }
 
-
     void handleSatelliteConversion() {
         tKeyPressed = true;
 
         std::cout << "DEBUG: Attempting satellite conversion..." << std::endl;
+
+        // ADD NULL CHECKS
+        if (!vehicleManager) {
+            std::cout << "ERROR: VehicleManager is null!" << std::endl;
+            return;
+        }
 
         if (currentState == GameState::SINGLE_PLAYER && vehicleManager &&
             vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
@@ -616,7 +700,7 @@ public:
 
             std::cout << "DEBUG: Rocket found, checking conversion eligibility..." << std::endl;
 
-            if (satelliteManager->canConvertRocketToSatellite(rocket)) {
+            if (satelliteManager && satelliteManager->canConvertRocketToSatellite(rocket)) {
                 try {
                     std::cout << "DEBUG: Conversion eligible, creating satellite..." << std::endl;
 
@@ -633,15 +717,19 @@ public:
                         sf::Vector2f newRocketPos = findNearestPlanetSurface(rocket->getPosition());
                         vehicleManager = std::make_unique<VehicleManager>(newRocketPos, planets);
 
-                        if (vehicleManager->getRocket()) {
+                        if (vehicleManager && vehicleManager->getRocket()) {
                             vehicleManager->getRocket()->setNearbyPlanets(planets);
                         }
 
                         // Update gravity simulator
-                        gravitySimulator->addVehicleManager(vehicleManager.get());
+                        if (gravitySimulator && vehicleManager) {
+                            gravitySimulator->addVehicleManager(vehicleManager.get());
+                        }
 
                         // SATELLITE SYSTEM: Update rocket reference after conversion
-                        satelliteManager->setNearbyRockets({ vehicleManager->getRocket() });
+                        if (satelliteManager && vehicleManager && vehicleManager->getRocket()) {
+                            satelliteManager->setNearbyRockets({ vehicleManager->getRocket() });
+                        }
 
                         // Update camera to follow new rocket
                         gameView.setCenter(newRocketPos);
@@ -664,7 +752,6 @@ public:
             std::cout << "Satellite conversion only available for rockets in single player mode" << std::endl;
         }
     }
-
 
 
     sf::Vector2f findNearestPlanetSurface(sf::Vector2f position) {
@@ -731,24 +818,25 @@ public:
     }
 
     void handleMouseWheelZoom(const sf::Event& event) {
-        const auto* scrollEvent = event.getIf<sf::Event::MouseWheelScrolled>();
-        if (scrollEvent && scrollEvent->wheel == sf::Mouse::Wheel::Vertical) {
-            const float zoomFactor = 1.1f;
-            if (scrollEvent->delta > 0) {
-                targetZoom /= zoomFactor;
-            }
-            else {
-                targetZoom *= zoomFactor;
-            }
-            targetZoom = std::max(0.5f, std::min(targetZoom, 50.0f));
+        if (auto* scrollEvent = event.getIf<sf::Event::MouseWheelScrolled>()) {
+            if (scrollEvent->wheel == sf::Mouse::Wheel::Vertical) {
+                const float zoomFactor = 1.1f;
+                if (scrollEvent->delta > 0) {
+                    targetZoom /= zoomFactor;
+                }
+                else {
+                    targetZoom *= zoomFactor;
+                }
+                targetZoom = std::max(0.5f, std::min(targetZoom, 50.0f));
 
-            updateCameraCenter();
+                updateCameraCenter();
+            }
         }
     }
 
+
     void handleWindowResize(const sf::Event& event) {
-        const auto* resizeEvent = event.getIf<sf::Event::Resized>();
-        if (resizeEvent) {
+        if (auto* resizeEvent = event.getIf<sf::Event::Resized>()) {
             sf::Vector2u newSize(resizeEvent->size.x, resizeEvent->size.y);
 
             float aspectRatio = static_cast<float>(newSize.x) / static_cast<float>(newSize.y);
@@ -772,6 +860,7 @@ public:
             window.setView(gameView);
         }
     }
+
 
     void updateCameraCenter() {
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
@@ -954,16 +1043,15 @@ public:
             vehicleManager->switchVehicle();
         }
     }
-
-
     void run() {
         sf::Clock clock;
 
         while (window.isOpen()) {
             float deltaTime = std::min(clock.restart().asSeconds(), 0.1f);
 
-            // Handle events
-            if (std::optional<sf::Event> event = window.pollEvent()) {
+            // Handle events - CORRECTED for SFML 3.0
+            for (auto event = window.pollEvent(); event.has_value(); event = window.pollEvent()) {
+                // Handle window close - CORRECTED
                 if (event->is<sf::Event::Closed>()) {
                     if (networkManager) {
                         networkManager->disconnect();
@@ -972,6 +1060,7 @@ public:
                     continue;
                 }
 
+                // Route events based on game state
                 switch (currentState) {
                 case GameState::MAIN_MENU:
                 case GameState::MULTIPLAYER_MENU:
