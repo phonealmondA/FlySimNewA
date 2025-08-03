@@ -77,7 +77,7 @@ namespace GameConstants {
 
     // Trajectory calculation settings
     constexpr float TRAJECTORY_TIME_STEP = 0.05f;
-    constexpr int TRAJECTORY_STEPS = 5000;
+    constexpr int TRAJECTORY_STEPS = 7500;
     constexpr float TRAJECTORY_COLLISION_RADIUS = 10.0f;
 
     // Vehicle physics
@@ -181,7 +181,7 @@ namespace GameConstants {
 
     // Integration with existing systems
     constexpr float SATELLITE_GRAVITY_INFLUENCE_FACTOR = 0.1f;  // How much satellites affect each other gravitationally
-    constexpr float SATELLITE_ROCKET_DOCKING_RANGE = 30.0f;     // Range for fuel transfer to rockets
+    constexpr float SATELLITE_ROCKET_DOCKING_RANGE = 210.0f;     // Range for fuel transfer to rockets
     constexpr float SATELLITE_PLANET_COLLECTION_EFFICIENCY = 1.2f; // More efficient collection than rockets
 }
 

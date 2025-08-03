@@ -10,16 +10,17 @@ enum class VehicleType {
     ROCKET,
     CAR
 };
-
+class SatelliteManager;
 class VehicleManager {
 private:
     std::unique_ptr<Rocket> rocket;
     std::unique_ptr<Car> car;
     VehicleType activeVehicle;
     std::vector<Planet*> planets;
+    SatelliteManager* satelliteManager;
 
 public:
-    VehicleManager(sf::Vector2f initialPos, const std::vector<Planet*>& planetList);
+    VehicleManager(sf::Vector2f initialPos, const std::vector<Planet*>& planetList, SatelliteManager* satManager = nullptr);
 
     void switchVehicle();
     void update(float deltaTime);
@@ -37,4 +38,12 @@ public:
     // Satellite integration
     Rocket* getCurrentRocket() const;
     VehicleType getActiveVehicleType() const { return activeVehicle; }
+
+    // Satellite system integration
+    void setSatelliteManager(SatelliteManager* satManager) { satelliteManager = satManager; }
+    SatelliteManager* getSatelliteManager() const { return satelliteManager; }
+    bool canConvertToSatellite() const;
+    int convertRocketToSatellite();
+    sf::Vector2f findNearestPlanetSurface() const;
+    void updateSatelliteManager();
 };

@@ -6,6 +6,7 @@
 #include "Rocket.h"
 #include "NetworkManager.h"
 #include "GameConstants.h"
+#include "SatelliteManager.h"
 #include <iostream>
 
 UIManager::UIManager(sf::Vector2u winSize)
@@ -65,7 +66,8 @@ bool UIManager::initializeFont() {
 
 void UIManager::update(GameState currentState, VehicleManager* vehicleManager,
     SplitScreenManager* splitScreenManager, Player* localPlayer,
-    const std::vector<Planet*>& planets, NetworkManager* networkManager) {
+    const std::vector<Planet*>& planets, NetworkManager* networkManager,
+    SatelliteManager* satelliteManager) {
 
     if (!showUI || !fontLoaded || !gameInfoDisplay) return;
 
@@ -73,7 +75,8 @@ void UIManager::update(GameState currentState, VehicleManager* vehicleManager,
         localPlayer, planets, networkManager);
 }
 
-void UIManager::draw(sf::RenderWindow& window, GameState currentState, NetworkManager* networkManager) {
+void UIManager::draw(sf::RenderWindow& window, GameState currentState, NetworkManager* networkManager,
+    SatelliteManager* satelliteManager) {
     if (!showUI || !fontLoaded || !gameInfoDisplay) return;
 
     // Set UI view for drawing
@@ -128,5 +131,94 @@ void UIManager::drawMultipleFuelLines(sf::RenderWindow& window, VehicleManager* 
 
     if (vm2 && vm2->getActiveVehicleType() == VehicleType::ROCKET) {
         drawFuelCollectionLines(window, vm2->getRocket());
+    }
+}
+
+void UIManager::drawSatelliteNetworkLines(sf::RenderWindow& window, SatelliteManager* satelliteManager) const {
+    if (!satelliteManager) return;
+
+    // Draw satellite network connections and transfers
+    // This leverages the existing satellite manager's drawing capabilities
+    auto satellites = satelliteManager->getAllSatellites();
+
+    // Draw connections between satellites
+    for (size_t i = 0; i < satellites.size(); i++) {
+        for (size_t j = i + 1; j < satellites.size(); j++) {
+            if (!satellites[i] || !satellites[j]) continue;
+
+            float dist = distance(satellites[i]->getPosition(), satellites[j]->getPosition());
+            if (dist <= GameConstants::SATELLITE_TRANSFER_RANGE) {
+                sf::VertexArray line(sf::PrimitiveType::LineStrip);
+
+                sf::Vertex start;
+                start.position = satellites[i]->getPosition();
+                start.color = GameConstants::SATELLITE_CONNECTION_COLOR;
+                line.append(start);
+
+                sf::Vertex end;
+                end.position = satellites[j]->getPosition();
+                end.color = GameConstants::SATELLITE_CONNECTION_COLOR;
+                line.append(end);
+
+                window.draw(line);
+            }
+        }
+    }
+}
+
+void UIManager::drawSatelliteFuelTransfers(sf::RenderWindow& window, SatelliteManager* satelliteManager) const {
+    if (!satelliteManager) return;
+
+    // Draw active fuel transfer lines between satellites
+    auto satellites = satelliteManager->getAllSatellites();
+
+    for (auto* satellite : satellites) {
+        if (!satellite) continue;
+
+        // Draw fuel collection lines from satellites to planets
+        satellite->drawFuelTransferLines(window);
+    }
+}
+
+void UIManager::drawSatelliteToRocketLines(sf::RenderWindow& window, SatelliteManager* satelliteManager,
+    VehicleManager* vm1, VehicleManager* vm2) const {
+    if (!satelliteManager) return;
+
+    auto satellites = satelliteManager->getAllSatellites();
+
+    // Draw fuel transfer lines from satellites to rockets
+    std::vector<Rocket*> rockets;
+
+    if (vm1 && vm1->getActiveVehicleType() == VehicleType::ROCKET) {
+        rockets.push_back(vm1->getRocket());
+    }
+    if (vm2 && vm2->getActiveVehicleType() == VehicleType::ROCKET) {
+        rockets.push_back(vm2->getRocket());
+    }
+
+    for (auto* satellite : satellites) {
+        if (!satellite || !satellite->isOperational()) continue;
+
+        for (auto* rocket : rockets) {
+            if (!rocket) continue;
+
+            float dist = distance(satellite->getPosition(), rocket->getPosition());
+            if (dist <= GameConstants::SATELLITE_ROCKET_DOCKING_RANGE) {
+                // Draw transfer line
+                sf::VertexArray line(sf::PrimitiveType::LineStrip);
+
+                sf::Vertex start;
+                start.position = satellite->getPosition();
+                start.color = GameConstants::SATELLITE_TRANSFER_FLOW_COLOR;
+                line.append(start);
+
+                sf::Vertex end;
+                end.position = rocket->getPosition();
+                end.color = GameConstants::SATELLITE_TRANSFER_FLOW_COLOR;
+                line.append(end);
+
+                window.draw(line);
+            }
+        }
     }
 }

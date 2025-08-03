@@ -1,21 +1,28 @@
 #pragma once
 #include "VehicleManager.h"
 #include "Planet.h"
+
 #include <memory>
 #include <vector>
+class SatelliteManager;
 
 class SplitScreenManager {
 private:
     std::unique_ptr<VehicleManager> player1;
     std::unique_ptr<VehicleManager> player2;
     std::vector<Planet*> planets;
-
+    SatelliteManager* satelliteManager;
     // Input tracking
     bool player1LKeyPressed;
     bool player2LKeyPressed;
+    // Satellite system integration
+    bool player1TKeyPressed;
+    bool player2TKeyPressed;
 
 public:
-    SplitScreenManager(sf::Vector2f player1Pos, sf::Vector2f player2Pos, const std::vector<Planet*>& planetList);
+
+	// Constructor
+    SplitScreenManager(sf::Vector2f player1Pos, sf::Vector2f player2Pos, const std::vector<Planet*>& planetList, SatelliteManager* satManager = nullptr);
     ~SplitScreenManager() = default;
 
     // Input handling
@@ -37,4 +44,9 @@ public:
 
     // Camera helper
     float getRequiredZoomToShowBothPlayers(sf::Vector2u windowSize);
+    // Satellite system methods
+    void handleSatelliteConversionInputs(const sf::Event& event);
+    bool canPlayerConvertToSatellite(int playerIndex) const;
+    sf::Vector2f findNearestPlanetSurface(sf::Vector2f position, int playerIndex) const;
+    void updateSatelliteManager();
 };

@@ -5,7 +5,7 @@
 #include "GameInfoDisplay.h"
 #include <SFML/Graphics.hpp>
 #include <memory>
-
+class SatelliteManager;
 // Forward declarations
 class VehicleManager;
 class SplitScreenManager;
@@ -54,9 +54,14 @@ public:
     // Core UI operations
     void update(GameState currentState, VehicleManager* vehicleManager,
         SplitScreenManager* splitScreenManager, Player* localPlayer,
-        const std::vector<Planet*>& planets, NetworkManager* networkManager);
+        const std::vector<Planet*>& planets, NetworkManager* networkManager,
+        SatelliteManager* satelliteManager = nullptr);
 
-    void draw(sf::RenderWindow& window, GameState currentState, NetworkManager* networkManager);
+
+
+    void draw(sf::RenderWindow& window, GameState currentState, NetworkManager* networkManager,
+        SatelliteManager* satelliteManager = nullptr);
+
 
     // Font and setup
     bool initializeFont();
@@ -79,6 +84,12 @@ public:
     // Drawing utilities (moved from main.cpp)
     void drawFuelCollectionLines(sf::RenderWindow& window, Rocket* rocket) const;
     void drawMultipleFuelLines(sf::RenderWindow& window, VehicleManager* vm1, VehicleManager* vm2 = nullptr) const;
+
+    // Satellite system drawing utilities
+    void drawSatelliteNetworkLines(sf::RenderWindow& window, SatelliteManager* satelliteManager) const;
+    void drawSatelliteFuelTransfers(sf::RenderWindow& window, SatelliteManager* satelliteManager) const;
+    void drawSatelliteToRocketLines(sf::RenderWindow& window, SatelliteManager* satelliteManager,
+        VehicleManager* vm1, VehicleManager* vm2 = nullptr) const;
 
     // Utility methods for main.cpp
     sf::Vector2f getMousePosition(sf::RenderWindow& window) const;

@@ -54,4 +54,8 @@ public:
 
     void addSatellite(Satellite* satellite);
     void addSatelliteManager(SatelliteManager* satManager);
+
+    // Player-satellite integration
+    void updateSatelliteManagerWithPlayers();
+    void updateSatelliteManagerWithVehicleManagers();
 };

@@ -4,12 +4,14 @@
 
 #include "VehicleManager.h"
 #include "Planet.h"
+#include "SatelliteManager.h"
 #include <SFML/Graphics.hpp>
 #include <memory>
 #include <vector>
 
 // Forward declaration to avoid circular dependency
 class NetworkManager;
+class SatelliteManager;
 struct PlayerState;
 
 enum class PlayerType {
@@ -38,10 +40,13 @@ private:
     // MANUAL FUEL TRANSFER INPUT TRACKING
     bool fuelIncreaseKeyPressed;    // '.' key state
     bool fuelDecreaseKeyPressed;    // ',' key state
+    // SATELLITE CONVERSION INPUT TRACKING
+    bool satelliteConversionKeyPressed;  // 'T' key state
+    SatelliteManager* satelliteManager;  // Reference to satellite system
 
 public:
     // Constructor
-    Player(int id, sf::Vector2f spawnPos, PlayerType playerType, const std::vector<Planet*>& planetList);
+    Player(int id, sf::Vector2f spawnPos, PlayerType playerType, const std::vector<Planet*>& planetList, SatelliteManager* satManager = nullptr);
     ~Player() = default;
 
     // Core update and rendering
@@ -54,6 +59,12 @@ public:
 
     // MANUAL FUEL TRANSFER INPUT HANDLING
     void handleFuelTransferInput(float deltaTime);  // Process fuel transfer controls
+
+    // SATELLITE CONVERSION METHODS
+    void handleSatelliteConversionInput(const sf::Event& event);  // Process satellite conversion input
+    bool canConvertToSatellite() const;  // Check if player can convert rocket to satellite
+    void convertRocketToSatellite();  // Perform the conversion
+    sf::Vector2f findNearestPlanetSurface() const;  // Find spawn point for new rocket
 
     // State management for networking
     PlayerState getState() const;
@@ -98,6 +109,8 @@ public:
             vehicleManager->getRocket()->setNearbyPlanets(planetList);
         }
     }
+    void setSatelliteManager(SatelliteManager* satManager) { satelliteManager = satManager; }
+    SatelliteManager* getSatelliteManager() const { return satelliteManager; }
 
     // Spawn point management
     sf::Vector2f getSpawnPosition() const { return spawnPosition; }

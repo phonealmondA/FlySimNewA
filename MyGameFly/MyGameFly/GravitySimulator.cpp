@@ -22,12 +22,24 @@ void GravitySimulator::addVehicleManager(VehicleManager* manager)
         vehicleManager = manager;  // Keep the first one for legacy code
     }
     vehicleManagers.push_back(manager);
+
+    // Update satellite manager with new vehicle manager
+    if (satelliteManager) {
+        updateSatelliteManagerWithVehicleManagers();
+    }
 }
 
 void GravitySimulator::addPlayer(Player* player)
 {
     players.push_back(player);
+
+    // Update satellite manager with new player's rocket
+    if (satelliteManager && player && player->getVehicleManager()) {
+        updateSatelliteManagerWithPlayers();
+    }
 }
+
+
 void GravitySimulator::addSatellite(Satellite* satellite)
 {
     satellites.push_back(satellite);
@@ -324,4 +336,49 @@ void GravitySimulator::update(float deltaTime)
     // FUEL SYSTEM: The fuel consumption and collection is handled automatically 
     // in each Rocket's update() method and Player's handleFuelTransferInput() method
     // Planet mass reduction from fuel collection is handled in Rocket's manual transfer methods
+
+    // SATELLITE SYSTEM: Update satellite manager with current rockets
+    if (satelliteManager) {
+        if (!players.empty()) {
+            updateSatelliteManagerWithPlayers();
+        }
+        else {
+            updateSatelliteManagerWithVehicleManagers();
+        }
+    }
+}
+
+void GravitySimulator::updateSatelliteManagerWithPlayers() {
+    if (!satelliteManager) return;
+
+    std::vector<Rocket*> activeRockets;
+
+    for (Player* player : players) {
+        if (player && player->getVehicleManager() &&
+            player->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+            Rocket* rocket = player->getVehicleManager()->getRocket();
+            if (rocket) {
+                activeRockets.push_back(rocket);
+            }
+        }
+    }
+
+    satelliteManager->setNearbyRockets(activeRockets);
+}
+
+void GravitySimulator::updateSatelliteManagerWithVehicleManagers() {
+    if (!satelliteManager) return;
+
+    std::vector<Rocket*> activeRockets;
+
+    for (VehicleManager* vm : vehicleManagers) {
+        if (vm && vm->getActiveVehicleType() == VehicleType::ROCKET) {
+            Rocket* rocket = vm->getRocket();
+            if (rocket) {
+                activeRockets.push_back(rocket);
+            }
+        }
+    }
+
+    satelliteManager->setNearbyRockets(activeRockets);
 }

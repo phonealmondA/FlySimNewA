@@ -5,16 +5,19 @@
 #include <SFML/Window/Keyboard.hpp>
 #include <iostream>
 #include <sstream>
+#include <limits>
 
-Player::Player(int id, sf::Vector2f spawnPos, PlayerType playerType, const std::vector<Planet*>& planetList)
+Player::Player(int id, sf::Vector2f spawnPos, PlayerType playerType, const std::vector<Planet*>& planetList, SatelliteManager* satManager)
     : playerID(id),
     spawnPosition(spawnPos),
     type(playerType),
     planets(planetList),
+    satelliteManager(satManager),
     stateChanged(false),
     timeSinceLastStateSent(0.0f),
     fuelIncreaseKeyPressed(false),
-    fuelDecreaseKeyPressed(false) {
+    fuelDecreaseKeyPressed(false),
+    satelliteConversionKeyPressed(false) {
 
     // Set default player name
     std::stringstream ss;
@@ -406,4 +409,125 @@ void Player::respawnAtPosition(sf::Vector2f newSpawnPos) {
 
     stateChanged = true; // Force state sync after respawn
     std::cout << playerName << " respawned at (" << newSpawnPos.x << ", " << newSpawnPos.y << ")" << std::endl;
+}
+
+void Player::handleSatelliteConversionInput(const sf::Event& event) {
+    if (type != PlayerType::LOCAL || !satelliteManager) return;
+
+    if (event.is<sf::Event::KeyPressed>()) {
+        const auto* keyEvent = event.getIf<sf::Event::KeyPressed>();
+        if (keyEvent) {
+            // Use different keys based on player ID to avoid conflicts in split-screen
+            sf::Keyboard::Key conversionKey = (playerID == 0) ? sf::Keyboard::Key::T : sf::Keyboard::Key::Y;
+
+            if (keyEvent->code == conversionKey && !satelliteConversionKeyPressed) {
+                satelliteConversionKeyPressed = true;
+                convertRocketToSatellite();
+            }
+        }
+    }
+
+    if (event.is<sf::Event::KeyReleased>()) {
+        const auto* keyEvent = event.getIf<sf::Event::KeyReleased>();
+        if (keyEvent) {
+            sf::Keyboard::Key conversionKey = (playerID == 0) ? sf::Keyboard::Key::T : sf::Keyboard::Key::Y;
+
+            if (keyEvent->code == conversionKey) {
+                satelliteConversionKeyPressed = false;
+            }
+        }
+    }
+}
+
+bool Player::canConvertToSatellite() const {
+    if (!satelliteManager || !vehicleManager) return false;
+    if (vehicleManager->getActiveVehicleType() != VehicleType::ROCKET) return false;
+
+    Rocket* rocket = vehicleManager->getRocket();
+    return rocket && satelliteManager->canConvertRocketToSatellite(rocket);
+}
+
+void Player::convertRocketToSatellite() {
+    if (!canConvertToSatellite()) {
+        std::cout << "Player " << playerName << " cannot convert rocket to satellite" << std::endl;
+        return;
+    }
+
+    Rocket* rocket = vehicleManager->getRocket();
+    if (!rocket) return;
+
+    try {
+        // Get optimal conversion configuration
+        SatelliteConversionConfig config = satelliteManager->getOptimalConversionConfig(rocket);
+        config.customName = playerName + "-SAT-" + std::to_string(satelliteManager->getSatelliteCount() + 1);
+
+        // Create satellite from rocket
+        int satelliteID = satelliteManager->createSatelliteFromRocket(rocket, config);
+
+        if (satelliteID >= 0) {
+            std::cout << "Player " << playerName << " converted rocket to satellite (ID: " << satelliteID << ")" << std::endl;
+
+            // Create new rocket at nearest planet surface
+            sf::Vector2f newRocketPos = findNearestPlanetSurface();
+            vehicleManager = std::make_unique<VehicleManager>(newRocketPos, planets);
+
+            if (vehicleManager && vehicleManager->getRocket()) {
+                vehicleManager->getRocket()->setNearbyPlanets(planets);
+            }
+
+            // Update spawn position for respawning
+            spawnPosition = newRocketPos;
+            stateChanged = true; // Force network sync
+
+            std::cout << "Player " << playerName << " spawned new rocket at ("
+                << newRocketPos.x << ", " << newRocketPos.y << ")" << std::endl;
+        }
+        else {
+            std::cout << "Failed to convert Player " << playerName << "'s rocket to satellite" << std::endl;
+        }
+    }
+    catch (const std::exception& e) {
+        std::cerr << "Exception during satellite conversion for Player " << playerName << ": " << e.what() << std::endl;
+    }
+}
+
+sf::Vector2f Player::findNearestPlanetSurface() const {
+    if (!vehicleManager) return spawnPosition;
+
+    sf::Vector2f currentPos = vehicleManager->getActiveVehicle()->getPosition();
+    Planet* nearestPlanet = nullptr;
+    float minDistance = std::numeric_limits<float>::max();
+
+    for (auto* planet : planets) {
+        if (!planet) continue;
+        sf::Vector2f direction = planet->getPosition() - currentPos;
+        float dist = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+        if (dist < minDistance) {
+            minDistance = dist;
+            nearestPlanet = planet;
+        }
+    }
+
+    if (nearestPlanet) {
+        // Add player-specific offset to avoid spawn conflicts
+        float playerOffset = playerID * 0.5f; // Slight angular offset per player
+        sf::Vector2f direction = currentPos - nearestPlanet->getPosition();
+        float length = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+        if (length > 0) {
+            direction /= length; // normalize
+        }
+
+        // Apply small rotation based on player ID
+        float cosOffset = std::cos(playerOffset);
+        float sinOffset = std::sin(playerOffset);
+        sf::Vector2f offsetDirection(
+            direction.x * cosOffset - direction.y * sinOffset,
+            direction.x * sinOffset + direction.y * cosOffset
+        );
+
+        return nearestPlanet->getPosition() + offsetDirection * (nearestPlanet->getRadius() + GameConstants::ROCKET_SIZE + 15.0f);
+    }
+
+    // Fallback to original spawn position with player offset
+    return spawnPosition + sf::Vector2f(playerID * 50.0f, 0.0f);
 }

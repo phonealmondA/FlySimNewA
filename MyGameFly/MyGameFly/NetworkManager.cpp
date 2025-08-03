@@ -11,7 +11,8 @@ NetworkManager::NetworkManager()
     lastHeartbeat(0.0f),
     localPlayerID(-1),
     nextPlayerID(0),
-    hasNewSpawnInfo(false) {
+    hasNewSpawnInfo(false),
+    hasPendingConversion(false) {
 }
 
 NetworkManager::~NetworkManager() {
@@ -158,6 +159,14 @@ void NetworkManager::update(float deltaTime) {
             // Transform requests can be handled by the game layer
             break;
         }
+        case MessageType::SATELLITE_CONVERSION: {
+            SatelliteConversionInfo conversionInfo;
+            deserializeSatelliteConversion(packet, conversionInfo);
+            pendingSatelliteConversion = conversionInfo;
+            hasPendingConversion = true;
+            std::cout << "Network: Received satellite conversion from Player " << conversionInfo.playerID << std::endl;
+            break;
+        }
         case MessageType::DISCONNECT:
             std::cout << "Network: Remote player disconnected" << std::endl;
             disconnect();
@@ -300,7 +309,12 @@ void NetworkManager::serializePlayerState(sf::Packet& packet, const PlayerState&
 
     // ADD SATELLITE SYSTEM SERIALIZATION
     packet << state.isSatellite << state.satelliteID << state.orbitAccuracy << state.needsMaintenance;
+
+    // ADD SATELLITE CONVERSION SERIALIZATION
+    packet << state.requestingSatelliteConversion << state.newSatelliteID;
+    packet << state.newRocketSpawnPos.x << state.newRocketSpawnPos.y;
 }
+
 
 void NetworkManager::deserializePlayerState(sf::Packet& packet, PlayerState& state) {
     packet >> state.playerID >> state.position.x >> state.position.y;
@@ -313,8 +327,11 @@ void NetworkManager::deserializePlayerState(sf::Packet& packet, PlayerState& sta
 
     // ADD SATELLITE SYSTEM DESERIALIZATION
     packet >> state.isSatellite >> state.satelliteID >> state.orbitAccuracy >> state.needsMaintenance;
-}
 
+    // ADD SATELLITE CONVERSION DESERIALIZATION
+    packet >> state.requestingSatelliteConversion >> state.newSatelliteID;
+    packet >> state.newRocketSpawnPos.x >> state.newRocketSpawnPos.y;
+}
 void NetworkManager::serializePlayerSpawnInfo(sf::Packet& packet, const PlayerSpawnInfo& spawnInfo) {
     packet << spawnInfo.playerID << spawnInfo.spawnPosition.x << spawnInfo.spawnPosition.y;
     packet << spawnInfo.isHost;
@@ -432,4 +449,47 @@ void NetworkManager::syncSatelliteStates(const std::vector<PlayerState>& satelli
     }
 
     std::cout << "Synchronized " << satelliteStates.size() << " satellite states" << std::endl;
+}
+
+bool NetworkManager::sendSatelliteConversion(const SatelliteConversionInfo& conversionInfo) {
+    if (!isConnected()) return false;
+
+    sf::Packet packet;
+    serializeSatelliteConversion(packet, conversionInfo);
+    return sendMessage(MessageType::SATELLITE_CONVERSION, packet);
+}
+
+bool NetworkManager::receiveSatelliteConversion(SatelliteConversionInfo& outInfo) {
+    if (!hasPendingConversion) return false;
+
+    outInfo = pendingSatelliteConversion;
+    hasPendingConversion = false;
+    return true;
+}
+
+bool NetworkManager::hasPendingSatelliteConversion() const {
+    return hasPendingConversion;
+}
+
+SatelliteConversionInfo NetworkManager::getPendingSatelliteConversion() {
+    hasPendingConversion = false;
+    return pendingSatelliteConversion;
+}
+
+void NetworkManager::serializeSatelliteConversion(sf::Packet& packet, const SatelliteConversionInfo& conversionInfo) {
+    packet << conversionInfo.playerID << conversionInfo.satelliteID;
+    packet << conversionInfo.satellitePosition.x << conversionInfo.satellitePosition.y;
+    packet << conversionInfo.satelliteVelocity.x << conversionInfo.satelliteVelocity.y;
+    packet << conversionInfo.satelliteFuel;
+    packet << conversionInfo.newRocketPosition.x << conversionInfo.newRocketPosition.y;
+    packet << conversionInfo.satelliteName;
+}
+
+void NetworkManager::deserializeSatelliteConversion(sf::Packet& packet, SatelliteConversionInfo& conversionInfo) {
+    packet >> conversionInfo.playerID >> conversionInfo.satelliteID;
+    packet >> conversionInfo.satellitePosition.x >> conversionInfo.satellitePosition.y;
+    packet >> conversionInfo.satelliteVelocity.x >> conversionInfo.satelliteVelocity.y;
+    packet >> conversionInfo.satelliteFuel;
+    packet >> conversionInfo.newRocketPosition.x >> conversionInfo.newRocketPosition.y;
+    packet >> conversionInfo.satelliteName;
 }

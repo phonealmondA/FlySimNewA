@@ -14,6 +14,7 @@
 #include <limits>
 #include <cmath>
 
+
 GameInfoDisplay::GameInfoDisplay(const sf::Font& gameFont, sf::Vector2u windowSize)
     : font(&gameFont), fontLoaded(true)
 {
@@ -24,21 +25,22 @@ GameInfoDisplay::GameInfoDisplay(const sf::Font& gameFont, sf::Vector2u windowSi
     controlsPanel = std::make_unique<TextPanel>(*font, 10, sf::Vector2f(10, 440), sf::Vector2f(270, 180));
     networkInfoPanel = std::make_unique<TextPanel>(*font, 11, sf::Vector2f(10, 630), sf::Vector2f(270, 80));
 
-    // Set up controls panel with satellite system controls
+    // Set up controls panel with satellite system controls for ALL game modes
     controlsPanel->setText(
         "CONTROLS:\n"
-        "Arrows: Move/Rotate\n"
+        "Arrows/WASD: Move/Rotate\n"
         "1-9,0,=: Thrust level & fuel rate\n"
         ".: Collect fuel from planet\n"
         ",: Give fuel to planet\n"
-        "L: Transform rocket/car\n"
-        "T: Convert rocket to satellite\n"
+        "L/K: Transform rocket/car\n"
+        "T/Y: Convert rocket to satellite\n"
         "Mouse wheel: Zoom\n"
         "F1: Toggle UI, F2: Debug\n"
         "F3: Satellite status\n"
         "ESC: Menu"
     );
 }
+
 
 void GameInfoDisplay::updateAllPanels(GameState currentState, VehicleManager* vehicleManager,
     SplitScreenManager* splitScreenManager, Player* localPlayer,
@@ -97,13 +99,13 @@ std::string GameInfoDisplay::generateVehicleInfo(GameState currentState, Vehicle
 
     // Check game state and display appropriate vehicle info
     if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-        // Split-screen mode vehicle info
+        // Split-screen mode vehicle info with satellite support
         VehicleManager* p1 = splitScreenManager->getPlayer1();
         VehicleManager* p2 = splitScreenManager->getPlayer2();
 
-        ss << "SPLIT-SCREEN MODE\n";
-        ss << "Player 1 (Arrows + L): " << (p1->getActiveVehicleType() == VehicleType::ROCKET ? "ROCKET" : "CAR") << "\n";
-        ss << "Player 2 (WASD + K): " << (p2->getActiveVehicleType() == VehicleType::ROCKET ? "ROCKET" : "CAR") << "\n";
+        ss << "SPLIT-SCREEN MODE (SATELLITES)\n";
+        ss << "P1 (Arrows + L + T): " << (p1->getActiveVehicleType() == VehicleType::ROCKET ? "ROCKET" : "CAR") << "\n";
+        ss << "P2 (WASD + K + Y): " << (p2->getActiveVehicleType() == VehicleType::ROCKET ? "ROCKET" : "CAR") << "\n";
 
         if (p1->getActiveVehicleType() == VehicleType::ROCKET) {
             Rocket* rocket = p1->getRocket();
@@ -112,6 +114,7 @@ std::string GameInfoDisplay::generateVehicleInfo(GameState currentState, Vehicle
             ss << "P1 Fuel: " << std::setprecision(1) << rocket->getCurrentFuel() << "/"
                 << rocket->getMaxFuel() << " (" << std::setprecision(0) << rocket->getFuelPercentage() << "%)\n";
             ss << "P1 Mass: " << std::setprecision(1) << rocket->getMass() << "/" << rocket->getMaxMass() << "\n";
+            ss << "P1 Can Convert: " << (rocket->getCurrentFuel() > 10.0f ? "YES" : "NO") << "\n";
         }
 
         if (p2->getActiveVehicleType() == VehicleType::ROCKET) {
@@ -119,12 +122,13 @@ std::string GameInfoDisplay::generateVehicleInfo(GameState currentState, Vehicle
             ss << "P2 Fuel: " << std::setprecision(1) << rocket2->getCurrentFuel() << "/"
                 << rocket2->getMaxFuel() << " (" << std::setprecision(0) << rocket2->getFuelPercentage() << "%)\n";
             ss << "P2 Mass: " << std::setprecision(1) << rocket2->getMass() << "/" << rocket2->getMaxMass() << "\n";
+            ss << "P2 Can Convert: " << (rocket2->getCurrentFuel() > 10.0f ? "YES" : "NO") << "\n";
         }
 
-        ss << "TODO: Individual fuel controls";
+        ss << "Satellites auto-fuel both players";
     }
     else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
-        // Network multiplayer vehicle info
+        // Network multiplayer vehicle info with satellite support
         std::string modeStr = (currentState == GameState::LAN_MULTIPLAYER) ? "LAN" : "ONLINE";
 
         if (localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
@@ -132,24 +136,26 @@ std::string GameInfoDisplay::generateVehicleInfo(GameState currentState, Vehicle
             float speed = std::sqrt(rocket->getVelocity().x * rocket->getVelocity().x +
                 rocket->getVelocity().y * rocket->getVelocity().y);
 
-            ss << modeStr << " MULTIPLAYER\n"
+            ss << modeStr << " MULTIPLAYER (SATELLITES)\n"
                 << "Player: " << localPlayer->getName() << "\n"
                 << "Speed: " << std::fixed << std::setprecision(1) << speed << " units/s\n"
                 << "Thrust: " << std::setprecision(0) << rocket->getThrustLevel() * 100.0f << "%\n"
                 << "Fuel: " << std::setprecision(1) << rocket->getCurrentFuel() << "/"
                 << rocket->getMaxFuel() << " (" << std::setprecision(0) << rocket->getFuelPercentage() << "%)\n"
                 << "Mass: " << std::setprecision(1) << rocket->getMass() << "/" << rocket->getMaxMass() << "\n"
-                << "Collecting: " << (rocket->getIsCollectingFuel() ? "YES" : "NO");
+                << "Collecting: " << (rocket->getIsCollectingFuel() ? "YES" : "NO") << "\n"
+                << "Can Convert: " << (rocket->getCurrentFuel() > 10.0f ? "YES" : "NO");
         }
         else {
             Car* car = localPlayer->getVehicleManager()->getCar();
             ss << modeStr << " MULTIPLAYER (CAR)\n"
                 << "Player: " << localPlayer->getName() << "\n"
-                << "On Ground: " << (car->isOnGround() ? "Yes" : "No");
+                << "On Ground: " << (car->isOnGround() ? "Yes" : "No") << "\n"
+                << "Transform to rocket for satellites";
         }
     }
     else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
-        // Single player rocket info
+        // Single player rocket info (unchanged)
         Rocket* rocket = vehicleManager->getRocket();
         float speed = std::sqrt(rocket->getVelocity().x * rocket->getVelocity().x +
             rocket->getVelocity().y * rocket->getVelocity().y);
@@ -165,7 +171,7 @@ std::string GameInfoDisplay::generateVehicleInfo(GameState currentState, Vehicle
             << "Can Thrust: " << (rocket->canThrust() ? "YES" : "NO");
     }
     else if (vehicleManager) {
-        // Car info
+        // Car info (unchanged)
         Car* car = vehicleManager->getCar();
         ss << "CAR INFO\n"
             << "On Ground: " << (car->isOnGround() ? "Yes" : "No") << "\n"
@@ -178,6 +184,7 @@ std::string GameInfoDisplay::generateVehicleInfo(GameState currentState, Vehicle
 
     return ss.str();
 }
+
 
 std::string GameInfoDisplay::generatePlanetInfo(GameState currentState, VehicleManager* vehicleManager,
     SplitScreenManager* splitScreenManager, Player* localPlayer,
@@ -230,29 +237,30 @@ std::string GameInfoDisplay::generatePlanetInfo(GameState currentState, VehicleM
     return ss.str();
 }
 
+
 std::string GameInfoDisplay::generateOrbitInfo(GameState currentState, VehicleManager* vehicleManager,
     SplitScreenManager* splitScreenManager, NetworkManager* networkManager, Player* localPlayer) const
 {
     std::stringstream ss;
 
     if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-        ss << "SPLIT-SCREEN MODE\n"
+        ss << "SPLIT-SCREEN SATELLITES\n"
             << "Camera centered between players\n"
             << "Mouse wheel to zoom\n"
             << "Numbers 1-9,0,= control thrust\n"
-            << "TODO: Individual fuel controls\n"
-            << "Fuel mining from planets!";
+            << "T/Y: Convert to satellite\n"
+            << "Satellites auto-fuel rockets!";
     }
     else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && networkManager) {
         std::string modeStr = (currentState == GameState::LAN_MULTIPLAYER) ? "LAN" : "ONLINE";
-        ss << modeStr << " MULTIPLAYER\n"
+        ss << modeStr << " SATELLITES\n"
             << "Role: " << (networkManager->getRole() == NetworkRole::HOST ? "HOST" : "CLIENT") << "\n"
             << "Status: " << (networkManager->isConnected() ? "CONNECTED" : "DISCONNECTED") << "\n";
         if (localPlayer) {
             ss << "Playing as: " << localPlayer->getName() << "\n";
         }
-        ss << "TODO: Fuel sync implementation\n"
-            << "Local fuel system active";
+        ss << "T: Convert to satellite\n"
+            << "Satellite network synced";
     }
     else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
         ss << "SATELLITE SYSTEM ACTIVE\n"
@@ -273,6 +281,7 @@ std::string GameInfoDisplay::generateOrbitInfo(GameState currentState, VehicleMa
 
     return ss.str();
 }
+
 
 std::string GameInfoDisplay::generateNetworkInfo(NetworkManager* networkManager, Player* localPlayer) const
 {
@@ -295,7 +304,7 @@ std::string GameInfoDisplay::generateNetworkInfo(NetworkManager* networkManager,
         case ConnectionStatus::DISCONNECTED: statusStr = "DISCONNECTED"; break;
         }
 
-        ss << "NETWORK STATUS\n"
+        ss << "NETWORK SATELLITES\n"
             << "Role: " << roleStr << "\n"
             << "Status: " << statusStr << "\n";
 
@@ -303,7 +312,12 @@ std::string GameInfoDisplay::generateNetworkInfo(NetworkManager* networkManager,
             ss << "Player ID: " << localPlayer->getID() << "\n";
         }
 
-        ss << "Fuel sync: TODO";
+        ss << "Satellite sync: ACTIVE";
+
+        // Show pending satellite conversions
+        if (networkManager->hasPendingSatelliteConversion()) {
+            ss << "\nPending conversion detected";
+        }
     }
     else {
         ss << "SATELLITE SYSTEM\n"
@@ -316,12 +330,13 @@ std::string GameInfoDisplay::generateNetworkInfo(NetworkManager* networkManager,
     return ss.str();
 }
 
+
 std::string GameInfoDisplay::generateSatelliteInfo(GameState currentState, VehicleManager* vehicleManager,
     SplitScreenManager* splitScreenManager, Player* localPlayer) const
 {
     std::stringstream ss;
 
-    // Show satellite fuel transfer status
+    // Show satellite fuel transfer status for all game modes
     if (currentState == GameState::SINGLE_PLAYER && vehicleManager &&
         vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
 
@@ -335,7 +350,7 @@ std::string GameInfoDisplay::generateSatelliteInfo(GameState currentState, Vehic
         }
     }
     else if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-        ss << "SATELLITE SYSTEM\n";
+        ss << "SPLIT-SCREEN SATELLITES\n";
         ss << "Auto-fueling both players\n";
 
         if (splitScreenManager->getPlayer1()->getActiveVehicleType() == VehicleType::ROCKET) {
@@ -345,18 +360,22 @@ std::string GameInfoDisplay::generateSatelliteInfo(GameState currentState, Vehic
 
         if (splitScreenManager->getPlayer2()->getActiveVehicleType() == VehicleType::ROCKET) {
             Rocket* p2Rocket = splitScreenManager->getPlayer2()->getRocket();
-            ss << "P2: " << std::setprecision(0) << p2Rocket->getFuelPercentage() << "% fuel";
+            ss << "P2: " << std::setprecision(0) << p2Rocket->getFuelPercentage() << "% fuel\n";
         }
+
+        ss << "T/Y: Convert to satellites";
     }
     else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
-        ss << "SATELLITE NETWORK\n";
+        ss << "NETWORK SATELLITES\n";
         if (localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
             Rocket* rocket = localPlayer->getVehicleManager()->getRocket();
             ss << "Fuel: " << std::setprecision(0) << rocket->getFuelPercentage() << "%\n";
-            ss << "Auto-fuel from satellites active";
+            ss << "Auto-fuel from satellites active\n";
+            ss << "T: Convert to satellite";
         }
         else {
-            ss << "Switch to rocket for satellite fuel";
+            ss << "Switch to rocket for satellite fuel\n";
+            ss << "T: Convert rocket to satellite";
         }
     }
     else {

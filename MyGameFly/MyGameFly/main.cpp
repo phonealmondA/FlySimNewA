@@ -137,30 +137,26 @@ public:
         // SATELLITE SYSTEM: Set planets for satellite manager FIRST
         satelliteManager->setPlanets(planets);
 
-        // Create vehicle manager - MOVED BEFORE satellite setup
+        // Create vehicle manager with satellite manager reference
         sf::Vector2f planetPos = planet->getPosition();
         float planetRadius = planet->getRadius();
         float rocketSize = GameConstants::ROCKET_SIZE;
         sf::Vector2f direction(0, -1);
         sf::Vector2f rocketPos = planetPos + direction * (planetRadius + rocketSize);
 
-        vehicleManager = std::make_unique<VehicleManager>(rocketPos, planets);
+        vehicleManager = std::make_unique<VehicleManager>(rocketPos, planets, satelliteManager.get());
 
         // FUEL SYSTEM: Set up fuel collection for the rocket
         if (vehicleManager->getRocket()) {
             vehicleManager->getRocket()->setNearbyPlanets(planets);
         }
 
-        // SATELLITE SYSTEM: Set up rocket integration AFTER vehicleManager is created
-        if (vehicleManager && vehicleManager->getRocket()) {
-            satelliteManager->setNearbyRockets({ vehicleManager->getRocket() });
-        }
-
-        // Setup gravity simulator
+        // Setup gravity simulator with satellite manager
         gravitySimulator = std::make_unique<GravitySimulator>();
         gravitySimulator->addPlanet(planet.get());
         gravitySimulator->addPlanet(planet2.get());
         gravitySimulator->addVehicleManager(vehicleManager.get());
+        gravitySimulator->addSatelliteManager(satelliteManager.get());
 
         // Clear players for single player mode
         players.clear();
@@ -175,7 +171,6 @@ public:
         std::cout << "Single Player mode initialized with satellite system!" << std::endl;
         std::cout << "Use 'T' to convert rocket to satellite, '.' to collect fuel, ',' to give fuel" << std::endl;
     }
-
 
     void initializeLocalPCMultiplayer() {
         // Create planets (same as single player)
@@ -206,24 +201,14 @@ public:
         sf::Vector2f player1Pos = planetPos + sf::Vector2f(0, -1) * (planetRadius + rocketSize);
         sf::Vector2f player2Pos = planetPos + sf::Vector2f(0, 1) * (planetRadius + rocketSize);
 
-        // Create split screen manager FIRST
-        splitScreenManager = std::make_unique<SplitScreenManager>(player1Pos, player2Pos, planets);
+        // Create split screen manager with satellite manager reference
+        splitScreenManager = std::make_unique<SplitScreenManager>(player1Pos, player2Pos, planets, satelliteManager.get());
 
-        // SATELLITE SYSTEM: Set up rocket integration for split screen AFTER creation
-        if (splitScreenManager) {
-            std::vector<Rocket*> splitScreenRockets;
-            if (splitScreenManager->getPlayer1() && splitScreenManager->getPlayer1()->getRocket()) {
-                splitScreenRockets.push_back(splitScreenManager->getPlayer1()->getRocket());
-            }
-            if (splitScreenManager->getPlayer2() && splitScreenManager->getPlayer2()->getRocket()) {
-                splitScreenRockets.push_back(splitScreenManager->getPlayer2()->getRocket());
-            }
-            satelliteManager->setNearbyRockets(splitScreenRockets);
-        }
-
+        // Setup gravity simulator with satellite manager
         gravitySimulator = std::make_unique<GravitySimulator>();
         gravitySimulator->addPlanet(planet.get());
         gravitySimulator->addPlanet(planet2.get());
+        gravitySimulator->addSatelliteManager(satelliteManager.get());
         if (splitScreenManager) {
             gravitySimulator->addVehicleManager(splitScreenManager->getPlayer1());
             gravitySimulator->addVehicleManager(splitScreenManager->getPlayer2());
@@ -240,17 +225,114 @@ public:
         }
 
         std::cout << "Local PC Split-Screen Multiplayer initialized with satellite system!" << std::endl;
+        std::cout << "P1: T to convert to satellite, P2: Y to convert to satellite" << std::endl;
     }
-
+    
     void initializeLANMultiplayer() {
-        std::cout << "LAN Multiplayer satellite system not yet fully implemented" << std::endl;
-        initializeSinglePlayer(); // Fallback for now
+        // Create planets
+        planet = std::make_unique<Planet>(
+            sf::Vector2f(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y),
+            0.0f, GameConstants::MAIN_PLANET_MASS, sf::Color::Blue);
+        planet->setVelocity(sf::Vector2f(0.f, 0.f));
+
+        planet2 = std::make_unique<Planet>(
+            sf::Vector2f(GameConstants::SECONDARY_PLANET_X, GameConstants::SECONDARY_PLANET_Y),
+            0.0f, GameConstants::SECONDARY_PLANET_MASS, sf::Color::Green);
+
+        float orbitSpeed = std::sqrt(GameConstants::G * planet->getMass() / GameConstants::PLANET_ORBIT_DISTANCE);
+        planet2->setVelocity(sf::Vector2f(0.f, orbitSpeed));
+
+        planets.clear();
+        planets.push_back(planet.get());
+        planets.push_back(planet2.get());
+
+        // SATELLITE SYSTEM: Set planets for satellite manager
+        satelliteManager->setPlanets(planets);
+
+        // Initialize network manager
+        networkManager = std::make_unique<NetworkManager>();
+        if (!networkManager->attemptAutoConnect()) {
+            std::cout << "Failed to establish LAN connection" << std::endl;
+            handleEscapeKey();
+            return;
+        }
+
+        // Create local player with satellite manager reference
+        sf::Vector2f spawnPos(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y - 150.0f);
+        localPlayer = std::make_unique<Player>(networkManager->getLocalPlayerID(), spawnPos,
+            PlayerType::LOCAL, planets, satelliteManager.get());
+
+        // Setup gravity simulator with satellite manager
+        gravitySimulator = std::make_unique<GravitySimulator>();
+        gravitySimulator->addPlanet(planet.get());
+        gravitySimulator->addPlanet(planet2.get());
+        gravitySimulator->addSatelliteManager(satelliteManager.get());
+        gravitySimulator->addPlayer(localPlayer.get());
+
+        vehicleManager.reset();
+        splitScreenManager.reset();
+
+        zoomLevel = 1.0f;
+        targetZoom = 1.0f;
+        gameView.setCenter(spawnPos);
+
+        std::cout << "LAN Multiplayer initialized with satellite system!" << std::endl;
+        std::cout << "Use 'T' to convert rocket to satellite" << std::endl;
     }
 
     void initializeOnlineMultiplayer(const ConnectionInfo& connectionInfo) {
-        std::cout << "Online Multiplayer satellite system not yet fully implemented" << std::endl;
-        initializeSinglePlayer(); // Fallback for now
+        // Create planets
+        planet = std::make_unique<Planet>(
+            sf::Vector2f(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y),
+            0.0f, GameConstants::MAIN_PLANET_MASS, sf::Color::Blue);
+        planet->setVelocity(sf::Vector2f(0.f, 0.f));
+
+        planet2 = std::make_unique<Planet>(
+            sf::Vector2f(GameConstants::SECONDARY_PLANET_X, GameConstants::SECONDARY_PLANET_Y),
+            0.0f, GameConstants::SECONDARY_PLANET_MASS, sf::Color::Green);
+
+        float orbitSpeed = std::sqrt(GameConstants::G * planet->getMass() / GameConstants::PLANET_ORBIT_DISTANCE);
+        planet2->setVelocity(sf::Vector2f(0.f, orbitSpeed));
+
+        planets.clear();
+        planets.push_back(planet.get());
+        planets.push_back(planet2.get());
+
+        // SATELLITE SYSTEM: Set planets for satellite manager
+        satelliteManager->setPlanets(planets);
+
+        // Initialize network manager for online play
+        networkManager = std::make_unique<NetworkManager>();
+        // TODO: Implement online connection with connectionInfo
+        if (!networkManager->attemptAutoConnect()) {
+            std::cout << "Failed to establish online connection" << std::endl;
+            handleEscapeKey();
+            return;
+        }
+
+        // Create local player with satellite manager reference
+        sf::Vector2f spawnPos(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y - 150.0f);
+        localPlayer = std::make_unique<Player>(networkManager->getLocalPlayerID(), spawnPos,
+            PlayerType::LOCAL, planets, satelliteManager.get());
+
+        // Setup gravity simulator with satellite manager
+        gravitySimulator = std::make_unique<GravitySimulator>();
+        gravitySimulator->addPlanet(planet.get());
+        gravitySimulator->addPlanet(planet2.get());
+        gravitySimulator->addSatelliteManager(satelliteManager.get());
+        gravitySimulator->addPlayer(localPlayer.get());
+
+        vehicleManager.reset();
+        splitScreenManager.reset();
+
+        zoomLevel = 1.0f;
+        targetZoom = 1.0f;
+        gameView.setCenter(spawnPos);
+
+        std::cout << "Online Multiplayer initialized with satellite system!" << std::endl;
+        std::cout << "Use 'T' to convert rocket to satellite" << std::endl;
     }
+
 
     void handleMenuEvents(const sf::Event& event) {
         sf::Vector2f mousePos = uiManager->getMousePosition(window);
@@ -342,53 +424,10 @@ public:
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
             splitScreenManager->handleTransformInputs(event);
         }
-
-        //if (event.is<sf::Event::KeyPressed>()) {
-        //    const auto* keyEvent = event.getIf<sf::Event::KeyPressed>();
-        //    if (keyEvent) {
-        //        if (keyEvent->code == sf::Keyboard::Key::Escape) {
-        //            handleEscapeKey();
-        //            return;
-        //        }
-        //        else if (keyEvent->code == sf::Keyboard::Key::P) {
-        //            togglePlanetGravity();
-        //        }
-        //        else if (keyEvent->code == sf::Keyboard::Key::L && !lKeyPressed) {
-        //            handleVehicleTransform();
-        //        }
-        //        // SATELLITE CONVERSION - NEW
-        //        else if (keyEvent->code == sf::Keyboard::Key::T && !tKeyPressed) {
-        //            handleSatelliteConversion();
-        //        }
-        //        // FUEL TRANSFER INPUT HANDLING
-        //        else if (keyEvent->code == sf::Keyboard::Key::Period && !fuelIncreaseKeyPressed) {
-        //            handleFuelTransferStart(true);
-        //        }
-        //        else if (keyEvent->code == sf::Keyboard::Key::Comma && !fuelDecreaseKeyPressed) {
-        //            handleFuelTransferStart(false);
-        //        }
-        //        // DEBUG KEYS
-        //        else if (keyEvent->code == sf::Keyboard::Key::H && networkManager) {
-        //            networkManager->sendHello();
-        //            std::cout << "Sent hello message to network!" << std::endl;
-        //        }
-        //        // UI CONTROLS
-        //        else if (keyEvent->code == sf::Keyboard::Key::F1) {
-        //            uiManager->toggleUI();
-        //        }
-        //        else if (keyEvent->code == sf::Keyboard::Key::F2) {
-        //            uiManager->toggleDebugInfo();
-        //        }
-        //        // SATELLITE DEBUG CONTROLS
-        //        else if (keyEvent->code == sf::Keyboard::Key::F3) {
-        //            satelliteManager->printNetworkStatus();
-        //        }
-        //        else if (keyEvent->code == sf::Keyboard::Key::F4) {
-        //            satelliteManager->optimizeNetworkFuelDistribution();
-        //            std::cout << "Triggered satellite fuel optimization" << std::endl;
-        //        }
-        //    }
-        //}
+        // Handle network multiplayer player events
+        if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
+            localPlayer->handleSatelliteConversionInput(event);
+        }
 
 
         if (auto* keyPressed = event.getIf<sf::Event::KeyPressed>()) {
@@ -547,7 +586,7 @@ public:
         drawVelocityVectors();
 
         // Draw UI
-        uiManager->draw(window, currentState, networkManager.get());
+        uiManager->draw(window, currentState, networkManager.get(), satelliteManager.get());
     }
 
     sf::Vector2f getCameraReferencePosition() {
@@ -683,76 +722,140 @@ public:
 
         std::cout << "DEBUG: Attempting satellite conversion..." << std::endl;
 
-        // ADD NULL CHECKS
-        if (!vehicleManager) {
-            std::cout << "ERROR: VehicleManager is null!" << std::endl;
-            return;
-        }
-
         if (currentState == GameState::SINGLE_PLAYER && vehicleManager &&
             vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
 
+            // Single player satellite conversion (unchanged logic)
             Rocket* rocket = vehicleManager->getRocket();
             if (!rocket) {
                 std::cout << "ERROR: Rocket is null!" << std::endl;
                 return;
             }
 
-            std::cout << "DEBUG: Rocket found, checking conversion eligibility..." << std::endl;
-
             if (satelliteManager && satelliteManager->canConvertRocketToSatellite(rocket)) {
                 try {
-                    std::cout << "DEBUG: Conversion eligible, creating satellite..." << std::endl;
-
-                    // Get optimal conversion configuration
                     SatelliteConversionConfig config = satelliteManager->getOptimalConversionConfig(rocket);
-
-                    // Create satellite from rocket
                     int satelliteID = satelliteManager->createSatelliteFromRocket(rocket, config);
 
                     if (satelliteID >= 0) {
-                        std::cout << "Successfully converted rocket to satellite (ID: " << satelliteID << ")" << std::endl;
-
-                        // Create new rocket at nearest planet surface
                         sf::Vector2f newRocketPos = findNearestPlanetSurface(rocket->getPosition());
-                        vehicleManager = std::make_unique<VehicleManager>(newRocketPos, planets);
+                        vehicleManager = std::make_unique<VehicleManager>(newRocketPos, planets, satelliteManager.get());
 
                         if (vehicleManager && vehicleManager->getRocket()) {
                             vehicleManager->getRocket()->setNearbyPlanets(planets);
                         }
 
-                        // Update gravity simulator
                         if (gravitySimulator && vehicleManager) {
                             gravitySimulator->addVehicleManager(vehicleManager.get());
                         }
 
-                        // SATELLITE SYSTEM: Update rocket reference after conversion
-                        if (satelliteManager && vehicleManager && vehicleManager->getRocket()) {
-                            satelliteManager->setNearbyRockets({ vehicleManager->getRocket() });
-                        }
-
-                        // Update camera to follow new rocket
                         gameView.setCenter(newRocketPos);
-
-                        std::cout << "New rocket spawned at (" << newRocketPos.x << ", " << newRocketPos.y << ")" << std::endl;
-                    }
-                    else {
-                        std::cout << "Failed to convert rocket to satellite" << std::endl;
+                        std::cout << "Single player satellite conversion completed" << std::endl;
                     }
                 }
                 catch (const std::exception& e) {
                     std::cerr << "Exception during satellite conversion: " << e.what() << std::endl;
                 }
             }
+        }
+        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) &&
+            localPlayer && networkManager) {
+
+            // Network multiplayer satellite conversion
+            if (localPlayer->canConvertToSatellite()) {
+                try {
+                    Rocket* rocket = localPlayer->getVehicleManager()->getRocket();
+                    if (!rocket) return;
+
+                    // Prepare conversion info for network
+                    SatelliteConversionInfo conversionInfo;
+                    conversionInfo.playerID = localPlayer->getID();
+                    conversionInfo.satelliteID = satelliteManager->getSatelliteCount() + 1; // Estimated ID
+                    conversionInfo.satellitePosition = rocket->getPosition();
+                    conversionInfo.satelliteVelocity = rocket->getVelocity();
+                    conversionInfo.satelliteFuel = rocket->getCurrentFuel() * GameConstants::SATELLITE_CONVERSION_FUEL_RETENTION;
+                    conversionInfo.newRocketPosition = localPlayer->findNearestPlanetSurface();
+                    conversionInfo.satelliteName = localPlayer->getName() + "-SAT-" + std::to_string(conversionInfo.satelliteID);
+
+                    // Send conversion to network first
+                    if (networkManager->sendSatelliteConversion(conversionInfo)) {
+                        // Perform local conversion
+                        localPlayer->convertRocketToSatellite();
+                        std::cout << "Network satellite conversion sent and executed locally" << std::endl;
+                    }
+                    else {
+                        std::cout << "Failed to send satellite conversion to network" << std::endl;
+                    }
+                }
+                catch (const std::exception& e) {
+                    std::cerr << "Exception during network satellite conversion: " << e.what() << std::endl;
+                }
+            }
             else {
-                std::cout << "Cannot convert rocket to satellite - check fuel and altitude requirements" << std::endl;
+                std::cout << "Cannot convert rocket to satellite - check requirements" << std::endl;
             }
         }
         else {
-            std::cout << "Satellite conversion only available for rockets in single player mode" << std::endl;
+            std::cout << "Satellite conversion not available in current mode/state" << std::endl;
         }
     }
+    
+    void handleNetworkSatelliteConversions() {
+        if (!networkManager || !networkManager->hasPendingSatelliteConversion()) return;
 
+        try {
+            SatelliteConversionInfo conversionInfo = networkManager->getPendingSatelliteConversion();
+
+            std::cout << "Processing network satellite conversion from Player " << conversionInfo.playerID << std::endl;
+
+            // Create satellite from network data
+            SatelliteConversionConfig config;
+            config.customName = conversionInfo.satelliteName;
+
+            int satelliteID = satelliteManager->createSatellite(
+                conversionInfo.satellitePosition,
+                conversionInfo.satelliteVelocity,
+                config
+            );
+
+            if (satelliteID >= 0) {
+                // Set the fuel level for the networked satellite
+                Satellite* satellite = satelliteManager->getSatellite(satelliteID);
+                if (satellite) {
+                    satellite->setFuel(conversionInfo.satelliteFuel);
+                }
+
+                // If this conversion involved the local player, handle rocket respawn
+                if (localPlayer && localPlayer->getID() == conversionInfo.playerID) {
+                    // Create new rocket at the specified spawn position
+                    localPlayer->respawnAtPosition(conversionInfo.newRocketPosition);
+                }
+                // If it's a remote player, create/update their rocket position
+                else {
+                    // Find or create remote player
+                    Player* remotePlayer = nullptr;
+                    for (auto& player : remotePlayers) {
+                        if (player->getID() == conversionInfo.playerID) {
+                            remotePlayer = player.get();
+                            break;
+                        }
+                    }
+
+                    if (remotePlayer) {
+                        remotePlayer->respawnAtPosition(conversionInfo.newRocketPosition);
+                    }
+                }
+
+                std::cout << "Network satellite conversion completed - ID: " << satelliteID << std::endl;
+            }
+            else {
+                std::cout << "Failed to create satellite from network conversion" << std::endl;
+            }
+        }
+        catch (const std::exception& e) {
+            std::cerr << "Exception during network satellite conversion: " << e.what() << std::endl;
+        }
+    }
 
     sf::Vector2f findNearestPlanetSurface(sf::Vector2f position) {
         Planet* nearestPlanet = nullptr;
@@ -783,6 +886,7 @@ public:
     void handleFuelTransferStart(bool isIncrease) {
         if (isIncrease) {
             fuelIncreaseKeyPressed = true;
+
             if (currentState == GameState::SINGLE_PLAYER && vehicleManager &&
                 vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
                 Rocket* rocket = vehicleManager->getRocket();
@@ -792,12 +896,31 @@ public:
                 }
                 rocket->startFuelTransferIn(transferRate);
             }
+            else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) &&
+                localPlayer && localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+                Rocket* rocket = localPlayer->getVehicleManager()->getRocket();
+                float transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * rocket->getThrustLevel() * GameConstants::FUEL_TRANSFER_THRUST_MULTIPLIER;
+                if (transferRate < GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f) {
+                    transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f;
+                }
+                rocket->startFuelTransferIn(transferRate);
+            }
         }
         else {
             fuelDecreaseKeyPressed = true;
+
             if (currentState == GameState::SINGLE_PLAYER && vehicleManager &&
                 vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
                 Rocket* rocket = vehicleManager->getRocket();
+                float transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * rocket->getThrustLevel() * GameConstants::FUEL_TRANSFER_THRUST_MULTIPLIER;
+                if (transferRate < GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f) {
+                    transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f;
+                }
+                rocket->startFuelTransferOut(transferRate);
+            }
+            else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) &&
+                localPlayer && localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+                Rocket* rocket = localPlayer->getVehicleManager()->getRocket();
                 float transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * rocket->getThrustLevel() * GameConstants::FUEL_TRANSFER_THRUST_MULTIPLIER;
                 if (transferRate < GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f) {
                     transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f;
@@ -814,6 +937,10 @@ public:
         if (currentState == GameState::SINGLE_PLAYER && vehicleManager &&
             vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
             vehicleManager->getRocket()->stopFuelTransfer();
+        }
+        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) &&
+            localPlayer && localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+            localPlayer->getVehicleManager()->getRocket()->stopFuelTransfer();
         }
     }
 
@@ -894,6 +1021,14 @@ public:
         handleThrustLevelControls(deltaTime, true);
     }
 
+    void handleMultiplayerSatelliteInput() {
+        // Handle satellite conversion input for network multiplayer
+        if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
+            // The T key is already handled in handleGameEvents, but we could add additional
+            // satellite-specific input handling here if needed
+        }
+    }
+
     void handleSinglePlayerInput(float deltaTime) {
         // Thrust level controls
         handleThrustLevelControls(deltaTime, false);
@@ -968,6 +1103,10 @@ public:
         if (networkManager) {
             networkManager->update(deltaTime);
         }
+        // Handle network satellite conversions
+        if (networkManager) {
+            handleNetworkSatelliteConversions();
+        }
 
         // Update simulation
         gravitySimulator->update(deltaTime);
@@ -992,7 +1131,22 @@ public:
             }
             satelliteManager->setNearbyRockets(activeRockets);
         }
+        // SATELLITE SYSTEM: Update rocket references for network multiplayer
+        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER)) {
+            std::vector<Rocket*> networkRockets;
 
+            if (localPlayer && localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+                networkRockets.push_back(localPlayer->getVehicleManager()->getRocket());
+            }
+
+            for (auto& remotePlayer : remotePlayers) {
+                if (remotePlayer && remotePlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+                    networkRockets.push_back(remotePlayer->getVehicleManager()->getRocket());
+                }
+            }
+
+            satelliteManager->setNearbyRockets(networkRockets);
+        }
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
             splitScreenManager->update(deltaTime);
 
@@ -1025,7 +1179,7 @@ public:
 
         // Update UI Manager
         uiManager->update(currentState, vehicleManager.get(), splitScreenManager.get(),
-            localPlayer.get(), planets, networkManager.get());
+            localPlayer.get(), planets, networkManager.get(), satelliteManager.get());
     }
 
     // Fix the handleVehicleTransform method (it had incorrect logic)

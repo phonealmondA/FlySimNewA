@@ -28,6 +28,7 @@ enum class MessageType : uint8_t {
     PLAYER_SPAWN = 2,      // Player joining game
     PLAYER_DISCONNECT = 3, // Player leaving game
     TRANSFORM = 4,         // Transform requests
+    SATELLITE_CONVERSION = 6, // Satellite conversion events
     DISCONNECT = 5    
 };
 
@@ -52,6 +53,10 @@ struct PlayerState {
     int satelliteID = -1;
     float orbitAccuracy = 100.0f;
     bool needsMaintenance = false;
+    // Satellite conversion tracking
+    bool requestingSatelliteConversion = false;
+    int newSatelliteID = -1;
+    sf::Vector2f newRocketSpawnPos;
 };
 
 struct PlayerSpawnInfo {
@@ -59,6 +64,16 @@ struct PlayerSpawnInfo {
     sf::Vector2f spawnPosition;
     bool isHost = false;
 };
+struct SatelliteConversionInfo {
+    int playerID;
+    int satelliteID;
+    sf::Vector2f satellitePosition;
+    sf::Vector2f satelliteVelocity;
+    float satelliteFuel;
+    sf::Vector2f newRocketPosition;
+    std::string satelliteName;
+};
+
 
 class NetworkManager {
 private:
@@ -86,6 +101,10 @@ private:
     // Player spawn tracking
     PlayerSpawnInfo pendingSpawnInfo;
     bool hasNewSpawnInfo;
+    // Satellite conversion tracking
+    SatelliteConversionInfo pendingSatelliteConversion;
+    bool hasPendingConversion;
+
 
 public:
     NetworkManager();
@@ -111,6 +130,12 @@ public:
     bool sendSatelliteState(const PlayerState& satelliteState);
     bool receiveSatelliteState(int satelliteID, PlayerState& outState);
     void syncSatelliteStates(const std::vector<PlayerState>& satelliteStates);
+    // Satellite conversion synchronization
+    bool sendSatelliteConversion(const SatelliteConversionInfo& conversionInfo);
+    bool receiveSatelliteConversion(SatelliteConversionInfo& outInfo);
+    bool hasPendingSatelliteConversion() const;
+    SatelliteConversionInfo getPendingSatelliteConversion();
+
 
     // Player ID management
     int getLocalPlayerID() const { return localPlayerID; }
@@ -145,6 +170,9 @@ private:
     void deserializePlayerState(sf::Packet& packet, PlayerState& state);
     void serializePlayerSpawnInfo(sf::Packet& packet, const PlayerSpawnInfo& spawnInfo);
     void deserializePlayerSpawnInfo(sf::Packet& packet, PlayerSpawnInfo& spawnInfo);
+
+    void serializeSatelliteConversion(sf::Packet& packet, const SatelliteConversionInfo& conversionInfo);
+    void deserializeSatelliteConversion(sf::Packet& packet, SatelliteConversionInfo& conversionInfo);
 
     // Connection management
     void handleHeartbeat(float deltaTime);
