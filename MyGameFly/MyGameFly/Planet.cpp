@@ -27,6 +27,12 @@ void Planet::update(float deltaTime)
     shape.setPosition(position);
 }
 
+void Planet::setPosition(sf::Vector2f pos)
+{
+    position = pos;
+    shape.setPosition(position);
+}
+
 void Planet::draw(sf::RenderWindow& window)
 {
     // Draw the planet

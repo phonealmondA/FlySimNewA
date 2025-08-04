@@ -17,4 +17,5 @@ public:
     sf::Vector2f getPosition() const;
     sf::Vector2f getVelocity() const;
     void setVelocity(sf::Vector2f vel);
+    virtual void setPosition(sf::Vector2f pos);
 };

@@ -13,6 +13,7 @@ public:
 
     void update(float deltaTime) override;
     void draw(sf::RenderWindow& window) override;
+    void setPosition(sf::Vector2f pos) override;
 
     float getMass() const;
     float getRadius() const;
@@ -25,7 +26,8 @@ public:
     void drawVelocityVector(sf::RenderWindow& window, float scale = 1.0f);
 
     // Draw predicted orbit path
-    void drawOrbitPath(sf::RenderWindow& window, const std::vector<Planet*>& planets, float timeStep = 0.5f, int steps = 200);
+    void drawOrbitPath(sf::RenderWindow& window, const std::vector<Planet*>& planets,
+        float timeStep = 0.5f, int steps = 200);
 
     // FUEL COLLECTION METHODS
     void drawFuelCollectionRing(sf::RenderWindow& window, bool isActivelyCollecting = false);

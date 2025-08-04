@@ -19,3 +19,7 @@ void GameObject::setVelocity(sf::Vector2f vel)
 {
     velocity = vel;
 }
+void GameObject::setPosition(sf::Vector2f pos)
+{
+    position = pos;
+}
