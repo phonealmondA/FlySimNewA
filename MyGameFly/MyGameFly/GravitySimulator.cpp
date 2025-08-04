@@ -223,6 +223,7 @@ void GravitySimulator::update(float deltaTime)
                         sf::Vector2f normalizedDir = normalize(direction);
                         sf::Vector2f accel2 = normalizedDir * forceMagnitude / planet2->getMass();
                         planet2->setVelocity(planet2->getVelocity() + accel2 * deltaTime);
+                        // REMOVED: planet2->update(deltaTime); - This should happen after all forces are calculated
                     }
                 }
                 else {
@@ -241,7 +242,13 @@ void GravitySimulator::update(float deltaTime)
                 }
             }
         }
+
+        // FIXED: Update all planet positions after all gravitational forces have been calculated
+        for (size_t i = 1; i < planets.size(); i++) {  // Skip planet 0 (pinned in place)
+            planets[i]->update(deltaTime);
+        }
     }
+
     // Apply gravity to satellites from planets
     if (satelliteManager) {
         auto satellites = satelliteManager->getAllSatellites();
@@ -271,7 +278,6 @@ void GravitySimulator::update(float deltaTime)
             }
         }
     }
-
 
     // FUEL SYSTEM INTEGRATION: Process fuel collection for all game modes
     if (!players.empty()) {
@@ -347,7 +353,6 @@ void GravitySimulator::update(float deltaTime)
         }
     }
 }
-
 void GravitySimulator::updateSatelliteManagerWithPlayers() {
     if (!satelliteManager) return;
 
