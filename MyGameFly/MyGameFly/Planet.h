@@ -63,8 +63,7 @@ public:
     void requestStateSync() { stateChanged = true; }
 
     // Enhanced setters that trigger network sync
-    void setVelocity(sf::Vector2f vel) override;
-    void setMass(float newMass);  // Enhanced to trigger network sync
+    void setVelocity(sf::Vector2f vel);
     void setRadius(float newRadius);
 
     // Planet state conversion for network

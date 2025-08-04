@@ -14,7 +14,8 @@
 // Forward declarations
 class Player;
 class VehicleManager;
-
+struct SatelliteCreationInfo;  // Add this forward declaration
+struct PlayerState;  // Add this forward declaration
 // Satellite management statistics
 struct SatelliteNetworkStats {
     int totalSatellites = 0;
@@ -224,7 +225,6 @@ public:
     void addNearbyRocket(Rocket* rocket);
     void removeNearbyRocket(Rocket* rocket);
     void setNearbyRockets(const std::vector<Rocket*>& rocketList);
-    void updateRocketProximity();
 };
 
 #endif // SATELLITE_MANAGER_H

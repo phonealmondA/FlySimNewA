@@ -116,7 +116,6 @@ public:
     void updateStateFromVehicle();  // Update state from current vehicle
 
 
-    sf::Vector2f findNearestPlanetSurface() const;  // Find spawn point for new rocket
 
     // State management for networking
     PlayerState getState() const;
@@ -166,7 +165,6 @@ public:
 
     // Spawn point management
     sf::Vector2f getSpawnPosition() const { return spawnPosition; }
-    void respawnAtPosition(sf::Vector2f newSpawnPos);
 
 private:
     // Helper methods

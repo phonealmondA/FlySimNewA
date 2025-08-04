@@ -184,7 +184,6 @@ public:
     void requestNetworkSync() { needsNetworkSync = true; }
 
     // Enhanced drawing methods for multiplayer consistency
-    void drawWithConstantSize(sf::RenderWindow& window, float zoomLevel) override;
     void drawNetworkIndicator(sf::RenderWindow& window, float zoomLevel);  // Show owner info
     static float getConstantDisplaySize() { return GameConstants::SATELLITE_SIZE; }
 

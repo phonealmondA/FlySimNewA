@@ -720,52 +720,7 @@ Rocket* Player::getRocketForNetworkTargeting() const {
     return vehicleManager->getRocket();
 }
 
-void Player::respawnAtPosition(sf::Vector2f newPosition) {
-    spawnPosition = newPosition;
 
-    if (vehicleManager) {
-        // Create new rocket at the specified position
-        vehicleManager = std::make_unique<VehicleManager>(newPosition, planets, satelliteManager);
-
-        if (vehicleManager->getRocket()) {
-            vehicleManager->getRocket()->setNearbyPlanets(planets);
-        }
-    }
-
-    std::cout << "Player " << playerName << " respawned at (" << newPosition.x << ", " << newPosition.y << ")" << std::endl;
-}
-
-sf::Vector2f Player::findNearestPlanetSurface() const {
-    if (!vehicleManager || !vehicleManager->getRocket()) {
-        return spawnPosition;
-    }
-
-    sf::Vector2f currentPos = vehicleManager->getRocket()->getPosition();
-    Planet* nearestPlanet = nullptr;
-    float minDistance = std::numeric_limits<float>::max();
-
-    for (Planet* planet : planets) {
-        if (!planet) continue;
-        sf::Vector2f direction = planet->getPosition() - currentPos;
-        float dist = std::sqrt(direction.x * direction.x + direction.y * direction.y);
-        if (dist < minDistance) {
-            minDistance = dist;
-            nearestPlanet = planet;
-        }
-    }
-
-    if (nearestPlanet) {
-        sf::Vector2f direction = currentPos - nearestPlanet->getPosition();
-        float length = std::sqrt(direction.x * direction.x + direction.y * direction.y);
-        if (length > 0) {
-            direction /= length; // normalize
-        }
-        return nearestPlanet->getPosition() + direction * (nearestPlanet->getRadius() + GameConstants::ROCKET_SIZE + 10.0f);
-    }
-
-    // Fallback to spawn position
-    return spawnPosition;
-}
 
 PlayerState Player::createPlayerState() const {
     PlayerState state;
