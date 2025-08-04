@@ -279,6 +279,7 @@ public:
         std::cout << "LAN Multiplayer initialized with satellite system!" << std::endl;
         std::cout << "Use 'T' to convert rocket to satellite" << std::endl;
     }
+
     void initializeOnlineMultiplayer(const ConnectionInfo& connectionInfo) {
         // Create planets
         planet = std::make_unique<Planet>(
@@ -303,24 +304,29 @@ public:
         // Initialize network manager for online play
         networkManager = std::make_unique<NetworkManager>();
 
-        // FIXED: Actually use ConnectionInfo to determine host vs client
+        // FIXED: Use the actual menu choice instead of IP-based detection
         bool connected = false;
         bool isHost = false;
 
-        // Determine if we're hosting or joining based on IP address
-        if (connectionInfo.ipAddress.empty() ||
-            connectionInfo.ipAddress == "localhost" ||
-            connectionInfo.ipAddress == "127.0.0.1") {
-            // Empty or localhost IP means we're hosting
+        // Get the user's actual choice from the online menu
+        OnlineMode selectedMode = onlineMenu->getSelectedMode();
+
+        if (selectedMode == OnlineMode::HOST_GAME) {
+            // User chose to host
             std::cout << "Starting as HOST on port " << connectionInfo.port << std::endl;
             connected = networkManager->startAsHost(connectionInfo.port);
             isHost = true;
         }
-        else {
-            // Valid remote IP means we're joining
+        else if (selectedMode == OnlineMode::JOIN_GAME) {
+            // User chose to join
             std::cout << "Connecting to " << connectionInfo.ipAddress << ":" << connectionInfo.port << std::endl;
             connected = networkManager->connectAsClient(connectionInfo.ipAddress, connectionInfo.port);
             isHost = false;
+        }
+        else {
+            std::cout << "Invalid online mode selected" << std::endl;
+            handleEscapeKey();
+            return;
         }
 
         if (!connected) {
@@ -331,37 +337,52 @@ public:
 
         // Wait a moment for client ID assignment if we're a client
         if (!isHost) {
-            sf::sleep(sf::milliseconds(100)); // Brief wait for ID assignment
-            networkManager->update(0.1f); // Process any pending messages
+            sf::sleep(sf::milliseconds(100));
         }
 
-        // Create local player with satellite manager reference
-        sf::Vector2f spawnPos(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y - 150.0f);
-        localPlayer = std::make_unique<Player>(networkManager->getLocalPlayerID(), spawnPos,
-            PlayerType::LOCAL, planets, satelliteManager.get());
-
-        // Setup gravity simulator with satellite manager
+        // Initialize gravity simulator
         gravitySimulator = std::make_unique<GravitySimulator>();
         gravitySimulator->addPlanet(planet.get());
         gravitySimulator->addPlanet(planet2.get());
-        gravitySimulator->addSatelliteManager(satelliteManager.get());
+
+        // Create players based on network role
+        if (isHost) {
+            // Host is Player 1
+            localPlayer = std::make_unique<Player>(0,
+                sf::Vector2f(GameConstants::MAIN_PLANET_X + 120.f, GameConstants::MAIN_PLANET_Y),
+                PlayerType::LOCAL, planets, satelliteManager.get());
+
+            // Add a remote player slot for when client connects
+            auto remotePlayer = std::make_unique<Player>(1,
+                sf::Vector2f(GameConstants::MAIN_PLANET_X - 120.f, GameConstants::MAIN_PLANET_Y),
+                PlayerType::REMOTE, planets, satelliteManager.get());
+            remotePlayers.push_back(std::move(remotePlayer));
+        }
+        else {
+            // Client is Player 2  
+            localPlayer = std::make_unique<Player>(1,
+                sf::Vector2f(GameConstants::MAIN_PLANET_X - 120.f, GameConstants::MAIN_PLANET_Y),
+                PlayerType::LOCAL, planets, satelliteManager.get());
+
+            // Add remote player for the host
+            auto remotePlayer = std::make_unique<Player>(0,
+                sf::Vector2f(GameConstants::MAIN_PLANET_X + 120.f, GameConstants::MAIN_PLANET_Y),
+                PlayerType::REMOTE, planets, satelliteManager.get());
+            remotePlayers.push_back(std::move(remotePlayer));
+        }
+
+        // Add players to gravity simulator
         gravitySimulator->addPlayer(localPlayer.get());
+        for (auto& remotePlayer : remotePlayers) {
+            gravitySimulator->addPlayer(remotePlayer.get());
+        }
 
-        // Clear old managers
-        vehicleManager.reset();
-        splitScreenManager.reset();
+        currentState = GameState::ONLINE_MULTIPLAYER;
 
-        // Initialize view
-        zoomLevel = 1.0f;
-        targetZoom = 1.0f;
-        gameView.setCenter(spawnPos);
-
-        std::cout << "Online Multiplayer initialized with satellite system!" << std::endl;
-        std::cout << "Local Player ID: " << networkManager->getLocalPlayerID() << std::endl;
+        std::cout << "Online multiplayer initialized successfully!" << std::endl;
+        std::cout << "Controls: WASD for thrust, Space for boost" << std::endl;
         std::cout << "Use 'T' to convert rocket to satellite" << std::endl;
     }
-
-
 
 
 
