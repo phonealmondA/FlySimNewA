@@ -279,7 +279,6 @@ public:
         std::cout << "LAN Multiplayer initialized with satellite system!" << std::endl;
         std::cout << "Use 'T' to convert rocket to satellite" << std::endl;
     }
-
     void initializeOnlineMultiplayer(const ConnectionInfo& connectionInfo) {
         // Create planets
         planet = std::make_unique<Planet>(
@@ -303,11 +302,37 @@ public:
 
         // Initialize network manager for online play
         networkManager = std::make_unique<NetworkManager>();
-        // TODO: Implement online connection with connectionInfo
-        if (!networkManager->attemptAutoConnect()) {
+
+        // FIXED: Actually use ConnectionInfo to determine host vs client
+        bool connected = false;
+        bool isHost = false;
+
+        // Determine if we're hosting or joining based on IP address
+        if (connectionInfo.ipAddress.empty() ||
+            connectionInfo.ipAddress == "localhost" ||
+            connectionInfo.ipAddress == "127.0.0.1") {
+            // Empty or localhost IP means we're hosting
+            std::cout << "Starting as HOST on port " << connectionInfo.port << std::endl;
+            connected = networkManager->startAsHost(connectionInfo.port);
+            isHost = true;
+        }
+        else {
+            // Valid remote IP means we're joining
+            std::cout << "Connecting to " << connectionInfo.ipAddress << ":" << connectionInfo.port << std::endl;
+            connected = networkManager->connectAsClient(connectionInfo.ipAddress, connectionInfo.port);
+            isHost = false;
+        }
+
+        if (!connected) {
             std::cout << "Failed to establish online connection" << std::endl;
             handleEscapeKey();
             return;
+        }
+
+        // Wait a moment for client ID assignment if we're a client
+        if (!isHost) {
+            sf::sleep(sf::milliseconds(100)); // Brief wait for ID assignment
+            networkManager->update(0.1f); // Process any pending messages
         }
 
         // Create local player with satellite manager reference
@@ -322,16 +347,22 @@ public:
         gravitySimulator->addSatelliteManager(satelliteManager.get());
         gravitySimulator->addPlayer(localPlayer.get());
 
+        // Clear old managers
         vehicleManager.reset();
         splitScreenManager.reset();
 
+        // Initialize view
         zoomLevel = 1.0f;
         targetZoom = 1.0f;
         gameView.setCenter(spawnPos);
 
         std::cout << "Online Multiplayer initialized with satellite system!" << std::endl;
+        std::cout << "Local Player ID: " << networkManager->getLocalPlayerID() << std::endl;
         std::cout << "Use 'T' to convert rocket to satellite" << std::endl;
     }
+
+
+
 
 
     void handleMenuEvents(const sf::Event& event) {
@@ -1098,55 +1129,50 @@ public:
         }
     }
 
+
     void updateGame(float deltaTime) {
-        // Update network manager if active
-        if (networkManager) {
-            networkManager->update(deltaTime);
-        }
-        // Handle network satellite conversions
-        if (networkManager) {
-            handleNetworkSatelliteConversions();
+        // Update gravity simulation
+        if (gravitySimulator) {
+            gravitySimulator->update(deltaTime);
         }
 
-        // Update simulation
-        gravitySimulator->update(deltaTime);
-        planet->update(deltaTime);
-        planet2->update(deltaTime);
+        // Update satellite system
+        if (satelliteManager) {
+            satelliteManager->update(deltaTime);
 
-        // SATELLITE SYSTEM: Update satellites
-        satelliteManager->update(deltaTime);
-
-        // SATELLITE SYSTEM: Update rocket references for single player
-        if (currentState == GameState::SINGLE_PLAYER && vehicleManager) {
-            satelliteManager->setNearbyRockets({ vehicleManager->getRocket() });
-        }
-        // SATELLITE SYSTEM: Update rocket references for split screen
-        else if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-            std::vector<Rocket*> activeRockets;
-            if (splitScreenManager->getPlayer1()->getActiveVehicleType() == VehicleType::ROCKET) {
-                activeRockets.push_back(splitScreenManager->getPlayer1()->getRocket());
+            // SATELLITE SYSTEM: Update rocket references for single player
+            if (currentState == GameState::SINGLE_PLAYER && vehicleManager) {
+                satelliteManager->setNearbyRockets({ vehicleManager->getRocket() });
             }
-            if (splitScreenManager->getPlayer2()->getActiveVehicleType() == VehicleType::ROCKET) {
-                activeRockets.push_back(splitScreenManager->getPlayer2()->getRocket());
-            }
-            satelliteManager->setNearbyRockets(activeRockets);
-        }
-        // SATELLITE SYSTEM: Update rocket references for network multiplayer
-        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER)) {
-            std::vector<Rocket*> networkRockets;
-
-            if (localPlayer && localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
-                networkRockets.push_back(localPlayer->getVehicleManager()->getRocket());
-            }
-
-            for (auto& remotePlayer : remotePlayers) {
-                if (remotePlayer && remotePlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
-                    networkRockets.push_back(remotePlayer->getVehicleManager()->getRocket());
+            // SATELLITE SYSTEM: Update rocket references for split screen
+            else if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+                std::vector<Rocket*> activeRockets;
+                if (splitScreenManager->getPlayer1()->getActiveVehicleType() == VehicleType::ROCKET) {
+                    activeRockets.push_back(splitScreenManager->getPlayer1()->getRocket());
                 }
+                if (splitScreenManager->getPlayer2()->getActiveVehicleType() == VehicleType::ROCKET) {
+                    activeRockets.push_back(splitScreenManager->getPlayer2()->getRocket());
+                }
+                satelliteManager->setNearbyRockets(activeRockets);
             }
+            // SATELLITE SYSTEM: Update rocket references for network multiplayer
+            else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER)) {
+                std::vector<Rocket*> networkRockets;
 
-            satelliteManager->setNearbyRockets(networkRockets);
+                if (localPlayer && localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+                    networkRockets.push_back(localPlayer->getVehicleManager()->getRocket());
+                }
+
+                for (auto& remotePlayer : remotePlayers) {
+                    if (remotePlayer && remotePlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+                        networkRockets.push_back(remotePlayer->getVehicleManager()->getRocket());
+                    }
+                }
+
+                satelliteManager->setNearbyRockets(networkRockets);
+            }
         }
+
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
             splitScreenManager->update(deltaTime);
 
@@ -1155,11 +1181,57 @@ public:
             }
         }
         else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
-            localPlayer->update(deltaTime);
+            // NETWORK MULTIPLAYER: Updated section with remote player handling
 
-            for (auto& remotePlayer : remotePlayers) {
-                remotePlayer->update(deltaTime);
+            // Update network
+            if (networkManager) {
+                networkManager->update(deltaTime);
+
+                // MISSING CODE: Check for new remote players joining
+                if (networkManager->hasNewPlayer()) {
+                    PlayerSpawnInfo spawnInfo = networkManager->getNewPlayerInfo();
+
+                    // Don't create a player object for ourselves
+                    if (spawnInfo.playerID != networkManager->getLocalPlayerID()) {
+                        auto remotePlayer = std::make_unique<Player>(
+                            spawnInfo.playerID,
+                            spawnInfo.spawnPosition,
+                            PlayerType::REMOTE,
+                            planets,
+                            satelliteManager.get()
+                        );
+
+                        remotePlayers.push_back(std::move(remotePlayer));
+
+                        // Add remote player to gravity simulator
+                        if (gravitySimulator) {
+                            gravitySimulator->addPlayer(remotePlayers.back().get());
+                        }
+
+                        std::cout << "Created remote player " << spawnInfo.playerID
+                            << " at position (" << spawnInfo.spawnPosition.x
+                            << ", " << spawnInfo.spawnPosition.y << ")" << std::endl;
+                    }
+                }
+
+                // Send our current state to other players
+                if (localPlayer) {
+                    PlayerState localState = localPlayer->getState();
+                    networkManager->sendPlayerState(localState);
+                }
+
+                // Update remote players with received network states
+                for (auto& remotePlayer : remotePlayers) {
+                    PlayerState remoteState;
+                    if (networkManager->receivePlayerState(remotePlayer->getID(), remoteState)) {
+                        remotePlayer->applyState(remoteState);
+                    }
+                    remotePlayer->update(deltaTime);
+                }
             }
+
+            // Update local player
+            localPlayer->update(deltaTime);
 
             if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
                 gameView.setCenter(localPlayer->getPosition());

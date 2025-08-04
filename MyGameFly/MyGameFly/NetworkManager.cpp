@@ -77,6 +77,49 @@ bool NetworkManager::connectAsClient() {
     return false;
 }
 
+
+bool NetworkManager::startAsHost(unsigned short port) {
+    listener = std::make_unique<sf::TcpListener>();
+
+    if (listener->listen(port) != sf::Socket::Status::Done) {
+        std::cout << "Network: Failed to start host on port " << port << std::endl;
+        return false;
+    }
+
+    listener->setBlocking(false);
+    role = NetworkRole::HOST;
+    status = ConnectionStatus::CONNECTED;
+    clientConnected = false;
+    localPlayerID = 0;  // Host is always Player 0
+    nextPlayerID = 1;   // Next client will be Player 1
+
+    std::cout << "Network: Host started on port " << port << std::endl;
+    return true;
+}
+
+bool NetworkManager::connectAsClient(const std::string& ipAddress, unsigned short port) {
+    serverSocket = std::make_unique<sf::TcpSocket>();
+
+    // FIXED: Convert string IP to sf::IpAddress for SFML 3.0
+    sf::IpAddress targetIP = sf::IpAddress::resolve(ipAddress).value_or(sf::IpAddress::Any);
+    sf::Socket::Status result = serverSocket->connect(targetIP, port, sf::seconds(3.0f));
+
+    if (result == sf::Socket::Status::Done) {
+        role = NetworkRole::CLIENT;
+        status = ConnectionStatus::CONNECTED;
+        serverSocket->setBlocking(false);
+        localPlayerID = -1;  // Will be assigned by host
+
+        std::cout << "Network: Client connected to " << ipAddress << ":" << port << std::endl;
+        sendHello();
+        return true;
+    }
+
+    std::cout << "Network: Failed to connect to " << ipAddress << ":" << port << std::endl;
+    serverSocket.reset();
+    return false;
+}
+
 void NetworkManager::assignClientPlayerID() {
     if (role != NetworkRole::HOST || !clientConnected) return;
 

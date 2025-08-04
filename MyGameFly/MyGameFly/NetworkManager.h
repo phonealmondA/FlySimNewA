@@ -112,6 +112,8 @@ public:
 
     // Connection management
     bool attemptAutoConnect();
+    bool startAsHost(unsigned short port);
+    bool connectAsClient(const std::string& ipAddress, unsigned short port);
     void update(float deltaTime);
     void disconnect();
 
@@ -160,7 +162,6 @@ private:
     void resetConnection();
     bool startAsHost();
     bool connectAsClient();
-
     // Message handling
     bool sendMessage(MessageType type, sf::Packet& packet);
     bool receiveMessage(MessageType& outType, sf::Packet& outPacket);
