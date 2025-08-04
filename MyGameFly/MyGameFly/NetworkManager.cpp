@@ -210,6 +210,31 @@ void NetworkManager::update(float deltaTime) {
             std::cout << "Network: Received satellite conversion from Player " << conversionInfo.playerID << std::endl;
             break;
         }
+        case MessageType::SATELLITE_STATE: {
+            PlayerState satelliteState;
+            deserializePlayerState(packet, satelliteState);
+            if (satelliteState.isSatellite) {
+                lastReceivedSatelliteStates[satelliteState.satelliteID] = satelliteState;
+            }
+            break;
+        }
+        case MessageType::SATELLITE_CREATED: {
+            SatelliteCreationInfo creationInfo;
+            deserializeSatelliteCreation(packet, creationInfo);
+            pendingSatelliteCreations.push_back(creationInfo);
+            hasPendingSatelliteCreations = true;
+            std::cout << "Network: Received satellite creation (ID: " << creationInfo.satelliteID
+                << ") from Player " << creationInfo.ownerPlayerID << std::endl;
+            break;
+        }
+        case MessageType::PLANET_STATE: {
+            PlanetState planetState;
+            deserializePlanetState(packet, planetState);
+            lastReceivedPlanetStates[planetState.planetID] = planetState;
+            pendingPlanetUpdates.push_back(planetState);
+            hasPendingPlanetUpdates = true;
+            break;
+        }
         case MessageType::DISCONNECT:
             std::cout << "Network: Remote player disconnected" << std::endl;
             disconnect();
@@ -454,13 +479,13 @@ void NetworkManager::resetConnection() {
     disconnect();
 }
 
-bool NetworkManager::sendSatelliteCreated(int satelliteID, sf::Vector2f position, sf::Vector2f velocity, float fuel) {
+
+bool NetworkManager::sendSatelliteCreated(const SatelliteCreationInfo& creationInfo) {
     if (!isConnected()) return false;
 
     sf::Packet packet;
-    packet << satelliteID << position.x << position.y << velocity.x << velocity.y << fuel;
-
-    return sendMessage(MessageType::PLAYER_SPAWN, packet); // Reuse spawn message type
+    serializeSatelliteCreation(packet, creationInfo);
+    return sendMessage(MessageType::SATELLITE_CREATED, packet);
 }
 
 bool NetworkManager::sendSatelliteState(const PlayerState& satelliteState) {
@@ -535,4 +560,103 @@ void NetworkManager::deserializeSatelliteConversion(sf::Packet& packet, Satellit
     packet >> conversionInfo.satelliteFuel;
     packet >> conversionInfo.newRocketPosition.x >> conversionInfo.newRocketPosition.y;
     packet >> conversionInfo.satelliteName;
+}
+
+// Planet state synchronization methods
+bool NetworkManager::sendPlanetState(const PlanetState& planetState) {
+    if (!isConnected()) return false;
+
+    sf::Packet packet;
+    serializePlanetState(packet, planetState);
+    return sendMessage(MessageType::PLANET_STATE, packet);
+}
+
+bool NetworkManager::receivePlanetState(int planetID, PlanetState& outState) {
+    if (!isConnected()) return false;
+
+    auto it = lastReceivedPlanetStates.find(planetID);
+    if (it != lastReceivedPlanetStates.end()) {
+        outState = it->second;
+        return true;
+    }
+    return false;
+}
+
+void NetworkManager::syncPlanetStates(const std::vector<PlanetState>& planetStates) {
+    if (!isConnected()) return;
+
+    for (const auto& state : planetStates) {
+        sendPlanetState(state);
+    }
+    std::cout << "Synchronized " << planetStates.size() << " planet states" << std::endl;
+}
+
+bool NetworkManager::hasPendingPlanetState() const {
+    return hasPendingPlanetUpdates;
+}
+
+std::vector<PlanetState> NetworkManager::getPendingPlanetUpdates() {
+    hasPendingPlanetUpdates = false;
+    std::vector<PlanetState> updates = pendingPlanetUpdates;
+    pendingPlanetUpdates.clear();
+    return updates;
+}
+
+// Enhanced satellite management methods
+bool NetworkManager::receiveSatelliteCreation(SatelliteCreationInfo& outInfo) {
+    if (pendingSatelliteCreations.empty()) return false;
+
+    outInfo = pendingSatelliteCreations.front();
+    pendingSatelliteCreations.erase(pendingSatelliteCreations.begin());
+
+    if (pendingSatelliteCreations.empty()) {
+        hasPendingSatelliteCreations = false;
+    }
+
+    return true;
+}
+
+bool NetworkManager::hasPendingSatelliteCreation() const {
+    return hasPendingSatelliteCreations;
+}
+
+std::vector<SatelliteCreationInfo> NetworkManager::getPendingSatelliteCreations() {
+    hasPendingSatelliteCreations = false;
+    std::vector<SatelliteCreationInfo> creations = pendingSatelliteCreations;
+    pendingSatelliteCreations.clear();
+    return creations;
+}
+
+// Planet state serialization
+void NetworkManager::serializePlanetState(sf::Packet& packet, const PlanetState& planetState) {
+    packet << planetState.planetID;
+    packet << planetState.position.x << planetState.position.y;
+    packet << planetState.velocity.x << planetState.velocity.y;
+    packet << planetState.mass << planetState.radius;
+    packet << planetState.color.r << planetState.color.g << planetState.color.b << planetState.color.a;
+}
+
+void NetworkManager::deserializePlanetState(sf::Packet& packet, PlanetState& planetState) {
+    packet >> planetState.planetID;
+    packet >> planetState.position.x >> planetState.position.y;
+    packet >> planetState.velocity.x >> planetState.velocity.y;
+    packet >> planetState.mass >> planetState.radius;
+    packet >> planetState.color.r >> planetState.color.g >> planetState.color.b >> planetState.color.a;
+}
+
+// Satellite creation serialization  
+void NetworkManager::serializeSatelliteCreation(sf::Packet& packet, const SatelliteCreationInfo& creationInfo) {
+    packet << creationInfo.satelliteID << creationInfo.ownerPlayerID;
+    packet << creationInfo.position.x << creationInfo.position.y;
+    packet << creationInfo.velocity.x << creationInfo.velocity.y;
+    packet << creationInfo.currentFuel << creationInfo.maxFuel;
+    packet << creationInfo.name;
+}
+
+void NetworkManager::deserializeSatelliteCreation(sf::Packet& packet, SatelliteCreationInfo& creationInfo) {
+    packet >> creationInfo.satelliteID >> creationInfo.ownerPlayerID;
+    packet >> creationInfo.position.x >> creationInfo.position.y;
+    packet >> creationInfo.velocity.x >> creationInfo.velocity.y;
+    packet >> creationInfo.currentFuel >> creationInfo.maxFuel;
+    packet >> creationInfo.name;
 }

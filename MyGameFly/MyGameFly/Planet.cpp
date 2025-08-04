@@ -4,7 +4,9 @@
 #include <cmath>
 
 Planet::Planet(sf::Vector2f pos, float radius, float mass, sf::Color color)
-    : GameObject(pos, { 0, 0 }, color), mass(mass)
+    : GameObject(pos, { 0, 0 }, color), mass(mass), planetID(-1), isNetworkPlanet(false),
+    stateChanged(false), lastNetworkUpdateTime(0.0f), lastNetworkPosition(pos),
+    lastNetworkVelocity({ 0, 0 }), lastNetworkMass(mass), networkSyncInterval(1.0f)
 {
     // If a specific radius was provided, use it
     if (radius > 0) {
@@ -20,11 +22,19 @@ Planet::Planet(sf::Vector2f pos, float radius, float mass, sf::Color color)
     shape.setOrigin({ this->radius, this->radius });
     shape.setPosition(position);
 }
-
 void Planet::update(float deltaTime)
 {
     position += velocity * deltaTime;
     shape.setPosition(position);
+
+    // Update network synchronization timer
+    lastNetworkUpdateTime += deltaTime;
+
+    // Request network sync if enough time has passed and this isn't a network planet
+    if (!isNetworkPlanet && lastNetworkUpdateTime >= networkSyncInterval && stateChanged) {
+        // The SatelliteManager or NetworkManager will handle the actual sending
+        lastNetworkUpdateTime = 0.0f;
+    }
 }
 
 void Planet::setPosition(sf::Vector2f pos)
@@ -56,10 +66,42 @@ float Planet::getRadius() const
 
 void Planet::setMass(float newMass)
 {
-    mass = newMass;
-    updateRadiusFromMass();
+    if (std::abs(mass - newMass) > 0.01f) {  // Only update if change is significant
+        mass = newMass;
+        updateRadiusFromMass();
+
+        // Trigger network synchronization for non-network planets
+        if (!isNetworkPlanet) {
+            requestStateSync();
+        }
+    }
 }
 
+void Planet::setRadius(float newRadius) {
+    if (std::abs(radius - newRadius) > 0.01f) {  // Only update if change is significant
+        radius = newRadius;
+
+        // Update the visual shape
+        shape.setRadius(radius);
+        shape.setOrigin({ radius, radius });
+
+        // Trigger network synchronization for non-network planets
+        if (!isNetworkPlanet) {
+            requestStateSync();
+        }
+    }
+}
+
+void Planet::setVelocity(sf::Vector2f vel) {
+    if (distance(velocity, vel) > 0.01f) {  // Only update if change is significant
+        velocity = vel;
+
+        // Trigger network synchronization for non-network planets  
+        if (!isNetworkPlanet) {
+            requestStateSync();
+        }
+    }
+}
 void Planet::updateRadiusFromMass()
 {
     // Use cube root relationship between mass and radius
@@ -90,41 +132,52 @@ void Planet::drawFuelCollectionRing(sf::RenderWindow& window, bool isActivelyCol
     // Calculate ring radius
     float ringRadius = getFuelCollectionRange();
 
-    // Choose color based on collection status
+    // Choose color based on collection status and network ownership
     sf::Color ringColor = isActivelyCollecting ?
-        GameConstants::FUEL_RING_ACTIVE_COLOR :
-        GameConstants::FUEL_RING_COLOR;
+        GameConstants::FUEL_COLLECTION_ACTIVE_COLOR :
+        GameConstants::FUEL_COLLECTION_AVAILABLE_COLOR;
 
-    // Create ring using CircleShape with transparent fill
+    // Modify color if this is a network planet to distinguish ownership
+    if (isNetworkPlanet) {
+        ringColor.a = 128;  // Make network planets' rings semi-transparent
+    }
+
+    // Create ring shape
     sf::CircleShape ring;
     ring.setRadius(ringRadius);
-    ring.setPosition(sf::Vector2f(position.x - ringRadius, position.y - ringRadius));
+    ring.setPosition({ position.x - ringRadius, position.y - ringRadius });
     ring.setFillColor(sf::Color::Transparent);
     ring.setOutlineColor(ringColor);
-    ring.setOutlineThickness(GameConstants::FUEL_RING_THICKNESS);
+    ring.setOutlineThickness(2.0f);
 
-    // Draw the ring
     window.draw(ring);
 
-    // For active collection, add a pulsing inner ring effect
-    if (isActivelyCollecting) {
-        // Create a smaller, more opaque inner ring
-        float innerRingRadius = ringRadius * 0.8f;
-        sf::CircleShape innerRing;
-        innerRing.setRadius(innerRingRadius);
-        innerRing.setPosition(sf::Vector2f(position.x - innerRingRadius, position.y - innerRingRadius));
-        innerRing.setFillColor(sf::Color::Transparent);
-
-        // Make the inner ring more vibrant
-        sf::Color innerRingColor = GameConstants::FUEL_RING_ACTIVE_COLOR;
-        innerRingColor.a = 255;  // Full opacity
-        innerRing.setOutlineColor(innerRingColor);
-        innerRing.setOutlineThickness(GameConstants::FUEL_RING_THICKNESS * 0.5f);
-
-        window.draw(innerRing);
+    // Draw network indicator if this is a network planet
+    if (isNetworkPlanet) {
+        drawNetworkIndicator(window);
     }
 }
 
+void Planet::drawNetworkIndicator(sf::RenderWindow& window) {
+    if (!isNetworkPlanet || planetID < 0) return;
+
+    // Draw a small indicator showing this is a network-synced planet
+    float indicatorSize = radius * 0.1f;
+
+    sf::CircleShape networkIndicator;
+    networkIndicator.setRadius(indicatorSize);
+    networkIndicator.setPosition(sf::Vector2f(
+        position.x + radius - indicatorSize,
+        position.y - radius - indicatorSize
+    ));
+
+    // Use a distinct color for network indicators
+    networkIndicator.setFillColor(sf::Color(255, 255, 0, 180));  // Semi-transparent yellow
+    networkIndicator.setOutlineColor(sf::Color::Black);
+    networkIndicator.setOutlineThickness(1.0f);
+
+    window.draw(networkIndicator);
+}
 void Planet::drawVelocityVector(sf::RenderWindow& window, float scale)
 {
     sf::VertexArray line(sf::PrimitiveType::LineStrip);
@@ -202,4 +255,77 @@ void Planet::drawOrbitPath(sf::RenderWindow& window, const std::vector<Planet*>&
 
     // Draw the trajectory
     window.draw(trajectory);
+}
+
+// Network synchronization methods
+void Planet::updateFromNetworkState(sf::Vector2f netPosition, sf::Vector2f netVelocity, float netMass, float netRadius) {
+    if (!isNetworkPlanet) return;
+
+    // Smooth interpolation for network updates to avoid jittery movement
+    float interpolationFactor = 0.1f;  // Adjust for smoother/snappier updates
+
+    position = position + (netPosition - position) * interpolationFactor;
+    velocity = velocity + (netVelocity - velocity) * interpolationFactor;
+
+    // Update mass and radius directly (more critical for gameplay)
+    if (std::abs(mass - netMass) > 0.01f) {
+        mass = netMass;
+        updateRadiusFromMass();
+    }
+
+    if (std::abs(radius - netRadius) > 0.01f) {
+        radius = netRadius;
+        shape.setRadius(radius);
+        shape.setOrigin({ radius, radius });
+    }
+
+    // Update shape position
+    shape.setPosition(position);
+
+    lastNetworkPosition = netPosition;
+    lastNetworkVelocity = netVelocity;
+    lastNetworkMass = netMass;
+    lastNetworkUpdateTime = 0.0f;  // Reset update timer
+
+    std::cout << "Updated planet " << planetID << " from network state (Mass: " << mass << ")" << std::endl;
+}
+
+struct PlanetState Planet::createPlanetState() const {
+    struct PlanetState state;
+    state.planetID = planetID;
+    state.position = position;
+    state.velocity = velocity;
+    state.mass = mass;
+    state.radius = radius;
+    state.color = color;
+    return state;
+}
+
+void Planet::applyPlanetState(const struct PlanetState& state) {
+    planetID = state.planetID;
+
+    // Don't interpolate if this is the first network update
+    if (isNetworkPlanet) {
+        updateFromNetworkState(state.position, state.velocity, state.mass, state.radius);
+    }
+    else {
+        // Direct assignment for first-time network planets
+        position = state.position;
+        velocity = state.velocity;
+        mass = state.mass;
+        radius = state.radius;
+        color = state.color;
+
+        // Update visual shape
+        shape.setRadius(radius);
+        shape.setOrigin({ radius, radius });
+        shape.setPosition(position);
+        shape.setFillColor(color);
+
+        isNetworkPlanet = true;
+    }
+
+    lastNetworkPosition = state.position;
+    lastNetworkVelocity = state.velocity;
+    lastNetworkMass = state.mass;
 }

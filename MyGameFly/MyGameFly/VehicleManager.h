@@ -13,6 +13,10 @@ enum class VehicleType {
 class SatelliteManager;
 class VehicleManager {
 private:
+    // Network multiplayer support - NEW
+    bool isNetworkMultiplayerMode;
+    int playerID;
+    class NetworkManager* networkManager;
     std::unique_ptr<Rocket> rocket;
     std::unique_ptr<Car> car;
     VehicleType activeVehicle;
@@ -46,4 +50,21 @@ public:
     int convertRocketToSatellite();
     sf::Vector2f findNearestPlanetSurface() const;
     void updateSatelliteManager();
+
+    // Network multiplayer support - NEW
+    void setNetworkMode(bool enabled, int playerIdx, class NetworkManager* netManager);
+    bool isInNetworkMode() const;
+    int getPlayerID() const;
+
+    // Network satellite conversion
+    int convertRocketToSatelliteNetwork();
+    void handleNetworkSatelliteCreation(const struct SatelliteCreationInfo& creationInfo);
+    void syncNetworkSatellites();
+
+    // Network rocket targeting for satellites
+    void updateSatelliteManagerNetwork();
+    void removeFromNetworkTargeting();
+    void updateNetworkRocketTargeting();
+    void setAllNetworkRockets(const std::vector<Rocket*>& allNetworkRockets);
+    Rocket* getRocketForNetworkTargeting() const;
 };

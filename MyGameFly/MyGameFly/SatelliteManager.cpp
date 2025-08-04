@@ -12,7 +12,8 @@ SatelliteManager::SatelliteManager()
     globalMaintenanceInterval(5.0f), globalOrbitTolerance(50.0f),
     enableAutomaticMaintenance(true), enableAutomaticCollection(true),
     collectionEfficiency(1.0f), showOrbitPaths(true), showTargetOrbitPaths(false),
-    showFuelTransferLines(true), showMaintenanceBurns(true), showStatusIndicators(true)
+    showFuelTransferLines(true), showMaintenanceBurns(true), showStatusIndicators(true),
+    networkMultiplayerMode(false), networkManager(nullptr)
 {
     transferNetwork = std::make_unique<FuelTransferNetwork>();
     networkStats.reset();
@@ -23,20 +24,31 @@ SatelliteManager::SatelliteManager()
 void SatelliteManager::update(float deltaTime) {
     timeSinceStatsUpdate += deltaTime;
 
-    // Update all satellites
+    // Handle network updates first if in network mode
+    if (networkMultiplayerMode && networkManager) {
+        syncNetworkSatellites();
+        handleNetworkPlanetUpdates();
+    }
+
+    // Update all satellites (including network satellites)
     for (auto& satellite : satellites) {
         if (satellite) {
             // Set nearby planets for each satellite
             satellite->setNearbyPlanets(planets);
+
+            // Set all network rockets for fuel targeting
+            if (networkMultiplayerMode) {
+                satellite->setNearbyRockets(nearbyRockets);  // All rockets from all players
+            }
 
             // Update satellite
             satellite->update(deltaTime);
         }
     }
 
-    // Update fuel transfer network
+    // Update fuel transfer network (unified across all players)
     if (transferNetwork) {
-        // Update network with current satellites
+        // Update network with ALL satellites (regardless of owner)
         transferNetwork->clearNetwork();
         for (auto& satellite : satellites) {
             if (satellite && satellite->isOperational()) {
@@ -57,6 +69,11 @@ void SatelliteManager::update(float deltaTime) {
         updateRocketProximity();
         updateNetworkStats();
         timeSinceStatsUpdate = 0.0f;
+    }
+
+    // Send network updates
+    if (networkMultiplayerMode && networkManager) {
+        sendNetworkSatelliteStates();
     }
 
     // Handle emergency situations
@@ -115,26 +132,13 @@ void SatelliteManager::draw(sf::RenderWindow& window) {
 }
 
 void SatelliteManager::drawWithConstantSize(sf::RenderWindow& window, float zoomLevel) {
-    // Draw orbit paths (not affected by zoom)
-    if (showOrbitPaths || showTargetOrbitPaths) {
-        for (const auto& satellite : satellites) {
-            if (satellite) {
-                if (showOrbitPaths) {
-                    satellite->drawOrbitPath(window, planets);
-                }
-                if (showTargetOrbitPaths) {
-                    satellite->drawTargetOrbitPath(window, planets);
-                }
-            }
-        }
-    }
-
-    // Draw satellites with constant size
-    for (const auto& satellite : satellites) {
+    // Draw all satellites with constant size (like planets)
+    for (auto& satellite : satellites) {
         if (satellite) {
+            // Use constant size drawing to prevent satellite "growth" during zoom
             satellite->drawWithConstantSize(window, zoomLevel);
 
-            // Draw status indicators
+            // Draw status indicators with constant size
             if (showStatusIndicators) {
                 satellite->drawStatusIndicator(window, zoomLevel);
             }
@@ -148,6 +152,9 @@ void SatelliteManager::drawWithConstantSize(sf::RenderWindow& window, float zoom
         transferNetwork->drawEmergencyIndicators(window);
     }
 }
+
+
+
 
 int SatelliteManager::createSatelliteFromRocket(const Rocket* rocket, const SatelliteConversionConfig& config) {
     if (!canConvertRocketToSatellite(rocket)) {
@@ -701,6 +708,217 @@ void SatelliteManager::updateRocketProximity() {
         if (!rocketsInRange.empty()) {
             //std::cout << "Satellite " << satellite->getName() << " has "
             //    << rocketsInRange.size() << " rockets in transfer range" << std::endl;
+        }
+    }
+}
+
+// Network multiplayer support methods
+void SatelliteManager::setNetworkManager(NetworkManager* netManager) {
+    networkManager = netManager;
+}
+
+int SatelliteManager::createNetworkSatellite(const SatelliteCreationInfo& creationInfo) {
+    auto satellite = std::make_unique<Satellite>(
+        creationInfo.position, creationInfo.velocity, creationInfo.satelliteID,
+        sf::Color::Cyan, GameConstants::SATELLITE_BASE_MASS
+    );
+
+    // Set satellite properties from network info
+    satellite->setName(creationInfo.name);
+    satellite->setFuel(creationInfo.currentFuel);
+
+    // Store satellite
+    int satelliteID = satellite->getID();
+    satelliteMap[satelliteID] = satellite.get();
+    satellites.push_back(std::move(satellite));
+
+    // Track ownership
+    playerSatelliteOwnership[satelliteID] = creationInfo.ownerPlayerID;
+
+    // Update next ID to avoid conflicts
+    if (satelliteID >= nextSatelliteID) {
+        nextSatelliteID = satelliteID + 1;
+    }
+
+    std::cout << "Created network satellite " << creationInfo.name
+        << " (ID: " << satelliteID << ") owned by Player " << creationInfo.ownerPlayerID << std::endl;
+
+    return satelliteID;
+}
+
+void SatelliteManager::receiveNetworkSatelliteStates(const std::vector<PlayerState>& satelliteStates) {
+    for (const auto& state : satelliteStates) {
+        if (state.isSatellite) {
+            updateSatelliteFromNetworkState(state.satelliteID, state);
+        }
+    }
+}
+
+void SatelliteManager::sendNetworkSatelliteStates() {
+    if (!networkManager) return;
+
+    std::vector<PlayerState> satelliteStates;
+    for (auto& satellite : satellites) {
+        if (satellite) {
+            PlayerState state;
+            state.playerID = getSatelliteOwner(satellite->getID());
+            state.position = satellite->getPosition();
+            state.velocity = satellite->getVelocity();
+            state.isSatellite = true;
+            state.satelliteID = satellite->getID();
+            state.currentFuel = satellite->getCurrentFuel();
+            state.maxFuel = satellite->getMaxFuel();
+            // Add other satellite state fields as needed
+
+            satelliteStates.push_back(state);
+        }
+    }
+
+    networkManager->syncSatelliteStates(satelliteStates);
+}
+
+void SatelliteManager::updateFromNetworkPlanetStates(const std::vector<PlanetState>& planetStates) {
+    for (const auto& planetState : planetStates) {
+        // Find corresponding planet and update its properties
+        if (planetState.planetID < planets.size()) {
+            Planet* planet = planets[planetState.planetID];
+            if (planet) {
+                planet->setPosition(planetState.position);
+                planet->setVelocity(planetState.velocity);
+                planet->setMass(planetState.mass);
+                // Update other planet properties as needed
+            }
+        }
+    }
+}
+
+void SatelliteManager::sendPlanetStatesToNetwork() {
+    if (!networkManager) return;
+
+    std::vector<PlanetState> planetStates = getCurrentPlanetStates();
+    networkManager->syncPlanetStates(planetStates);
+}
+
+std::vector<PlanetState> SatelliteManager::getCurrentPlanetStates() const {
+    std::vector<PlanetState> planetStates;
+
+    for (size_t i = 0; i < planets.size(); ++i) {
+        if (planets[i]) {
+            PlanetState state;
+            state.planetID = static_cast<int>(i);
+            state.position = planets[i]->getPosition();
+            state.velocity = planets[i]->getVelocity();
+            state.mass = planets[i]->getMass();
+            state.radius = planets[i]->getRadius();
+            state.color = planets[i]->getColor();
+
+            planetStates.push_back(state);
+        }
+    }
+
+    return planetStates;
+}
+
+void SatelliteManager::assignSatelliteOwner(int satelliteID, int playerID) {
+    playerSatelliteOwnership[satelliteID] = playerID;
+}
+
+int SatelliteManager::getSatelliteOwner(int satelliteID) const {
+    auto it = playerSatelliteOwnership.find(satelliteID);
+    return (it != playerSatelliteOwnership.end()) ? it->second : -1;
+}
+
+std::vector<Satellite*> SatelliteManager::getSatellitesOwnedByPlayer(int playerID) {
+    std::vector<Satellite*> result;
+
+    for (auto& satellite : satellites) {
+        if (satellite && getSatelliteOwner(satellite->getID()) == playerID) {
+            result.push_back(satellite.get());
+        }
+    }
+
+    return result;
+}
+
+std::vector<Satellite*> SatelliteManager::getAllNetworkSatellites() {
+    return getAllSatellites();  // Return all satellites regardless of owner
+}
+
+void SatelliteManager::setAllNetworkRockets(const std::vector<Rocket*>& allRockets) {
+    nearbyRockets = allRockets;
+
+    // Update all satellites with all network rockets for fuel targeting
+    for (auto& satellite : satellites) {
+        if (satellite) {
+            satellite->setNearbyRockets(nearbyRockets);
+        }
+    }
+}
+
+void SatelliteManager::addNetworkRocket(Rocket* rocket, int ownerPlayerID) {
+    if (rocket && std::find(nearbyRockets.begin(), nearbyRockets.end(), rocket) == nearbyRockets.end()) {
+        nearbyRockets.push_back(rocket);
+
+        // Update all satellites with the new rocket list
+        for (auto& satellite : satellites) {
+            if (satellite) {
+                satellite->setNearbyRockets(nearbyRockets);
+            }
+        }
+    }
+}
+
+void SatelliteManager::removeNetworkRocket(Rocket* rocket) {
+    auto it = std::find(nearbyRockets.begin(), nearbyRockets.end(), rocket);
+    if (it != nearbyRockets.end()) {
+        nearbyRockets.erase(it);
+
+        // Update all satellites with the new rocket list
+        for (auto& satellite : satellites) {
+            if (satellite) {
+                satellite->setNearbyRockets(nearbyRockets);
+            }
+        }
+    }
+}
+
+void SatelliteManager::syncNetworkSatellites() {
+    if (!networkManager) return;
+
+    // Handle incoming satellite creations
+    while (networkManager->hasPendingSatelliteCreation()) {
+        SatelliteCreationInfo creationInfo;
+        if (networkManager->receiveSatelliteCreation(creationInfo)) {
+            createNetworkSatellite(creationInfo);
+        }
+    }
+}
+
+void SatelliteManager::handleNetworkPlanetUpdates() {
+    if (!networkManager) return;
+
+    // Handle incoming planet state updates
+    if (networkManager->hasPendingPlanetState()) {
+        std::vector<PlanetState> planetUpdates = networkManager->getPendingPlanetUpdates();
+        updateFromNetworkPlanetStates(planetUpdates);
+    }
+}
+
+void SatelliteManager::updateSatelliteFromNetworkState(int satelliteID, const PlayerState& networkState) {
+    Satellite* satellite = getSatellite(satelliteID);
+    if (satellite) {
+        satellite->setPosition(networkState.position);
+        satellite->setVelocity(networkState.velocity);
+        satellite->setFuel(networkState.currentFuel);
+        // Update other properties as needed
+    }
+}
+
+void SatelliteManager::mergeNetworkSatellites(const std::vector<SatelliteCreationInfo>& networkSatellites) {
+    for (const auto& creationInfo : networkSatellites) {
+        // Only create if we don't already have this satellite
+        if (!getSatellite(creationInfo.satelliteID)) {
+            createNetworkSatellite(creationInfo);
         }
     }
 }

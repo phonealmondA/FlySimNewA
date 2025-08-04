@@ -183,6 +183,95 @@ namespace GameConstants {
     constexpr float SATELLITE_GRAVITY_INFLUENCE_FACTOR = 0.1f;  // How much satellites affect each other gravitationally
     constexpr float SATELLITE_ROCKET_DOCKING_RANGE = 210.0f;     // Range for fuel transfer to rockets
     constexpr float SATELLITE_PLANET_COLLECTION_EFFICIENCY = 1.2f; // More efficient collection than rockets
+
+    // NETWORK MULTIPLAYER SATELLITE CONSTANTS - NEW
+
+    // Network synchronization timing
+    constexpr float NETWORK_SATELLITE_SYNC_INTERVAL = 1.0f / 30.0f;  // 30 FPS satellite sync
+    constexpr float NETWORK_PLANET_SYNC_INTERVAL = 1.0f;            // 1 FPS planet sync
+    constexpr float NETWORK_STATE_SEND_INTERVAL = 1.0f / 20.0f;     // 20 FPS player state sync
+    constexpr float NETWORK_HEARTBEAT_INTERVAL = 5.0f;              // Heartbeat every 5 seconds
+
+    // Network satellite identification
+    constexpr int NETWORK_SATELLITE_ID_OFFSET = 1000;               // ID offset per player (Player 0: 0-999, Player 1: 1000-1999, etc.)
+    constexpr int NETWORK_MAX_PLAYERS = 8;                          // Maximum players in network
+    constexpr int NETWORK_MAX_SATELLITES_PER_PLAYER = 100;          // Max satellites per player
+
+    // Cross-player satellite visibility and targeting
+    constexpr bool NETWORK_ENABLE_CROSS_PLAYER_FUEL_TRANSFER = true; // Allow fuel transfer between players
+    constexpr bool NETWORK_ENABLE_SATELLITE_SHARING = true;          // Allow satellites to connect across players
+    constexpr float NETWORK_CROSS_PLAYER_TRANSFER_EFFICIENCY = 0.9f; // Slightly less efficient cross-player transfers
+    constexpr float NETWORK_SATELLITE_OWNERSHIP_INDICATOR_SIZE = 3.0f; // Size of player ownership indicator
+
+    // Planet state synchronization
+    constexpr float NETWORK_PLANET_MASS_SYNC_THRESHOLD = 0.1f;       // Only sync if mass changes by this amount
+    constexpr float NETWORK_PLANET_POSITION_SYNC_THRESHOLD = 1.0f;   // Only sync if position changes by this amount
+    constexpr float NETWORK_PLANET_VELOCITY_SYNC_THRESHOLD = 0.1f;   // Only sync if velocity changes by this amount
+    constexpr float NETWORK_PLANET_INTERPOLATION_FACTOR = 0.1f;      // Smooth interpolation for network updates
+
+    // Satellite visual constants for constant size rendering
+    constexpr float SATELLITE_CONSTANT_DISPLAY_SIZE = SATELLITE_SIZE; // Base size for constant rendering
+    constexpr float SATELLITE_MIN_ZOOM_SIZE = 8.0f;                   // Minimum visual size when zoomed out
+    constexpr float SATELLITE_MAX_ZOOM_SIZE = 24.0f;                  // Maximum visual size when zoomed in
+    constexpr float SATELLITE_ZOOM_SCALE_FACTOR = 1.0f;               // Scale factor for zoom-independent rendering
+
+    // Network timeout and retry constants
+    constexpr float NETWORK_CONNECTION_TIMEOUT = 30.0f;              // Connection timeout in seconds
+    constexpr float NETWORK_RETRY_INTERVAL = 5.0f;                   // Retry failed operations every 5 seconds
+    constexpr int NETWORK_MAX_RETRY_ATTEMPTS = 3;                    // Maximum retry attempts
+    constexpr float NETWORK_PACKET_LOSS_TOLERANCE = 0.1f;            // 10% packet loss tolerance
+
+    // Network satellite state interpolation
+    constexpr float NETWORK_SATELLITE_INTERPOLATION_FACTOR = 0.1f;   // Smooth satellite movement
+    constexpr float NETWORK_SATELLITE_PREDICTION_TIME = 0.1f;        // Predict 100ms ahead for smooth movement
+    constexpr float NETWORK_SATELLITE_EXTRAPOLATION_LIMIT = 0.5f;    // Maximum extrapolation time
+
+    // Network fuel transfer synchronization
+    constexpr float NETWORK_FUEL_TRANSFER_SYNC_RATE = 10.0f;         // Sync fuel transfers 10 times per second
+    constexpr float NETWORK_FUEL_TRANSFER_BUFFER_SIZE = 5.0f;        // Buffer fuel transfers for smooth sync
+    constexpr bool NETWORK_ENABLE_FUEL_PREDICTION = true;            // Predict fuel changes for smooth display
+
+    // Network satellite network topology
+    constexpr float NETWORK_SATELLITE_CONNECTION_RANGE = SATELLITE_TRANSFER_RANGE; // Use same range for network connections
+    constexpr int NETWORK_MAX_SATELLITE_CONNECTIONS = 8;             // Maximum connections per satellite
+    constexpr bool NETWORK_ENABLE_MESH_TOPOLOGY = true;              // Allow mesh network topology
+    constexpr float NETWORK_TOPOLOGY_UPDATE_INTERVAL = 2.0f;         // Update network topology every 2 seconds
+
+    // Network error recovery
+    constexpr float NETWORK_STATE_MISMATCH_THRESHOLD = 10.0f;        // Threshold for detecting state mismatches
+    constexpr bool NETWORK_ENABLE_STATE_CORRECTION = true;           // Enable automatic state correction
+    constexpr float NETWORK_STATE_CORRECTION_INTERVAL = 1.0f;        // Correct state mismatches every second
+    constexpr int NETWORK_MAX_STATE_CORRECTIONS = 5;                 // Maximum corrections per interval
+
+    // Network performance optimization
+    constexpr bool NETWORK_ENABLE_DELTA_COMPRESSION = true;          // Only send state changes
+    constexpr float NETWORK_DELTA_THRESHOLD = 0.01f;                 // Minimum change to trigger update
+    constexpr bool NETWORK_ENABLE_BATCH_UPDATES = true;              // Batch multiple updates together
+    constexpr int NETWORK_MAX_BATCH_SIZE = 10;                       // Maximum updates per batch
+
+    // Network satellite ownership visualization
+    const sf::Color NETWORK_PLAYER_COLORS[NETWORK_MAX_PLAYERS] = {
+        sf::Color(255, 100, 100, 180),  // Player 1: Light Red
+        sf::Color(100, 100, 255, 180),  // Player 2: Light Blue  
+        sf::Color(100, 255, 100, 180),  // Player 3: Light Green
+        sf::Color(255, 255, 100, 180),  // Player 4: Light Yellow
+        sf::Color(255, 100, 255, 180),  // Player 5: Light Magenta
+        sf::Color(100, 255, 255, 180),  // Player 6: Light Cyan
+        sf::Color(255, 255, 255, 180),  // Player 7: Light White
+        sf::Color(255, 150, 100, 180)   // Player 8: Light Orange
+    };
+
+    // Network planet synchronization colors
+    const sf::Color NETWORK_PLANET_INDICATOR_COLOR = sf::Color(255, 255, 0, 180); // Yellow for network-synced planets
+    const sf::Color NETWORK_PLANET_HOST_COLOR = sf::Color(0, 255, 0, 180);        // Green for host-controlled planets
+    const sf::Color NETWORK_PLANET_CLIENT_COLOR = sf::Color(0, 0, 255, 180);      // Blue for client-controlled planets
+
+    // Network debugging and monitoring
+    constexpr bool NETWORK_ENABLE_DEBUG_OVERLAY = false;             // Show network debug info
+    constexpr bool NETWORK_ENABLE_LATENCY_COMPENSATION = true;       // Compensate for network latency
+    constexpr float NETWORK_LATENCY_ESTIMATE = 0.05f;                // Estimated network latency (50ms)
+    constexpr bool NETWORK_ENABLE_JITTER_BUFFER = true;              // Buffer to handle jitter
+    constexpr float NETWORK_JITTER_BUFFER_SIZE = 0.1f;               // 100ms jitter buffer
 }
 
 

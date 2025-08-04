@@ -19,7 +19,10 @@ Satellite::Satellite(sf::Vector2f pos, sf::Vector2f vel, int id, sf::Color col, 
     transferRange(GameConstants::SATELLITE_TRANSFER_RANGE), isCollectingFuel(false),
     fuelSourcePlanet(nullptr), stationKeepingEfficiency(GameConstants::SATELLITE_FUEL_EFFICIENCY),
     maxCorrectionBurn(GameConstants::SATELLITE_MAX_SINGLE_BURN),
-    fuelConsumptionRate(GameConstants::SATELLITE_MAINTENANCE_FUEL_RATE)
+    fuelConsumptionRate(GameConstants::SATELLITE_MAINTENANCE_FUEL_RATE),
+    ownerPlayerID(-1), isNetworkSatellite(false), lastNetworkUpdateTime(0.0f),
+    lastNetworkPosition(pos), lastNetworkVelocity(vel), needsNetworkSync(false),
+    networkSyncInterval(1.0f / 30.0f)  // 30 FPS sync rate
 {
     // Initialize orbital elements
     targetOrbit = new OrbitalElements();
@@ -475,19 +478,48 @@ void Satellite::draw(sf::RenderWindow& window) {
 }
 
 void Satellite::drawWithConstantSize(sf::RenderWindow& window, float zoomLevel) {
-    // FIXED for SFML 3.0
-    sf::CircleShape scaledBody = body;
-    scaledBody.setRadius(GameConstants::SATELLITE_SIZE * zoomLevel);
-    scaledBody.setOrigin(sf::Vector2f(GameConstants::SATELLITE_SIZE * zoomLevel, GameConstants::SATELLITE_SIZE * zoomLevel));
+    // Calculate constant size that doesn't change with zoom (like planets)
+    float constantSize = GameConstants::SATELLITE_SIZE;
 
-    // Scale solar panels
+    // Create scaled body with constant visual size
+    sf::CircleShape scaledBody;
+    scaledBody.setRadius(constantSize);
+    scaledBody.setFillColor(body.getFillColor());
+    scaledBody.setPosition(position);
+    scaledBody.setOrigin(sf::Vector2f(constantSize, constantSize));
+
+    // Adjust color for network satellites to distinguish ownership
+    if (isNetworkSatellite) {
+        sf::Color networkColor = body.getFillColor();
+        networkColor.a = 180;  // Make slightly transparent
+        scaledBody.setFillColor(networkColor);
+    }
+
+    // Create scaled solar panels with constant size
     sf::ConvexShape scaledPanels[2];
+    float panelScale = constantSize / GameConstants::SATELLITE_SIZE;
+
     for (int i = 0; i < 2; i++) {
-        scaledPanels[i] = solarPanels[i];
-        for (size_t j = 0; j < scaledPanels[i].getPointCount(); j++) {
-            sf::Vector2f point = solarPanels[i].getPoint(j);
-            scaledPanels[i].setPoint(j, point * zoomLevel);
+        scaledPanels[i].setPointCount(4);
+
+        // Set panel points relative to satellite position with constant size
+        float panelWidth = GameConstants::SATELLITE_PANEL_SIZE * 3 * panelScale;
+        float panelHeight = GameConstants::SATELLITE_PANEL_SIZE * panelScale;
+
+        if (i == 0) {  // Left panel
+            scaledPanels[i].setPoint(0, sf::Vector2f(position.x - constantSize - panelWidth, position.y - panelHeight));
+            scaledPanels[i].setPoint(1, sf::Vector2f(position.x - constantSize, position.y - panelHeight));
+            scaledPanels[i].setPoint(2, sf::Vector2f(position.x - constantSize, position.y + panelHeight));
+            scaledPanels[i].setPoint(3, sf::Vector2f(position.x - constantSize - panelWidth, position.y + panelHeight));
         }
+        else {  // Right panel
+            scaledPanels[i].setPoint(0, sf::Vector2f(position.x + constantSize, position.y - panelHeight));
+            scaledPanels[i].setPoint(1, sf::Vector2f(position.x + constantSize + panelWidth, position.y - panelHeight));
+            scaledPanels[i].setPoint(2, sf::Vector2f(position.x + constantSize + panelWidth, position.y + panelHeight));
+            scaledPanels[i].setPoint(3, sf::Vector2f(position.x + constantSize, position.y + panelHeight));
+        }
+
+        scaledPanels[i].setFillColor(GameConstants::SATELLITE_PANEL_COLOR);
     }
 
     // Draw scaled components
@@ -495,14 +527,24 @@ void Satellite::drawWithConstantSize(sf::RenderWindow& window, float zoomLevel) 
         window.draw(scaledPanels[i]);
     }
     window.draw(scaledBody);
+
+    // Draw network ownership indicator if this is a network satellite
+    if (isNetworkSatellite) {
+        drawNetworkIndicator(window, 1.0f);  // Use constant zoom for consistency
+    }
 }
 
+
 void Satellite::drawStatusIndicator(sf::RenderWindow& window, float zoomLevel) {
+    // Use constant size for status indicator too
+    float constantSize = GameConstants::SATELLITE_SIZE;
+    float ringRadius = constantSize + 5.0f;
+
     sf::CircleShape statusRing;
-    statusRing.setRadius((GameConstants::SATELLITE_SIZE + 5.0f) * zoomLevel);
-    statusRing.setPosition(sf::Vector2f(position.x - statusRing.getRadius(), position.y - statusRing.getRadius()));
+    statusRing.setRadius(ringRadius);
+    statusRing.setPosition(sf::Vector2f(position.x - ringRadius, position.y - ringRadius));
     statusRing.setFillColor(sf::Color::Transparent);
-    statusRing.setOutlineThickness(2.0f * zoomLevel);
+    statusRing.setOutlineThickness(2.0f);
 
     // Set color based on status
     switch (status) {
@@ -559,10 +601,113 @@ void Satellite::drawMaintenanceBurn(sf::RenderWindow& window) {
     // Placeholder implementation
 }
 
+// Network multiplayer support methods
+void Satellite::updateFromNetworkState(sf::Vector2f netPosition, sf::Vector2f netVelocity, float netFuel) {
+    if (!isNetworkSatellite) return;
+
+    // Smooth interpolation for network updates to avoid jittery movement
+    float interpolationFactor = 0.1f;  // Adjust for smoother/snappier updates
+
+    position = position + (netPosition - position) * interpolationFactor;
+    velocity = velocity + (netVelocity - velocity) * interpolationFactor;
+
+    // Update fuel directly (more critical for gameplay)
+    setFuel(netFuel);
+
+    // Update body position
+    body.setPosition(position);
+    for (int i = 0; i < 2; i++) {
+        solarPanels[i].setPosition(position);
+    }
+
+    lastNetworkPosition = netPosition;
+    lastNetworkVelocity = netVelocity;
+    lastNetworkUpdateTime = 0.0f;  // Reset update timer
+
+    std::cout << "Updated satellite " << name << " from network state" << std::endl;
+}
+
+void Satellite::drawNetworkIndicator(sf::RenderWindow& window, float zoomLevel) {
+    if (!isNetworkSatellite || ownerPlayerID < 0) return;
+
+    // Draw a small indicator showing which player owns this satellite
+    float constantSize = GameConstants::SATELLITE_SIZE;
+    float indicatorSize = constantSize * 0.3f;
+
+    sf::CircleShape ownerIndicator;
+    ownerIndicator.setRadius(indicatorSize);
+    ownerIndicator.setPosition(sf::Vector2f(
+        position.x + constantSize - indicatorSize,
+        position.y - constantSize - indicatorSize
+    ));
+
+    // Color based on player ID
+    sf::Color playerColors[] = {
+        sf::Color::Red, sf::Color::Blue, sf::Color::Green, sf::Color::Yellow,
+        sf::Color::Magenta, sf::Color::Cyan, sf::Color::White
+    };
+
+    int colorIndex = ownerPlayerID % (sizeof(playerColors) / sizeof(playerColors[0]));
+    ownerIndicator.setFillColor(playerColors[colorIndex]);
+    ownerIndicator.setOutlineColor(sf::Color::Black);
+    ownerIndicator.setOutlineThickness(1.0f);
+
+    window.draw(ownerIndicator);
+}
+
+void Satellite::updateRocketTargeting() {
+    // This method is called when the satellite manager updates the nearby rockets list
+    // It ensures that satellites can target rockets from all players in multiplayer
+
+    // Filter rockets that are in transfer range
+    std::vector<Rocket*> targetableRockets;
+    for (Rocket* rocket : nearbyRockets) {
+        if (rocket && isRocketInTransferRange(rocket)) {
+            targetableRockets.push_back(rocket);
+        }
+    }
+
+    // Update transfer tracking for newly available rockets
+    for (Rocket* rocket : targetableRockets) {
+        auto it = std::find_if(rocketTransferTracking.begin(), rocketTransferTracking.end(),
+            [rocket](const std::pair<Rocket*, RocketTransferInfo>& entry) {
+                return entry.first == rocket;
+            });
+
+        if (it == rocketTransferTracking.end()) {
+            // New rocket in range - initialize tracking
+            RocketTransferInfo info;
+            info.totalTransferred = 0.0f;
+            info.isActive = false;
+            rocketTransferTracking.push_back({ rocket, info });
+        }
+    }
+}
+
+bool Satellite::canTargetAllNetworkRockets() const {
+    // Return true if this satellite can target rockets from all players
+    return !nearbyRockets.empty();
+}
+
 void Satellite::sendStatusUpdate() {
-    // Placeholder for network synchronization
+    // Enhanced network synchronization
+    if (isNetworkSatellite) return;  // Don't send updates for satellites we received from network
+
+    needsNetworkSync = true;
+    lastNetworkUpdateTime += 0.016f;  // Increment by ~60fps frame time
+
+    // Mark for synchronization if enough time has passed
+    if (lastNetworkUpdateTime >= networkSyncInterval) {
+        requestNetworkSync();
+        lastNetworkUpdateTime = 0.0f;
+    }
 }
 
 void Satellite::receiveStatusUpdate() {
-    // Placeholder for network synchronization
+    // Process incoming network updates
+    if (!isNetworkSatellite) return;
+
+    // Reset the network update timer
+    lastNetworkUpdateTime = 0.0f;
+    markNetworkSynced();
 }

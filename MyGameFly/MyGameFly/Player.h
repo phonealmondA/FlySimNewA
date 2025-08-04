@@ -37,6 +37,16 @@ private:
     float timeSinceLastStateSent;
     static constexpr float STATE_SEND_INTERVAL = 1.0f / 30.0f; // 30 FPS state sync
 
+    // Network multiplayer support - NEW
+    NetworkManager* networkManager;              // Reference to network manager
+    bool isNetworkMultiplayerMode;              // Enable network-specific behavior
+    std::vector<int> ownedSatelliteIDs;         // Track satellites created by this player
+    float lastNetworkSyncTime;                  // Time since last network sync
+
+    // Planet state tracking for network sync
+    std::vector<Planet*> originalPlanets;       // Original planet references
+    bool hasPendingPlanetUpdates;               // Planet updates need sync
+
     // MANUAL FUEL TRANSFER INPUT TRACKING
     bool fuelIncreaseKeyPressed;    // '.' key state
     bool fuelDecreaseKeyPressed;    // ',' key state
@@ -63,7 +73,49 @@ public:
     // SATELLITE CONVERSION METHODS
     void handleSatelliteConversionInput(const sf::Event& event);  // Process satellite conversion input
     bool canConvertToSatellite() const;  // Check if player can convert rocket to satellite
-    void convertRocketToSatellite();  // Perform the conversion
+
+
+    void convertRocketToSatellite();
+
+    // Network satellite conversion - ENHANCED
+    void convertRocketToSatelliteNetwork();      // Network-aware conversion
+    void handleNetworkSatelliteConversion(const struct SatelliteCreationInfo& creationInfo);
+
+    // Network state management - NEW
+    void setNetworkManager(NetworkManager* netManager);
+    void enableNetworkMode(bool enabled) { isNetworkMultiplayerMode = enabled; }
+    bool isInNetworkMode() const { return isNetworkMultiplayerMode; }
+
+    // Enhanced network synchronization
+    void sendPlayerStateToNetwork();
+    void receivePlayerStateFromNetwork(const PlayerState& networkState);
+    void syncWithNetwork(float deltaTime);
+
+    // Planet state synchronization
+    void sendPlanetStatesToNetwork();
+    void receivePlanetStatesFromNetwork(const std::vector<struct PlanetState>& planetStates);
+    void updateLocalPlanetsFromNetwork();
+
+    // Satellite ownership and management
+    void addOwnedSatellite(int satelliteID);
+    void removeOwnedSatellite(int satelliteID);
+    std::vector<int> getOwnedSatellites() const { return ownedSatelliteIDs; }
+    bool ownsSatellite(int satelliteID) const;
+
+    // Enhanced rocket targeting for cross-player fuel transfers
+    void updateRocketTargetingForNetwork();
+    Rocket* getRocketForNetworkTargeting() const;
+
+    // Respawn and position management for network
+    void respawnAtPosition(sf::Vector2f newPosition);
+    sf::Vector2f findNearestPlanetSurface() const;
+
+    // Network state conversion helpers
+    PlayerState createPlayerState() const;
+    void applyPlayerState(const PlayerState& state);
+    void updateStateFromVehicle();  // Update state from current vehicle
+
+
     sf::Vector2f findNearestPlanetSurface() const;  // Find spawn point for new rocket
 
     // State management for networking

@@ -63,6 +63,15 @@ private:
     bool isCollectingFuel;                   // Currently collecting from planet
     Planet* fuelSourcePlanet;                // Which planet we're collecting from
 
+    // Network multiplayer support - NEW
+    int ownerPlayerID;                       // Which player created this satellite
+    bool isNetworkSatellite;                 // Created by remote player
+    float lastNetworkUpdateTime;             // For network synchronization
+    sf::Vector2f lastNetworkPosition;        // Last position from network
+    sf::Vector2f lastNetworkVelocity;        // Last velocity from network
+    bool needsNetworkSync;                   // Satellite state needs sync
+    float networkSyncInterval;               // How often to sync with network
+
     // Station-keeping parameters
     float stationKeepingEfficiency;   // How efficiently satellite uses fuel for corrections
     float maxCorrectionBurn;          // Maximum single correction burn magnitude
@@ -158,9 +167,31 @@ public:
     void drawMaintenanceBurn(sf::RenderWindow& window);
     void drawStatusIndicator(sf::RenderWindow& window, float zoomLevel);
 
-    // Network communication (for multiplayer)
-    void sendStatusUpdate(); // Future: network synchronization
-    void receiveStatusUpdate(); // Future: network synchronization
+    // Network communication (for multiplayer) - ENHANCED
+    void sendStatusUpdate();
+    void receiveStatusUpdate();
+
+    // Network state management
+    void setOwnerPlayerID(int playerID) { ownerPlayerID = playerID; }
+    int getOwnerPlayerID() const { return ownerPlayerID; }
+    void setNetworkSatellite(bool isNetwork) { isNetworkSatellite = isNetwork; }
+    bool isFromNetwork() const { return isNetworkSatellite; }
+
+    // Network synchronization
+    void updateFromNetworkState(sf::Vector2f netPosition, sf::Vector2f netVelocity, float netFuel);
+    bool needsNetworkUpdate() const { return needsNetworkSync; }
+    void markNetworkSynced() { needsNetworkSync = false; }
+    void requestNetworkSync() { needsNetworkSync = true; }
+
+    // Enhanced drawing methods for multiplayer consistency
+    void drawWithConstantSize(sf::RenderWindow& window, float zoomLevel) override;
+    void drawNetworkIndicator(sf::RenderWindow& window, float zoomLevel);  // Show owner info
+    static float getConstantDisplaySize() { return GameConstants::SATELLITE_SIZE; }
+
+    // Cross-player rocket targeting support
+    void updateRocketTargeting();  // Refresh rocket targeting for all network rockets
+    bool canTargetAllNetworkRockets() const;
+    std::vector<Rocket*> getTargetableRockets() const { return nearbyRockets; }
 };
 
 #endif // SATELLITE_H
