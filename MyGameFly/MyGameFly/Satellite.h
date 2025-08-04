@@ -7,6 +7,7 @@
 #include "Planet.h"
 #include <vector>
 #include <memory>
+#include <utility>  // For std::pair
 
 // Forward declarations
 class Rocket;
@@ -26,6 +27,7 @@ enum class SatelliteStatus {
 
 class Satellite : public GameObject {
 private:
+
     // Orbital maintenance system
     OrbitalElements* targetOrbit;      // Desired orbital parameters (pointer to avoid incomplete type)
     OrbitalElements* currentOrbit;     // Actual orbital parameters (pointer to avoid incomplete type)
@@ -65,6 +67,13 @@ private:
     float stationKeepingEfficiency;   // How efficiently satellite uses fuel for corrections
     float maxCorrectionBurn;          // Maximum single correction burn magnitude
     float fuelConsumptionRate;        // Base fuel consumption for maintenance
+
+    // Rocket transfer tracking
+    struct RocketTransferInfo {
+        float totalTransferred = 0.0f;
+        bool isActive = false;
+    };
+    std::vector<std::pair<Rocket*, RocketTransferInfo>> rocketTransferTracking;
 
     // Internal methods
     void updateOrbitalElements();

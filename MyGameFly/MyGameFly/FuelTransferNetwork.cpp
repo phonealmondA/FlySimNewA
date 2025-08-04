@@ -59,7 +59,7 @@ void FuelTransferNetwork::addSatellite(Satellite* satellite) {
     // Update connections
     updateConnections();
 
-    std::cout << "Added satellite " << satellite->getName() << " to fuel transfer network" << std::endl;
+    //std::cout << "Added satellite " << satellite->getName() << " to fuel transfer network" << std::endl;
 }
 
 void FuelTransferNetwork::removeSatellite(int satelliteID) {

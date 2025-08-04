@@ -263,11 +263,22 @@ bool Satellite::transferFuelToRocket(Rocket* rocket, float amount) {
     return true;
 }
 
+
 void Satellite::transferFuelToNearbyRockets(float deltaTime) {
     if (!isOperational() || getAvailableFuel() < 1.0f) return;
 
     // Use the member variable nearbyRockets set by SatelliteManager
-    if (nearbyRockets.empty()) return;
+    if (nearbyRockets.empty()) {
+        // No rockets nearby - finish any active transfers
+        for (auto& entry : rocketTransferTracking) {
+            if (entry.second.isActive) {
+                std::cout << "Satellite " << name << " finished transfer - gave "
+                    << entry.second.totalTransferred << " total fuel to rocket (no rockets nearby)" << std::endl;
+            }
+        }
+        rocketTransferTracking.clear();
+        return;
+    }
 
     // Calculate total fuel demand from rockets
     float totalDemand = 0.0f;
@@ -289,7 +300,20 @@ void Satellite::transferFuelToNearbyRockets(float deltaTime) {
 
     // Distribute fuel proportionally based on demand
     for (Rocket* rocket : nearbyRockets) {
-        if (!rocket || rocket->getCurrentFuel() >= rocket->getMaxFuel()) continue;
+        if (!rocket || rocket->getCurrentFuel() >= rocket->getMaxFuel()) {
+            // Rocket is full - check if we were transferring to it and output total
+            auto it = std::find_if(rocketTransferTracking.begin(), rocketTransferTracking.end(),
+                [rocket](const std::pair<Rocket*, RocketTransferInfo>& entry) {
+                    return entry.first == rocket;
+                });
+
+            if (it != rocketTransferTracking.end() && it->second.isActive) {
+                std::cout << "Satellite " << name << " finished transfer - gave "
+                    << it->second.totalTransferred << " total fuel to rocket" << std::endl;
+                rocketTransferTracking.erase(it);
+            }
+            continue;
+        }
 
         float rocketCapacity = rocket->getMaxFuel() - rocket->getCurrentFuel();
         float proportion = rocketCapacity / totalDemand;
@@ -298,9 +322,50 @@ void Satellite::transferFuelToNearbyRockets(float deltaTime) {
         if (fuelForThisRocket > 0.1f) { // Minimum transfer threshold
             if (transferFuelToRocket(rocket, fuelForThisRocket)) {
                 status = SatelliteStatus::TRANSFER_MODE;
-                std::cout << "Satellite " << name << " transferred " << fuelForThisRocket
-                    << " fuel to rocket" << std::endl;
+
+                // Find or create tracking entry for this rocket
+                auto it = std::find_if(rocketTransferTracking.begin(), rocketTransferTracking.end(),
+                    [rocket](const std::pair<Rocket*, RocketTransferInfo>& entry) {
+                        return entry.first == rocket;
+                    });
+
+                if (it == rocketTransferTracking.end()) {
+                    // First time transferring to this rocket - start tracking
+                    RocketTransferInfo info;
+                    info.totalTransferred = fuelForThisRocket;
+                    info.isActive = true;
+                    rocketTransferTracking.push_back({ rocket, info });
+                    std::cout << "Satellite " << name << " started fuel transfer to rocket" << std::endl;
+                }
+                else {
+                    // Add to existing transfer total
+                    it->second.totalTransferred += fuelForThisRocket;
+                }
             }
+        }
+    }
+
+    // Clean up tracking for rockets that are no longer nearby
+    auto it = rocketTransferTracking.begin();
+    while (it != rocketTransferTracking.end()) {
+        Rocket* trackedRocket = it->first;
+        bool stillNearby = false;
+
+        for (Rocket* rocket : nearbyRockets) {
+            if (rocket == trackedRocket) {
+                stillNearby = true;
+                break;
+            }
+        }
+
+        if (!stillNearby && it->second.isActive) {
+            // Rocket moved away - output final total
+            std::cout << "Satellite " << name << " finished transfer - gave "
+                << it->second.totalTransferred << " total fuel to rocket (moved out of range)" << std::endl;
+            it = rocketTransferTracking.erase(it);
+        }
+        else {
+            ++it;
         }
     }
 }

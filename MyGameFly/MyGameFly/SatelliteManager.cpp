@@ -699,8 +699,8 @@ void SatelliteManager::updateRocketProximity() {
         satellite->setNearbyRockets(rocketsInRange);
 
         if (!rocketsInRange.empty()) {
-            std::cout << "Satellite " << satellite->getName() << " has "
-                << rocketsInRange.size() << " rockets in transfer range" << std::endl;
+            //std::cout << "Satellite " << satellite->getName() << " has "
+            //    << rocketsInRange.size() << " rockets in transfer range" << std::endl;
         }
     }
 }
