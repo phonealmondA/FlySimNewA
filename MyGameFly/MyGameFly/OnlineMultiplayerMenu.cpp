@@ -10,7 +10,7 @@ OnlineMultiplayerMenu::OnlineMultiplayerMenu(sf::Vector2u winSize)
     titleText(font), ipText(font), portText(font), statusText(font),
     ipInputText(font), portInputText(font),
     currentIP(DEFAULT_IP), currentPort(std::to_string(DEFAULT_PORT)),
-    ipInputActive(false), portInputActive(false)
+    ipInputActive(false), portInputActive(false), isHost(false)
 {
     loadFont();
     setupBackground();
