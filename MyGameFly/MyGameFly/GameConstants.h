@@ -249,6 +249,8 @@ namespace GameConstants {
     constexpr bool NETWORK_ENABLE_BATCH_UPDATES = true;              // Batch multiple updates together
     constexpr int NETWORK_MAX_BATCH_SIZE = 10;                       // Maximum updates per batch
 
+
+
     // Network satellite ownership visualization
     const sf::Color NETWORK_PLAYER_COLORS[NETWORK_MAX_PLAYERS] = {
         sf::Color(255, 100, 100, 180),  // Player 1: Light Red
@@ -272,6 +274,8 @@ namespace GameConstants {
     constexpr float NETWORK_LATENCY_ESTIMATE = 0.05f;                // Estimated network latency (50ms)
     constexpr bool NETWORK_ENABLE_JITTER_BUFFER = true;              // Buffer to handle jitter
     constexpr float NETWORK_JITTER_BUFFER_SIZE = 0.1f;               // 100ms jitter buffer
+
+
 }
 
 

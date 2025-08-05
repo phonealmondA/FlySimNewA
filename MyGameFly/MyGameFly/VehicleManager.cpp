@@ -4,6 +4,8 @@
 #include "VectorHelper.h"
 #include "SatelliteManager.h"
 #include <limits>
+#include <iostream>  // For std::cout, std::cerr
+#include <sstream>   // For std::stringstream
 
 VehicleManager::VehicleManager(sf::Vector2f initialPos, const std::vector<Planet*>& planetList, SatelliteManager* satManager)
     : activeVehicle(VehicleType::ROCKET), planets(planetList), satelliteManager(satManager),

@@ -6,6 +6,7 @@
 #include "Planet.h"
 #include "Rocket.h"
 #include "FuelTransferNetwork.h"
+#include "NetworkManager.h"  // For complete NetworkManager definition
 #include <vector>
 #include <memory>
 #include <map>

@@ -6,6 +6,8 @@
 #include <iostream>
 #include <sstream>
 #include <algorithm>
+#include "NetworkManager.h"     // For NetworkManager complete definition
+#include "Player.h"             // For PlayerState complete definition
 
 SatelliteManager::SatelliteManager()
     : nextSatelliteID(1), statsUpdateInterval(1.0f), timeSinceStatsUpdate(0.0f),

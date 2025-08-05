@@ -1,7 +1,7 @@
 #pragma once
 #include "GameObject.h"
 #include <vector>
-
+#include "NetworkManager.h"  // For PlanetState definition
 class Planet : public GameObject {
 private:
     sf::CircleShape shape;

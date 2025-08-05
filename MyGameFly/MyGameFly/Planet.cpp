@@ -2,6 +2,7 @@
 #include "VectorHelper.h"
 #include "GameConstants.h"
 #include <cmath>
+#include <iostream>  // For std::cout
 
 Planet::Planet(sf::Vector2f pos, float radius, float mass, sf::Color color)
     : GameObject(pos, { 0, 0 }, color), mass(mass), planetID(-1), isNetworkPlanet(false),
@@ -134,8 +135,8 @@ void Planet::drawFuelCollectionRing(sf::RenderWindow& window, bool isActivelyCol
 
     // Choose color based on collection status and network ownership
     sf::Color ringColor = isActivelyCollecting ?
-        GameConstants::FUEL_COLLECTION_ACTIVE_COLOR :
-        GameConstants::FUEL_COLLECTION_AVAILABLE_COLOR;
+    GameConstants::FUEL_COLLECTION_ACTIVE_COLOR :
+    GameConstants::FUEL_COLLECTION_AVAILABLE_COLOR;
 
     // Modify color if this is a network planet to distinguish ownership
     if (isNetworkPlanet) {
