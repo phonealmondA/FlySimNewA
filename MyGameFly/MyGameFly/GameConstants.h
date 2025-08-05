@@ -19,13 +19,14 @@ namespace GameConstants {
     constexpr float ORBIT_PERIOD = 420.0f;  // Desired orbit period in seconds
 
     // Derived parameters
-    constexpr float SECONDARY_PLANET_MASS = MAIN_PLANET_MASS * 0.06f;  // 8% of main planet mass
+    constexpr float SECONDARY_PLANET_MASS = MAIN_PLANET_MASS * 0.06f;  // 6% of main planet mass
 
     // Fixed radius values (not using functions that would cause constexpr issues)
-    constexpr float MAIN_PLANET_RADIUS = 10000.0f;  // Base radius at this mass
+    constexpr float MAIN_PLANET_RADIUS = 770.25f;
     constexpr float MASS_RATIO = 0.06f;  // Same as SECONDARY_PLANET_MASS / MAIN_PLANET_MASS
     constexpr float CUBE_ROOT_APPROX = 60.0f;  // Approximate cube root of 0.08
-    constexpr float SECONDARY_PLANET_RADIUS = (MAIN_PLANET_RADIUS / CUBE_ROOT_APPROX) / 10000;  // ~430
+
+    constexpr float SECONDARY_PLANET_RADIUS = 301.54f;  // Pre-calculated
 
     // Planet positions
     constexpr float MAIN_PLANET_X = 400.0f;
@@ -39,8 +40,7 @@ namespace GameConstants {
     const float SECONDARY_PLANET_Y = MAIN_PLANET_Y;
 
     // Pre-calculate orbital velocity for a circular orbit
-    const float SECONDARY_PLANET_ORBITAL_VELOCITY =
-        std::sqrt(G * MAIN_PLANET_MASS / PLANET_ORBIT_DISTANCE);
+    const float SECONDARY_PLANET_ORBITAL_VELOCITY = std::sqrt(G * MAIN_PLANET_MASS / PLANET_ORBIT_DISTANCE);
 
     // Rocket parameters - UPDATED FOR DYNAMIC MASS SYSTEM
     constexpr float ROCKET_BASE_MASS = 1.0f;  // Mass to make a rocket (empty)
