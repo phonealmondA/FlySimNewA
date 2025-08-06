@@ -67,4 +67,7 @@ public:
     void updateNetworkRocketTargeting();
     void setAllNetworkRockets(const std::vector<Rocket*>& allNetworkRockets);
     Rocket* getRocketForNetworkTargeting() const;
+    // Save state management
+    void restoreFromSaveState(const struct PlayerState& saveState);
+    void applyPlayerState(const struct PlayerState& state);
 };

@@ -373,3 +373,81 @@ void VehicleManager::updateNetworkRocketTargeting() {
     // Ensure our rocket is available for satellite fuel targeting
     updateSatelliteManagerNetwork();
 }
+void VehicleManager::restoreFromSaveState(const PlayerState& saveState) {
+    // Set the correct vehicle type based on save state
+    if (saveState.isRocket) {
+        activeVehicle = VehicleType::ROCKET;
+
+        // Apply rocket state
+        rocket->setPosition(saveState.position);
+        rocket->setVelocity(saveState.velocity);
+        rocket->setFuel(saveState.currentFuel);
+
+        // Set rocket rotation and other properties
+        if (rocket) {
+            // Apply rotation if the rocket supports it
+            float currentRotation = rocket->getRotation();
+            float rotationDiff = saveState.rotation - currentRotation;
+            rocket->rotate(rotationDiff);
+
+            // Apply fuel collection state
+            if (saveState.isCollectingFuel) {
+                // The rocket will automatically detect nearby planets for fuel collection
+                rocket->collectFuelFromPlanetsAuto(0.0f);
+            }
+        }
+
+        std::cout << "VehicleManager: Restored rocket state (Fuel: " << saveState.currentFuel
+            << ", Position: " << saveState.position.x << ", " << saveState.position.y << ")" << std::endl;
+    }
+    else {
+        activeVehicle = VehicleType::CAR;
+
+        // Apply car state
+        car->setPosition(saveState.position);
+        car->setVelocity(saveState.velocity);
+
+        // Check grounding after position is set
+        car->checkGrounding(planets);
+
+        std::cout << "VehicleManager: Restored car state (Position: "
+            << saveState.position.x << ", " << saveState.position.y << ")" << std::endl;
+    }
+}
+
+void VehicleManager::applyPlayerState(const PlayerState& state) {
+    // This method is for real-time state updates (like from network)
+    // Similar to restoreFromSaveState but designed for frequent updates
+
+    if (state.isRocket && activeVehicle == VehicleType::ROCKET) {
+        rocket->setPosition(state.position);
+        rocket->setVelocity(state.velocity);
+
+        // Only update fuel if it's significantly different to avoid constant updates
+        if (std::abs(rocket->getCurrentFuel() - state.currentFuel) > 1.0f) {
+            rocket->setFuel(state.currentFuel);
+        }
+    }
+    else if (!state.isRocket && activeVehicle == VehicleType::CAR) {
+        car->setPosition(state.position);
+        car->setVelocity(state.velocity);
+        car->checkGrounding(planets);
+    }
+    else {
+        // Vehicle type mismatch - need to switch vehicle type
+        if (state.isRocket && activeVehicle == VehicleType::CAR) {
+            // Switch to rocket
+            activeVehicle = VehicleType::ROCKET;
+            rocket->setPosition(state.position);
+            rocket->setVelocity(state.velocity);
+            rocket->setFuel(state.currentFuel);
+        }
+        else if (!state.isRocket && activeVehicle == VehicleType::ROCKET) {
+            // Switch to car
+            activeVehicle = VehicleType::CAR;
+            car->setPosition(state.position);
+            car->setVelocity(state.velocity);
+            car->checkGrounding(planets);
+        }
+    }
+}

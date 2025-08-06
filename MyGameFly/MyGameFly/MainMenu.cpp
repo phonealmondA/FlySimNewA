@@ -64,9 +64,19 @@ void MainMenu::createButtons() {
         );
         buttons.push_back(std::move(singlePlayerButton));
 
+        // Load Game Button
+        auto loadGameButton = std::make_unique<Button>(
+            sf::Vector2f(centerX - buttonWidth / 2, startY + spacing),
+            sf::Vector2f(buttonWidth, buttonHeight),
+            "Load Game",
+            font,
+            [this]() { onLoadGameClicked(); }
+        );
+        buttons.push_back(std::move(loadGameButton));
+
         // Multiplayer Button
         auto multiplayerButton = std::make_unique<Button>(
-            sf::Vector2f(centerX - buttonWidth / 2, startY + spacing),
+            sf::Vector2f(centerX - buttonWidth / 2, startY + spacing * 2),
             sf::Vector2f(buttonWidth, buttonHeight),
             "Multiplayer",
             font,
@@ -76,7 +86,7 @@ void MainMenu::createButtons() {
 
         // Quit Button
         auto quitButton = std::make_unique<Button>(
-            sf::Vector2f(centerX - buttonWidth / 2, startY + spacing * 2),
+            sf::Vector2f(centerX - buttonWidth / 2, startY + spacing * 3),
             sf::Vector2f(buttonWidth, buttonHeight),
             "Quit",
             font,
@@ -107,6 +117,13 @@ void MainMenu::onQuitClicked() {
     isActive = false;
     std::cout << "Quit selected" << std::endl;
 }
+
+void MainMenu::onLoadGameClicked() {
+    selectedMode = GameMode::LOAD_GAME;
+    isActive = false;
+    std::cout << "Load Game mode selected" << std::endl;
+}
+
 
 void MainMenu::handleEvent(const sf::Event& event, const sf::Vector2f& mousePos) {
     if (!isActive) return;

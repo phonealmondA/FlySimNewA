@@ -2,6 +2,9 @@
 #include "GameObject.h"
 #include <vector>
 #include "NetworkManager.h"  // For PlanetState definition
+
+struct PlanetSaveState;  // Forward declaration for save state support
+
 class Planet : public GameObject {
 private:
     sf::CircleShape shape;
@@ -69,4 +72,6 @@ public:
     // Planet state conversion for network
     struct PlanetState createPlanetState() const;
     void applyPlanetState(const struct PlanetState& state);
+    // Save state management
+    void restoreFromSaveState(const struct PlanetSaveState& saveState);
 };

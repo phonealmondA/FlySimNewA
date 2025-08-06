@@ -470,3 +470,159 @@ std::string SaveGameManager::formatSaveTime(std::time_t saveTime) const {
     ss << std::put_time(std::localtime(&saveTime), "%Y-%m-%d %H:%M:%S");
     return ss.str();
 }
+// Game state extraction implementations
+GameSaveState SaveGameManager::extractGameState(const Game* game) const {
+    // This method would need access to Game's internal state
+    // For now, we'll throw an error since Game class integration isn't complete yet
+    throw std::runtime_error("SaveGameManager::extractGameState - Game class integration not yet implemented");
+}
+
+GameSaveState SaveGameManager::extractSinglePlayerState(const VehicleManager* vehicleManager,
+    const std::vector<Planet*>& planets,
+    const SatelliteManager* satelliteManager,
+    float gameTime, sf::Vector2f cameraCenter,
+    float zoom) const {
+
+    GameSaveState saveState;
+
+    // Set basic game info
+    saveState.currentGameMode = GameState::SINGLE_PLAYER;
+    saveState.gameTimeElapsed = gameTime;
+
+    // Camera state
+    saveState.cameraCenter = cameraCenter;
+    saveState.zoomLevel = zoom;
+    saveState.targetZoom = zoom; // Assume current zoom is target
+
+    // Extract planet states
+    saveState.planets.reserve(planets.size());
+    for (const auto* planet : planets) {
+        if (planet) {
+            saveState.planets.push_back(extractPlanetState(planet));
+        }
+    }
+
+    // Extract single player state
+    if (vehicleManager) {
+        PlayerState playerState = extractPlayerStateFromVehicleManager(vehicleManager, 0);
+        saveState.players.push_back(playerState);
+        saveState.playerNames.push_back("Player"); // Default single player name
+    }
+
+    // Extract satellite states
+    if (satelliteManager) {
+        auto satellites = satelliteManager->getAllSatellites();
+        saveState.satellites.reserve(satellites.size());
+
+        for (const auto& satellite : satellites) {
+            if (satellite) {
+                SatelliteSaveState satState;
+                // Extract base player state from satellite
+                satState.baseState = satellite->getPlayerState();
+                satState.satelliteName = satellite->getName();
+                satState.stationKeepingEfficiency = satellite->getStationKeepingEfficiency();
+                satState.transferRange = satellite->getTransferRange();
+                satState.enableAutomaticMaintenance = satellite->isAutomaticMaintenanceEnabled();
+                satState.enableAutomaticCollection = satellite->isAutomaticCollectionEnabled();
+
+                // Get target orbit info
+                satState.targetSemiMajorAxis = satellite->getTargetSemiMajorAxis();
+                satState.targetEccentricity = satellite->getTargetEccentricity();
+                satState.targetInclination = satellite->getTargetInclination();
+
+                saveState.satellites.push_back(satState);
+            }
+        }
+
+        // Extract network stats
+        saveState.networkStats = satelliteManager->getNetworkStats();
+    }
+
+    // Game settings (default values for now - could be passed as parameters)
+    saveState.showTrajectories = false;
+    saveState.showVelocityVectors = false;
+    saveState.showGravityVectors = false;
+    saveState.showSatelliteOrbits = true;
+
+    // Single player specific
+    saveState.localPlayerID = 0;
+    saveState.isMultiplayerGame = false;
+
+    return saveState;
+}
+
+GameSaveState SaveGameManager::extractMultiplayerState(const std::vector<Player*>& players,
+    const std::vector<Planet*>& planets,
+    const SatelliteManager* satelliteManager,
+    float gameTime, sf::Vector2f cameraCenter,
+    float zoom, GameState gameMode) const {
+
+    GameSaveState saveState;
+
+    // Set basic game info
+    saveState.currentGameMode = gameMode;
+    saveState.gameTimeElapsed = gameTime;
+
+    // Camera state
+    saveState.cameraCenter = cameraCenter;
+    saveState.zoomLevel = zoom;
+    saveState.targetZoom = zoom;
+
+    // Extract planet states
+    saveState.planets.reserve(planets.size());
+    for (const auto* planet : planets) {
+        if (planet) {
+            saveState.planets.push_back(extractPlanetState(planet));
+        }
+    }
+
+    // Extract player states
+    saveState.players.reserve(players.size());
+    saveState.playerNames.reserve(players.size());
+
+    for (size_t i = 0; i < players.size(); ++i) {
+        if (players[i]) {
+            PlayerState playerState = players[i]->getState();
+            saveState.players.push_back(playerState);
+            saveState.playerNames.push_back(players[i]->getName());
+        }
+    }
+
+    // Extract satellite states
+    if (satelliteManager) {
+        auto satellites = satelliteManager->getAllSatellites();
+        saveState.satellites.reserve(satellites.size());
+
+        for (const auto& satellite : satellites) {
+            if (satellite) {
+                SatelliteSaveState satState;
+                satState.baseState = satellite->getPlayerState();
+                satState.satelliteName = satellite->getName();
+                satState.stationKeepingEfficiency = satellite->getStationKeepingEfficiency();
+                satState.transferRange = satellite->getTransferRange();
+                satState.enableAutomaticMaintenance = satellite->isAutomaticMaintenanceEnabled();
+                satState.enableAutomaticCollection = satellite->isAutomaticCollectionEnabled();
+
+                satState.targetSemiMajorAxis = satellite->getTargetSemiMajorAxis();
+                satState.targetEccentricity = satellite->getTargetEccentricity();
+                satState.targetInclination = satellite->getTargetInclination();
+
+                saveState.satellites.push_back(satState);
+            }
+        }
+
+        saveState.networkStats = satelliteManager->getNetworkStats();
+    }
+
+    // Game settings (could be passed as parameters or retrieved from game state)
+    saveState.showTrajectories = false;
+    saveState.showVelocityVectors = false;
+    saveState.showGravityVectors = false;
+    saveState.showSatelliteOrbits = true;
+
+    // Multiplayer specific
+    saveState.localPlayerID = 0; // This should be passed as a parameter
+    saveState.isMultiplayerGame = true;
+
+    return saveState;
+}

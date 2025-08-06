@@ -330,3 +330,27 @@ void Planet::applyPlanetState(const struct PlanetState& state) {
     lastNetworkVelocity = state.velocity;
     lastNetworkMass = state.mass;
 }
+void Planet::restoreFromSaveState(const PlanetSaveState& saveState) {
+    // Restore all planet properties from save state
+    position = saveState.position;
+    velocity = saveState.velocity;
+    mass = saveState.mass;
+    radius = saveState.radius;
+    color = saveState.color;
+
+    // Update visual representation
+    shape.setRadius(radius);
+    shape.setOrigin({ radius, radius });
+    shape.setPosition(position);
+    shape.setFillColor(color);
+
+    // Reset network state tracking since this is a loaded state
+    stateChanged = false;
+    lastNetworkPosition = position;
+    lastNetworkVelocity = velocity;
+    lastNetworkMass = mass;
+    lastNetworkUpdateTime = 0.0f;
+
+    std::cout << "Planet restored from save state (Mass: " << mass << ", Position: "
+        << position.x << ", " << position.y << ")" << std::endl;
+}
