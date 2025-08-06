@@ -197,3 +197,46 @@ void Planet::drawOrbitPath(sf::RenderWindow& window, const std::vector<Planet*>&
     // Draw the trajectory
     window.draw(trajectory);
 }
+
+// STATIC METHODS FOR DYNAMIC PLANET CREATION
+
+std::unique_ptr<Planet> Planet::createOrbitalPlanet(
+    const Planet* centralPlanet,
+    float orbitDistance,
+    float massRatio,
+    float angleOffset,
+    sf::Color color)
+{
+    // Calculate mass
+    float planetMass = centralPlanet->getMass() * massRatio;
+
+    // Calculate orbital position
+    sf::Vector2f centerPos = centralPlanet->getPosition();
+    sf::Vector2f orbitPos = calculateOrbitalPosition(centerPos, orbitDistance, angleOffset);
+
+    // Create the planet with 0 radius (will be calculated from mass)
+    auto planet = std::make_unique<Planet>(orbitPos, 0.0f, planetMass, color);
+
+    // Calculate and set orbital velocity
+    float orbitalVel = calculateOrbitalVelocity(centralPlanet->getMass(), orbitDistance);
+
+    // Velocity is perpendicular to radius vector
+    // For counter-clockwise orbit: rotate radius vector 90 degrees
+    sf::Vector2f velocityDirection(-std::sin(angleOffset), std::cos(angleOffset));
+    planet->setVelocity(velocityDirection * orbitalVel);
+
+    return planet;
+}
+
+float Planet::calculateOrbitalVelocity(float centralMass, float orbitDistance)
+{
+    return std::sqrt(GameConstants::G * centralMass / orbitDistance);
+}
+
+sf::Vector2f Planet::calculateOrbitalPosition(sf::Vector2f centerPos, float distance, float angle)
+{
+    return sf::Vector2f(
+        centerPos.x + distance * std::cos(angle),
+        centerPos.y + distance * std::sin(angle)
+    );
+}

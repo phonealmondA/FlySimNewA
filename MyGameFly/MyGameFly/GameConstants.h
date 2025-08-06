@@ -4,6 +4,8 @@
 
 #include <SFML/Graphics.hpp>
 #include <cmath>
+#include <vector>
+struct PlanetConfig;
 
 namespace GameConstants {
     // Gravitational constants
@@ -63,7 +65,7 @@ namespace GameConstants {
     // AUTOMATIC fuel collection parameters (for future satellites)
     constexpr float FUEL_COLLECTION_RANGE = 250.0f;  // Distance from planet surface for fuel collection
     constexpr float FUEL_COLLECTION_RATE = 15.0f;  // Fuel units per second when collecting (auto mode)
-    constexpr float FUEL_COLLECTION_MASS_RATIO = 1.0f;  // How much planet mass equals 1 fuel unit
+    constexpr float FUEL_COLLECTION_MASS_RATIO = 150.0f;  // How much planet mass equals 1 fuel unit
     constexpr float MIN_PLANET_MASS_FOR_COLLECTION = 50.0f;  // Minimum planet mass before collection stops
 
     // Fuel collection ring visual settings
@@ -183,6 +185,8 @@ namespace GameConstants {
     constexpr float SATELLITE_GRAVITY_INFLUENCE_FACTOR = 0.1f;  // How much satellites affect each other gravitationally
     constexpr float SATELLITE_ROCKET_DOCKING_RANGE = 210.0f;     // Range for fuel transfer to rockets
     constexpr float SATELLITE_PLANET_COLLECTION_EFFICIENCY = 1.2f; // More efficient collection than rockets
+
+    std::vector<PlanetConfig> getPlanetConfigurations();
 }
 
 
