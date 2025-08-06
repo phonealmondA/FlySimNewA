@@ -4,11 +4,11 @@
 namespace GameConstants {
     std::vector<PlanetConfig> getPlanetConfigurations() {
         return {
-            {0.06f, 3.0f, 0.0f, sf::Color::Green},                        // Current green planet
-            {0.004f, 1.2f, GameConstants::PI / 3, sf::Color::Magenta},           // Smaller Magenta planet, closer
-            {0.0025f, 0.4f, GameConstants::PI, sf::Color(255, 192, 203)},         // Even smaller Pink planet closest
+            {0.06f, 1.7f, 0.0f, sf::Color::Green},                        // Current green planet
+            {0.014f, 1.2f, GameConstants::PI / 3, sf::Color::Magenta},           // Smaller Magenta planet, closer
+            {0.0065f, 0.4f, 0.0f, sf::Color(255, 192, 203)},         // Even smaller Pink planet closest
             // Add more planets here as needed:
-            // {0.015f, 3.0f, GameConstants::PI * 1.5f, sf::Color::Cyan},   // Tiny cyan planet, very far out
+            {0.6f, 5.0f, 0.0f * 1.5f, sf::Color::Cyan}   // Tiny cyan planet, very far out
             // {0.035f, 2.8f, GameConstants::PI * 0.5f, sf::Color::Magenta} // Small magenta planet
         };
     }
@@ -17,7 +17,7 @@ namespace GameConstants {
 // {massRatio, orbitDistanceMultiplier, angleOffset, color}
 
 //{ 0.06f,    1.0f,     0.0f,     sf::Color::Green},
-//  ^        ^         ^         ^
+//                            
 //  |        |         |         |
 //  |        |         |         ??? Planet color (visual appearance)
 //  |        |         ??? Starting angle in orbit (radians)
@@ -25,11 +25,11 @@ namespace GameConstants {
 //  |        |             PI/2 = bottom, PI = left, 3*PI/2 = top
 //  |        ??? Distance from central planet multiplier
 //  |            1.0f = same as base orbit distance
-//  |            1.5f = 50% further out, 2.0f = twice as far
+//  |            1.5f = 50 further out, 2.0f = twice as far
 //  ??? Mass as percentage of central planet
-//      0.06f = 6% of main planet mass
-//      0.04f = 4% of main planet mass (smaller planet)
-//      0.1f = 10% of main planet mass (larger planet)
+//      0.06f = 6 of main planet mass
+//      0.04f = 4 of main planet mass (smaller planet)
+//      0.1f = 10 of main planet mass (larger planet)
 
 // EXAMPLES:
 // Small close planet:    {0.03f, 0.8f, 0.0f, sf::Color::Blue}

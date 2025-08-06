@@ -1047,7 +1047,7 @@ public:
                 else {
                     targetZoom *= zoomFactor;
                 }
-                targetZoom = std::max(0.5f, std::min(targetZoom, 50.0f));
+                targetZoom = std::max(0.0005f, std::min(targetZoom, 500.0f));
 
                 updateCameraCenter();
             }
