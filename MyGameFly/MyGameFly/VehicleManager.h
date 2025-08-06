@@ -6,6 +6,8 @@
 #include <memory>
 #include <vector>
 
+struct PlayerState;  // Forward declaration for save state support
+
 enum class VehicleType {
     ROCKET,
     CAR
