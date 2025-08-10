@@ -78,8 +78,8 @@ namespace GameConstants {
     constexpr float VELOCITY_VECTOR_SCALE = 10.0f;
 
     // Trajectory calculation settings
-    constexpr float TRAJECTORY_TIME_STEP = 0.05f;
-    constexpr int TRAJECTORY_STEPS = 7500;
+    constexpr float TRAJECTORY_TIME_STEP = 0.5f;
+    constexpr int TRAJECTORY_STEPS = 500;
     constexpr float TRAJECTORY_COLLISION_RADIUS = 10.0f;
 
     // Vehicle physics
