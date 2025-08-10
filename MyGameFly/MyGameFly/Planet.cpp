@@ -19,18 +19,60 @@ Planet::Planet(sf::Vector2f pos, float radius, float mass, sf::Color color)
     shape.setFillColor(color);
     shape.setOrigin({ this->radius, this->radius });
     shape.setPosition(position);
+    // Initialize moon system members
+    parentPlanet = nullptr;
+    isMoon = false;
+    moonRetentionMassThreshold = mass * 1.0f;  // Lose moons if mass drops below 100%
+    sphereOfInfluenceRadius = calculateSphereOfInfluence();
+    orbitalAngle = 0.0f;
+    orbitalDistance = 0.0f;
+    orbitalAngularVelocity = 0.0f;
+    moonVisualScale = 1.0f;
+    showOrbitPath = true;
 }
 
 void Planet::update(float deltaTime)
 {
-    position += velocity * deltaTime;
-    shape.setPosition(position);
-}
+    // Update moon orbit if this is a moon
+    if (isMoon && parentPlanet) {
+        updateMoonOrbit(deltaTime);
+    }
+    else {
+        // Normal planet movement
+        position += velocity * deltaTime;
+    }
 
+    shape.setPosition(position);
+
+    // Update all child moons
+    updateMoons(deltaTime);
+
+    // Check if moons should escape (for planets with moons)
+    if (!moons.empty()) {
+        checkMoonRetention();
+    }
+}
 void Planet::draw(sf::RenderWindow& window)
 {
     // Draw the planet
     window.draw(shape);
+
+    // Draw moons
+    for (auto& moon : moons) {
+        if (moon) {
+            moon->draw(window);
+        }
+    }
+
+    // Draw moon orbit path if this is a moon
+    if (isMoon && showOrbitPath) {
+        drawMoonOrbitPath(window);
+    }
+
+    // Draw sphere of influence for planets with moons
+    if (!moons.empty()) {
+        drawSphereOfInfluence(window);
+    }
 
     // Draw fuel collection ring if the planet can provide fuel
     if (canCollectFuel()) {
@@ -52,6 +94,13 @@ void Planet::setMass(float newMass)
 {
     mass = newMass;
     updateRadiusFromMass();
+    // Update sphere of influence
+    updateSphereOfInfluence();
+
+    // Check if moons should be lost due to mass reduction
+    if (!moons.empty()) {
+        checkMoonRetention();
+    }
 }
 
 void Planet::updateRadiusFromMass()
@@ -239,4 +288,252 @@ sf::Vector2f Planet::calculateOrbitalPosition(sf::Vector2f centerPos, float dist
         centerPos.x + distance * std::cos(angle),
         centerPos.y + distance * std::sin(angle)
     );
+}
+
+// Moon system implementation
+void Planet::addMoon(std::unique_ptr<Planet> moon) {
+    if (moon) {
+        moon->setParentPlanet(this);
+        moon->setIsMoon(true);
+        moons.push_back(std::move(moon));
+    }
+}
+
+void Planet::updateMoons(float deltaTime) {
+    for (auto& moon : moons) {
+        if (moon) {
+            moon->update(deltaTime);
+        }
+    }
+}
+
+void Planet::updateMoonOrbit(float deltaTime) {
+    if (!parentPlanet) return;
+
+    // Update orbital angle
+    orbitalAngle += orbitalAngularVelocity * deltaTime;
+
+    // Calculate new position relative to parent
+    sf::Vector2f parentPos = parentPlanet->getPosition();
+    position.x = parentPos.x + orbitalDistance * std::cos(orbitalAngle);
+    position.y = parentPos.y + orbitalDistance * std::sin(orbitalAngle);
+
+    // Update velocity to match orbital motion (for physics interactions)
+    velocity.x = -orbitalDistance * orbitalAngularVelocity * std::sin(orbitalAngle);
+    velocity.y = orbitalDistance * orbitalAngularVelocity * std::cos(orbitalAngle);
+
+    // Add parent's velocity for correct world-space velocity
+    velocity = velocity + parentPlanet->getVelocity();
+}
+
+void Planet::checkMoonRetention() {
+    if (mass < moonRetentionMassThreshold) {
+        // Moons will be released in the next update
+        for (auto& moon : moons) {
+            if (moon) {
+                moon->setParentPlanet(nullptr);
+                moon->setIsMoon(false);
+                // Add escape velocity perturbation
+                float escapeSpeed = calculateEscapeVelocity(mass, moon->orbitalDistance);
+                sf::Vector2f escapeDir = normalize(moon->getPosition() - position);
+                moon->setVelocity(moon->getVelocity() + escapeDir * escapeSpeed * 0.0f);
+            }
+        }
+    }
+}
+
+void Planet::setParentPlanet(Planet* parent) {
+    parentPlanet = parent;
+    if (parent) {
+        sphereOfInfluenceRadius = calculateSphereOfInfluence(parent->getMass());
+    }
+}
+
+float Planet::calculateSphereOfInfluence(float parentMass) const {
+    if (parentMass <= 0) {
+        return radius * 10.0f;  // Default for primary planets
+    }
+    // Only calculate distance if we have a parent
+    if (!parentPlanet) {
+        return radius * 10.0f;
+    }
+    // Hill sphere approximation
+    float distance = std::sqrt((position.x - parentPlanet->position.x) * (position.x - parentPlanet->position.x) +
+        (position.y - parentPlanet->position.y) * (position.y - parentPlanet->position.y));
+    return distance * std::pow(mass / (3.0f * parentMass), 1.0f / 3.0f);
+}
+void Planet::updateSphereOfInfluence() {
+    if (parentPlanet) {
+        sphereOfInfluenceRadius = calculateSphereOfInfluence(parentPlanet->getMass());
+    }
+    else {
+        sphereOfInfluenceRadius = calculateSphereOfInfluence();
+    }
+}
+
+void Planet::setOrbitalParameters(float distance, float angle, float angularVel) {
+    orbitalDistance = distance;
+    orbitalAngle = angle;
+    orbitalAngularVelocity = angularVel;
+}
+
+void Planet::drawMoonOrbitPath(sf::RenderWindow& window) {
+    if (!parentPlanet) return;
+
+    sf::CircleShape orbit;
+    orbit.setRadius(orbitalDistance);
+    orbit.setPosition(parentPlanet->getPosition() - sf::Vector2f(orbitalDistance, orbitalDistance));
+    orbit.setFillColor(sf::Color::Transparent);
+    orbit.setOutlineColor(sf::Color(150, 150, 150, 100));
+    orbit.setOutlineThickness(1.0f);
+    orbit.setPointCount(60);
+    window.draw(orbit);
+}
+
+void Planet::drawSphereOfInfluence(sf::RenderWindow& window, sf::Color color) {
+    sf::CircleShape influence;
+    influence.setRadius(sphereOfInfluenceRadius);
+    influence.setPosition(position - sf::Vector2f(sphereOfInfluenceRadius, sphereOfInfluenceRadius));
+    influence.setFillColor(sf::Color::Transparent);
+    influence.setOutlineColor(color);
+    influence.setOutlineThickness(1.0f);
+    influence.setPointCount(40);
+    window.draw(influence);
+}
+
+std::vector<std::unique_ptr<Planet>> Planet::releaseLostMoons() {
+    std::vector<std::unique_ptr<Planet>> lostMoons;
+    if (mass >= moonRetentionMassThreshold) return lostMoons;
+
+    for (auto& moon : moons) {
+        if (moon) {
+            lostMoons.push_back(std::move(moon));
+        }
+    }
+    moons.clear();
+    return lostMoons;
+}
+
+sf::Vector2f Planet::getWorldPosition() const {
+    if (isMoon && parentPlanet) {
+        return position;  // Already calculated in world space during updateMoonOrbit
+    }
+    return position;
+}
+
+// Static moon creation methods
+std::unique_ptr<Planet> Planet::createMoon(Planet* parentPlanet, float orbitDistance,
+    float massRatio, float angleOffset, sf::Color color) {
+    if (!parentPlanet) return nullptr;
+
+    float moonMass = parentPlanet->getMass() * massRatio;
+    float actualDistance = parentPlanet->getRadius() * orbitDistance;
+
+    sf::Vector2f moonPos = calculateOrbitalPosition(parentPlanet->getPosition(), actualDistance, angleOffset);
+
+    auto moon = std::make_unique<Planet>(moonPos, 0.0f, moonMass, color);
+    moon->setIsMoon(true);
+    moon->setParentPlanet(parentPlanet);
+
+    // Set orbital parameters
+    float orbitalVel = calculateOrbitalVelocity(parentPlanet->getMass(), actualDistance);
+    float angularVel = orbitalVel / actualDistance;
+    moon->setOrbitalParameters(actualDistance, angleOffset, angularVel);
+
+    // Set moon visual scale
+    moon->setMoonVisualScale(0.5f);  // Moons appear smaller
+
+    return moon;
+}
+
+int Planet::calculateMoonCount(float planetMass, float mainPlanetMass) {
+    float massRatio = planetMass / mainPlanetMass;
+    if (massRatio < 0.02f) return 0;      // Too small for moons
+    if (massRatio < 0.05f) return 1;      // Small planet - 1 moon
+    if (massRatio < 0.10f) return 2;      // Medium planet - 2 moons
+    return 3;                             // Large planet - 3 moons max
+}
+
+float Planet::calculateEscapeVelocity(float parentMass, float distance) {
+    return std::sqrt(2.0f * GameConstants::G * parentMass / distance);
+}
+
+// Add these methods to Planet.cpp:
+
+void Planet::removeMoon(int moonIndex) {
+    if (moonIndex >= 0 && moonIndex < moons.size()) {
+        moons.erase(moons.begin() + moonIndex);
+    }
+}
+
+void Planet::clearMoons() {
+    moons.clear();
+}
+
+std::vector<Planet*> Planet::getAllMoonPointers() const {
+    std::vector<Planet*> moonPtrs;
+    for (const auto& moon : moons) {
+        if (moon) {
+            moonPtrs.push_back(moon.get());
+        }
+    }
+    return moonPtrs;
+}
+
+bool Planet::isWithinSphereOfInfluence(sf::Vector2f point) const {
+    float distance = std::sqrt((point.x - position.x) * (point.x - position.x) +
+        (point.y - position.y) * (point.y - position.y));
+    return distance <= sphereOfInfluenceRadius;
+}
+
+sf::Vector2f Planet::getRelativePosition() const {
+    if (isMoon && parentPlanet) {
+        return position - parentPlanet->getPosition();
+    }
+    return position;
+}
+
+void Planet::drawMoonConnectionLine(sf::RenderWindow& window) {
+    if (!isMoon || !parentPlanet) return;
+
+    sf::VertexArray line(sf::PrimitiveType::LineStrip);
+
+    sf::Vertex start;
+    start.position = position;
+    start.color = sf::Color(100, 100, 100, 50);  // Faint gray
+    line.append(start);
+
+    sf::Vertex end;
+    end.position = parentPlanet->getPosition();
+    end.color = sf::Color(100, 100, 100, 50);
+    line.append(end);
+
+    window.draw(line);
+}
+
+// Static method for creating multiple moons
+std::vector<std::unique_ptr<Planet>> Planet::createMoonsForPlanet(
+    Planet* parentPlanet, const std::vector<MoonConfig>& moonConfigs) {
+
+    std::vector<std::unique_ptr<Planet>> newMoons;
+
+    for (const auto& config : moonConfigs) {
+        auto moon = createMoon(parentPlanet,
+            config.orbitDistanceMultiplier,
+            config.massRatio,
+            config.angleOffset,
+            config.color);
+        if (moon) {
+            newMoons.push_back(std::move(moon));
+        }
+    }
+
+    return newMoons;
+}
+
+// Static method to check if moon should escape
+bool Planet::shouldMoonEscape(float currentParentMass, float originalParentMass,
+    float moonDistance, float escapeThreshold) {
+    float massRatio = currentParentMass / originalParentMass;
+    return massRatio < escapeThreshold;
 }

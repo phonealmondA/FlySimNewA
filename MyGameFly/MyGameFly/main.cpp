@@ -143,8 +143,43 @@ public:
             orbitingPlanets.push_back(std::move(orbitalPlanet));
         }
 
+        // After creating orbital planets, add their moons
+        for (size_t i = 0; i < orbitingPlanets.size(); i++) {
+            const auto& config = planetConfigs[i];
+
+            // Check if this planet has moons configured
+            if (!config.moons.empty()) {
+                // Create moons for this planet
+                for (const auto& moonConfig : config.moons) {
+                    auto moon = Planet::createMoon(
+                        orbitingPlanets[i].get(),
+                        moonConfig.orbitDistanceMultiplier,
+                        moonConfig.massRatio,
+                        moonConfig.angleOffset,
+                        moonConfig.color
+                    );
+
+                    if (moon) {
+                        // Add moon to its parent planet
+                        orbitingPlanets[i]->addMoon(std::move(moon));
+                    }
+                }
+
+                std::cout << "Added " << config.moons.size() << " moons to planet " << i << std::endl;
+            }
+        }
+
+        // After adding moons, update the planets vector to include all moons for gravity calculations
+        for (auto& planet : orbitingPlanets) {
+            auto moonPtrs = planet->getAllMoonPointers();
+            for (auto* moon : moonPtrs) {
+                planets.push_back(moon);
+            }
+        }
+
         // SATELLITE SYSTEM: Set planets for satellite manager FIRST
         satelliteManager->setPlanets(planets);
+
 
         // Create vehicle manager with satellite manager reference - spawn on green planet
         if (!orbitingPlanets.empty()) {
@@ -224,6 +259,40 @@ public:
 
             planets.push_back(orbitalPlanet.get());
             orbitingPlanets.push_back(std::move(orbitalPlanet));
+        }
+
+        // After creating orbital planets, add their moons
+        for (size_t i = 0; i < orbitingPlanets.size(); i++) {
+            const auto& config = planetConfigs[i];
+
+            // Check if this planet has moons configured
+            if (!config.moons.empty()) {
+                // Create moons for this planet
+                for (const auto& moonConfig : config.moons) {
+                    auto moon = Planet::createMoon(
+                        orbitingPlanets[i].get(),
+                        moonConfig.orbitDistanceMultiplier,
+                        moonConfig.massRatio,
+                        moonConfig.angleOffset,
+                        moonConfig.color
+                    );
+
+                    if (moon) {
+                        // Add moon to its parent planet
+                        orbitingPlanets[i]->addMoon(std::move(moon));
+                    }
+                }
+
+                std::cout << "Added " << config.moons.size() << " moons to planet " << i << std::endl;
+            }
+        }
+
+        // After adding moons, update the planets vector to include all moons for gravity calculations
+        for (auto& planet : orbitingPlanets) {
+            auto moonPtrs = planet->getAllMoonPointers();
+            for (auto* moon : moonPtrs) {
+                planets.push_back(moon);
+            }
         }
 
         // SATELLITE SYSTEM: Set planets for satellite manager FIRST
@@ -308,7 +377,41 @@ public:
             orbitingPlanets.push_back(std::move(orbitalPlanet));
         }
 
-        // SATELLITE SYSTEM: Set planets for satellite manager
+        // After creating orbital planets, add their moons
+        for (size_t i = 0; i < orbitingPlanets.size(); i++) {
+            const auto& config = planetConfigs[i];
+
+            // Check if this planet has moons configured
+            if (!config.moons.empty()) {
+                // Create moons for this planet
+                for (const auto& moonConfig : config.moons) {
+                    auto moon = Planet::createMoon(
+                        orbitingPlanets[i].get(),
+                        moonConfig.orbitDistanceMultiplier,
+                        moonConfig.massRatio,
+                        moonConfig.angleOffset,
+                        moonConfig.color
+                    );
+
+                    if (moon) {
+                        // Add moon to its parent planet
+                        orbitingPlanets[i]->addMoon(std::move(moon));
+                    }
+                }
+
+                std::cout << "Added " << config.moons.size() << " moons to planet " << i << std::endl;
+            }
+        }
+
+        // After adding moons, update the planets vector to include all moons for gravity calculations
+        for (auto& planet : orbitingPlanets) {
+            auto moonPtrs = planet->getAllMoonPointers();
+            for (auto* moon : moonPtrs) {
+                planets.push_back(moon);
+            }
+        }
+
+        // SATELLITE SYSTEM: Set planets for satellite manager FIRST
         satelliteManager->setPlanets(planets);
 
         // Initialize network manager
@@ -383,7 +486,41 @@ public:
             orbitingPlanets.push_back(std::move(orbitalPlanet));
         }
 
-        // SATELLITE SYSTEM: Set planets for satellite manager
+        // After creating orbital planets, add their moons
+        for (size_t i = 0; i < orbitingPlanets.size(); i++) {
+            const auto& config = planetConfigs[i];
+
+            // Check if this planet has moons configured
+            if (!config.moons.empty()) {
+                // Create moons for this planet
+                for (const auto& moonConfig : config.moons) {
+                    auto moon = Planet::createMoon(
+                        orbitingPlanets[i].get(),
+                        moonConfig.orbitDistanceMultiplier,
+                        moonConfig.massRatio,
+                        moonConfig.angleOffset,
+                        moonConfig.color
+                    );
+
+                    if (moon) {
+                        // Add moon to its parent planet
+                        orbitingPlanets[i]->addMoon(std::move(moon));
+                    }
+                }
+
+                std::cout << "Added " << config.moons.size() << " moons to planet " << i << std::endl;
+            }
+        }
+
+        // After adding moons, update the planets vector to include all moons for gravity calculations
+        for (auto& planet : orbitingPlanets) {
+            auto moonPtrs = planet->getAllMoonPointers();
+            for (auto* moon : moonPtrs) {
+                planets.push_back(moon);
+            }
+        }
+
+        // SATELLITE SYSTEM: Set planets for satellite manager FIRST
         satelliteManager->setPlanets(planets);
 
         // Initialize network manager for online play

@@ -2,15 +2,83 @@
 #include "Planet.h"
 
 namespace GameConstants {
+
+    // Helper function to create a ring of identical planets
+    std::vector<PlanetConfig> createPlanetRing(
+        int numPlanets,           // How many planets in the ring
+        float massRatio,          // Mass of each planet (as ratio of main)
+        float orbitDistance,      // Distance from center (multiplier)
+        sf::Color color,          // Color of all planets
+        float startAngle = 0.0f)  // Starting angle offset (optional)
+    {
+        std::vector<PlanetConfig> ringPlanets;
+
+        // Calculate angle between each planet for even spacing
+        float angleIncrement = (2.0f * GameConstants::PI) / numPlanets;
+
+        for (int i = 0; i < numPlanets; i++) {
+            float angle = startAngle + (angleIncrement * i);
+            PlanetConfig planet(massRatio, orbitDistance, angle, color);
+            ringPlanets.push_back(planet);
+        }
+
+        return ringPlanets;
+    }
+
     std::vector<PlanetConfig> getPlanetConfigurations() {
-        return {
-            {0.06f, 1.7f, 0.0f, sf::Color::Green},                        // Current green planet
-            {0.014f, 1.2f, GameConstants::PI / 3, sf::Color::Magenta},           // Smaller Magenta planet, closer
-            {0.0065f, 0.4f, 0.0f, sf::Color(255, 192, 203)},         // Even smaller Pink planet closest
-            // Add more planets here as needed:
-            {0.6f, 5.0f, 0.0f * 1.5f, sf::Color::Cyan}   // Tiny cyan planet, very far out
-            // {0.035f, 2.8f, GameConstants::PI * 0.5f, sf::Color::Magenta} // Small magenta planet
-        };
+        std::vector<PlanetConfig> configs;
+
+        // Green planet
+        PlanetConfig green(0.06f, 2.6f, 0.0f, sf::Color::Green);
+        green.moons.push_back(MoonConfig(0.01f, 2.5f, 0.0f, sf::Color(200, 200, 255)));        // Large blue-white moon
+        //green.moons.push_back(MoonConfig(0.015f, 4.0f, GameConstants::PI * 0.5f, sf::Color(255, 200, 200))); // Medium pink moon
+        //green.moons.push_back(MoonConfig(0.008f, 5.5f, GameConstants::PI, sf::Color(200, 255, 200)));        // Small green moon
+
+        configs.push_back(green);
+
+        // Magenta planet
+        PlanetConfig magenta(0.014f, 1.9f, GameConstants::PI / 3, sf::Color::Magenta);
+
+        //magenta.moons.push_back(MoonConfig(0.01f, 1.5f, 0.0f, sf::Color(200, 200, 255)));
+        configs.push_back(magenta);
+
+        // Pink planet
+        PlanetConfig pink(0.0065f, 0.6f, 0.0f, sf::Color(255, 192, 203));
+
+        //pink.moons.push_back(MoonConfig(0.01f, 1.5f, 0.0f, sf::Color(200, 200, 255)));
+        configs.push_back(pink);
+
+        // Cyan planet - MASSIVE with MOONS!
+        //PlanetConfig cyan(0.6f, 5.0f, 0.0f, sf::Color::Cyan);
+
+        //// Add 3 moons to the cyan planet (it's massive enough to hold them)
+        //cyan.moons.push_back(MoonConfig(0.03f, 2.5f, 0.0f, sf::Color(200, 200, 255)));        // Large blue-white moon
+        //cyan.moons.push_back(MoonConfig(0.015f, 4.0f, GameConstants::PI * 0.5f, sf::Color(255, 200, 200))); // Medium pink moon
+        //cyan.moons.push_back(MoonConfig(0.008f, 5.5f, GameConstants::PI, sf::Color(200, 255, 200)));        // Small green moon
+
+        //configs.push_back(cyan);
+
+        //PlanetConfig pink2(0.0065f, 10.0f, 0.0f, sf::Color(255, 192, 203));
+        //configs.push_back(pink2);
+        //PlanetConfig pink3(0.0065f, 10.0f, 0.5f, sf::Color(255, 192, 203));
+        //configs.push_back(pink3);
+        //PlanetConfig pink4(0.0065f, 10.0f, 1.0f, sf::Color(255, 192, 203));
+        //configs.push_back(pink4);
+
+        //auto outerRing = createPlanetRing(
+        //    8,                              // 8 planets in the ring
+        //    0.065f,                        // Small mass
+        //    10.0f,                          // Far out
+        //    sf::Color(255, 192, 203),       // Pink color
+        //    0.0f                            // Start at angle 0
+        //);
+
+        //// Add all ring planets to configs
+        //for (const auto& planet : outerRing) {
+        //    configs.push_back(planet);
+        //}
+
+        return configs;
     }
 }
 // PLANET CONFIGURATION EXPLAINED:
