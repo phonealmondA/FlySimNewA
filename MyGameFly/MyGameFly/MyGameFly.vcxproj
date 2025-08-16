@@ -143,6 +143,7 @@
     <ClCompile Include="FuelTransferNetwork.cpp" />
     <ClCompile Include="GameConstants.cpp" />
     <ClCompile Include="GameInfoDisplay.cpp" />
+    <ClCompile Include="GameSaveData.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MainMenu.cpp" />
     <ClCompile Include="MultiplayerMenu.cpp" />
@@ -160,6 +161,7 @@
     <ClCompile Include="Car.cpp" />
     <ClCompile Include="Satellite.cpp" />
     <ClCompile Include="SatelliteManager.cpp" />
+    <ClCompile Include="SavesMenu.cpp" />
     <ClCompile Include="SplitScreenManager.cpp" />
     <ClCompile Include="TextPanel.cpp" />
     <ClCompile Include="UIManager.cpp" />
@@ -171,6 +173,7 @@
     <ClInclude Include="GameInfoDisplay.h" />
     <ClInclude Include="GameObject.h" />
     <ClInclude Include="Engine.h" />
+    <ClInclude Include="GameSaveData.h" />
     <ClInclude Include="GravitySimulator.h" />
     <ClInclude Include="Button.h" />
     <ClInclude Include="Car.h" />
@@ -181,6 +184,7 @@
     <ClInclude Include="Player.h" />
     <ClInclude Include="Satellite.h" />
     <ClInclude Include="SatelliteManager.h" />
+    <ClInclude Include="SavesMenu.h" />
     <ClInclude Include="SplitScreenManager.h" />
     <ClInclude Include="TextPanel.h" />
     <ClInclude Include="UIManager.h" />
