@@ -17,19 +17,12 @@ Player::Player(int id, sf::Vector2f spawnPos, PlayerType playerType, const std::
     timeSinceLastStateSent(0.0f),
     fuelIncreaseKeyPressed(false),
     fuelDecreaseKeyPressed(false),
-    satelliteConversionKeyPressed(false),
-    networkManager(nullptr),
-    isNetworkMultiplayerMode(false),
-    lastNetworkSyncTime(0.0f),
-    hasPendingPlanetUpdates(false) {
+    satelliteConversionKeyPressed(false) {
 
     // Set default player name
     std::stringstream ss;
     ss << "Player " << (playerID + 1);  // Display as 1-indexed
     playerName = ss.str();
-
-    // Initialize planet references for network sync
-    originalPlanets = planetList;
 
     // Initialize the VehicleManager at spawn position
     initializeVehicleManager();
@@ -37,6 +30,7 @@ Player::Player(int id, sf::Vector2f spawnPos, PlayerType playerType, const std::
     std::cout << "Created " << playerName << " (" << (type == PlayerType::LOCAL ? "LOCAL" : "REMOTE")
         << ") at position (" << spawnPos.x << ", " << spawnPos.y << ")" << std::endl;
 }
+
 void Player::initializeVehicleManager() {
     vehicleManager = std::make_unique<VehicleManager>(spawnPosition, planets);
 
@@ -49,34 +43,19 @@ void Player::initializeVehicleManager() {
 void Player::update(float deltaTime) {
     // Update state send timer
     timeSinceLastStateSent += deltaTime;
-    lastNetworkSyncTime += deltaTime;
 
     if (type == PlayerType::LOCAL) {
         // Handle local input for this player
         handleLocalInput(deltaTime);
-
-        // Handle network synchronization for local player
-        if (isNetworkMultiplayerMode) {
-            syncWithNetwork(deltaTime);
-        }
     }
     // REMOTE players just run physics based on their current state
 
     // Update the vehicle regardless of player type
     if (vehicleManager) {
         vehicleManager->update(deltaTime);
-
-        // Update state tracking from vehicle
-        if (type == PlayerType::LOCAL) {
-            updateStateFromVehicle();
-        }
-    }
-
-    // Update rocket targeting for network multiplayer
-    if (isNetworkMultiplayerMode && satelliteManager) {
-        updateRocketTargetingForNetwork();
     }
 }
+
 void Player::handleLocalInput(float deltaTime) {
     if (type != PlayerType::LOCAL) return;
 
@@ -469,12 +448,6 @@ bool Player::canConvertToSatellite() const {
 }
 
 void Player::convertRocketToSatellite() {
-    if (isNetworkMultiplayerMode) {
-        convertRocketToSatelliteNetwork();
-        return;
-    }
-
-    // Original local conversion logic
     if (!canConvertToSatellite()) {
         std::cout << "Player " << playerName << " cannot convert rocket to satellite" << std::endl;
         return;
@@ -492,21 +465,32 @@ void Player::convertRocketToSatellite() {
         int satelliteID = satelliteManager->createSatelliteFromRocket(rocket, config);
 
         if (satelliteID >= 0) {
-            // Track ownership
-            addOwnedSatellite(satelliteID);
-
-            std::cout << "Player " << playerName << " converted rocket to satellite (ID: " << satelliteID << ")"
-                << std::endl;
+            std::cout << "Player " << playerName << " converted rocket to satellite (ID: " << satelliteID << ")" << std::endl;
 
             // Create new rocket at nearest planet surface
             sf::Vector2f newRocketPos = findNearestPlanetSurface();
-            respawnAtPosition(newRocketPos);
+            vehicleManager = std::make_unique<VehicleManager>(newRocketPos, planets);
+
+            if (vehicleManager && vehicleManager->getRocket()) {
+                vehicleManager->getRocket()->setNearbyPlanets(planets);
+            }
+
+            // Update spawn position for respawning
+            spawnPosition = newRocketPos;
+            stateChanged = true; // Force network sync
+
+            std::cout << "Player " << playerName << " spawned new rocket at ("
+                << newRocketPos.x << ", " << newRocketPos.y << ")" << std::endl;
+        }
+        else {
+            std::cout << "Failed to convert Player " << playerName << "'s rocket to satellite" << std::endl;
         }
     }
     catch (const std::exception& e) {
-        std::cerr << "Exception during Player satellite conversion: " << e.what() << std::endl;
+        std::cerr << "Exception during satellite conversion for Player " << playerName << ": " << e.what() << std::endl;
     }
 }
+
 sf::Vector2f Player::findNearestPlanetSurface() const {
     if (!vehicleManager) return spawnPosition;
 
@@ -546,259 +530,4 @@ sf::Vector2f Player::findNearestPlanetSurface() const {
 
     // Fallback to original spawn position with player offset
     return spawnPosition + sf::Vector2f(playerID * 50.0f, 0.0f);
-}
-
-// Network multiplayer methods
-void Player::setNetworkManager(NetworkManager* netManager) {
-    networkManager = netManager;
-}
-
-void Player::convertRocketToSatelliteNetwork() {
-    if (!canConvertToSatellite() || !networkManager) {
-        std::cout << "Player " << playerName << " cannot convert rocket to satellite in network mode" << std::endl;
-        return;
-    }
-
-    Rocket* rocket = vehicleManager->getRocket();
-    if (!rocket) return;
-
-    try {
-        // Prepare conversion info for network
-        SatelliteCreationInfo creationInfo;
-        creationInfo.satelliteID = satelliteManager->getSatelliteCount() + playerID * 100; // Avoid ID conflicts
-        creationInfo.ownerPlayerID = playerID;
-        creationInfo.position = rocket->getPosition();
-        creationInfo.velocity = rocket->getVelocity();
-        creationInfo.currentFuel = rocket->getCurrentFuel() * GameConstants::SATELLITE_CONVERSION_FUEL_RETENTION;
-        creationInfo.maxFuel = rocket->getMaxFuel();
-        creationInfo.name = playerName + "-SAT-" + std::to_string(creationInfo.satelliteID);
-
-        // Send creation to network first
-        if (networkManager->sendSatelliteCreated(creationInfo)) {
-            // Create satellite locally
-            int satelliteID = satelliteManager->createNetworkSatellite(creationInfo);
-
-            if (satelliteID >= 0) {
-                // Track ownership
-                addOwnedSatellite(satelliteID);
-
-                // Assign ownership in satellite manager
-                satelliteManager->assignSatelliteOwner(satelliteID, playerID);
-
-                std::cout << "Player " << playerName << " sent network satellite conversion (ID: " << satelliteID << ")" << std::endl;
-
-                // Create new rocket at nearest planet surface
-                sf::Vector2f newRocketPos = findNearestPlanetSurface();
-                respawnAtPosition(newRocketPos);
-            }
-        }
-        else {
-            std::cout << "Failed to send satellite creation to network" << std::endl;
-        }
-    }
-    catch (const std::exception& e) {
-        std::cerr << "Exception during network satellite conversion: " << e.what() << std::endl;
-    }
-}
-
-void Player::handleNetworkSatelliteConversion(const SatelliteCreationInfo& creationInfo) {
-    if (!satelliteManager) return;
-
-    // Create satellite from network data (for remote players)
-    int satelliteID = satelliteManager->createNetworkSatellite(creationInfo);
-
-    if (satelliteID >= 0) {
-        std::cout << "Player " << playerName << " received network satellite from Player "
-            << creationInfo.ownerPlayerID << " (ID: " << satelliteID << ")" << std::endl;
-
-        // If this was our conversion, handle rocket respawn
-        if (creationInfo.ownerPlayerID == playerID) {
-            addOwnedSatellite(satelliteID);
-            // Note: respawn position should be handled by the conversion sender
-        }
-    }
-}
-
-void Player::syncWithNetwork(float deltaTime) {
-    if (!networkManager || !isNetworkMultiplayerMode) return;
-
-    // Send state updates at regular intervals
-    if (timeSinceLastStateSent >= STATE_SEND_INTERVAL) {
-        sendPlayerStateToNetwork();
-        timeSinceLastStateSent = 0.0f;
-    }
-
-    // Send planet states if hosting
-    if (networkManager->getRole() == NetworkRole::HOST && hasPendingPlanetUpdates) {
-        sendPlanetStatesToNetwork();
-        hasPendingPlanetUpdates = false;
-    }
-
-    // Handle incoming satellite creations
-    while (networkManager->hasPendingSatelliteCreation()) {
-        SatelliteCreationInfo creationInfo;
-        if (networkManager->receiveSatelliteCreation(creationInfo)) {
-            handleNetworkSatelliteConversion(creationInfo);
-        }
-    }
-
-    // Handle incoming planet updates
-    if (networkManager->hasPendingPlanetState()) {
-        std::vector<PlanetState> planetUpdates = networkManager->getPendingPlanetUpdates();
-        receivePlanetStatesFromNetwork(planetUpdates);
-    }
-}
-
-void Player::sendPlayerStateToNetwork() {
-    if (!networkManager) return;
-
-    PlayerState state = createPlayerState();
-    networkManager->sendPlayerState(state);
-}
-
-void Player::receivePlayerStateFromNetwork(const PlayerState& networkState) {
-    if (type != PlayerType::REMOTE) return;
-
-    applyPlayerState(networkState);
-}
-
-void Player::sendPlanetStatesToNetwork() {
-    if (!networkManager || !satelliteManager) return;
-
-    std::vector<PlanetState> planetStates = satelliteManager->getCurrentPlanetStates();
-    networkManager->syncPlanetStates(planetStates);
-}
-
-void Player::receivePlanetStatesFromNetwork(const std::vector<PlanetState>& planetStates) {
-    if (!satelliteManager) return;
-
-    satelliteManager->updateFromNetworkPlanetStates(planetStates);
-}
-
-void Player::updateLocalPlanetsFromNetwork() {
-    // Check if any planets have changed significantly
-    for (Planet* planet : planets) {
-        if (planet && planet->hasStateChanged()) {
-            hasPendingPlanetUpdates = true;
-            break;
-        }
-    }
-}
-
-void Player::addOwnedSatellite(int satelliteID) {
-    if (std::find(ownedSatelliteIDs.begin(), ownedSatelliteIDs.end(), satelliteID) == ownedSatelliteIDs.end()) {
-        ownedSatelliteIDs.push_back(satelliteID);
-    }
-}
-
-void Player::removeOwnedSatellite(int satelliteID) {
-    auto it = std::find(ownedSatelliteIDs.begin(), ownedSatelliteIDs.end(), satelliteID);
-    if (it != ownedSatelliteIDs.end()) {
-        ownedSatelliteIDs.erase(it);
-    }
-}
-
-bool Player::ownsSatellite(int satelliteID) const {
-    return std::find(ownedSatelliteIDs.begin(), ownedSatelliteIDs.end(), satelliteID) != ownedSatelliteIDs.end();
-}
-
-void Player::updateRocketTargetingForNetwork() {
-    if (!satelliteManager || !vehicleManager) return;
-
-    // Get our rocket for network targeting
-    Rocket* ourRocket = getRocketForNetworkTargeting();
-    if (ourRocket) {
-        // Add our rocket to the satellite manager's network rocket list
-        satelliteManager->addNetworkRocket(ourRocket, playerID);
-    }
-}
-
-Rocket* Player::getRocketForNetworkTargeting() const {
-    if (!vehicleManager || vehicleManager->getActiveVehicleType() != VehicleType::ROCKET) {
-        return nullptr;
-    }
-    return vehicleManager->getRocket();
-}
-
-
-
-PlayerState Player::createPlayerState() const {
-    PlayerState state;
-    state.playerID = playerID;
-
-    if (vehicleManager && vehicleManager->getRocket()) {
-        Rocket* rocket = vehicleManager->getRocket();
-        state.position = rocket->getPosition();
-        state.velocity = rocket->getVelocity();
-        state.rotation = rocket->getRotation();
-        state.isRocket = true;
-        state.isOnGround = false; // TODO: Add ground detection
-        state.mass = rocket->getMass();
-        state.thrustLevel = rocket->getThrustLevel();
-        state.currentFuel = rocket->getCurrentFuel();
-        state.maxFuel = rocket->getMaxFuel();
-        state.isCollectingFuel = rocket->getIsCollectingFuel();
-    }
-    else {
-        // Default values if no vehicle
-        state.position = spawnPosition;
-        state.velocity = sf::Vector2f(0, 0);
-        state.rotation = 0.0f;
-        state.isRocket = true;
-        state.isOnGround = false;
-        state.mass = GameConstants::ROCKET_BASE_MASS;
-        state.thrustLevel = 0.0f;
-        state.currentFuel = GameConstants::ROCKET_STARTING_FUEL;
-        state.maxFuel = GameConstants::ROCKET_MAX_FUEL;
-        state.isCollectingFuel = false;
-    }
-
-    // Satellite fields (not used for player state, but included for completeness)
-    state.isSatellite = false;
-    state.satelliteID = -1;
-    state.orbitAccuracy = 100.0f;
-    state.needsMaintenance = false;
-    state.requestingSatelliteConversion = false;
-    state.newSatelliteID = -1;
-    state.newRocketSpawnPos = sf::Vector2f(0, 0);
-
-    return state;
-}
-
-void Player::applyPlayerState(const PlayerState& state) {
-    if (type != PlayerType::REMOTE) return;
-
-    // Update vehicle state from network
-    if (vehicleManager && vehicleManager->getRocket()) {
-        Rocket* rocket = vehicleManager->getRocket();
-        rocket->setPosition(state.position);
-        rocket->setVelocity(state.velocity);
-        rocket->setFuel(state.currentFuel);
-        // Note: Other properties like rotation and thrust are visual only for remote players
-    }
-}
-
-void Player::updateStateFromVehicle() {
-    if (type != PlayerType::LOCAL || !vehicleManager) return;
-
-    // Check if vehicle state has changed significantly
-    static sf::Vector2f lastPosition(0, 0);
-    static float lastFuel = 0;
-
-    if (vehicleManager->getRocket()) {
-        Rocket* rocket = vehicleManager->getRocket();
-        sf::Vector2f currentPos = rocket->getPosition();
-        float currentFuel = rocket->getCurrentFuel();
-
-        // Check for significant changes
-        float positionChange = std::sqrt((currentPos.x - lastPosition.x) * (currentPos.x - lastPosition.x) +
-            (currentPos.y - lastPosition.y) * (currentPos.y - lastPosition.y));
-        float fuelChange = std::abs(currentFuel - lastFuel);
-
-        if (positionChange > 1.0f || fuelChange > 0.1f) {
-            stateChanged = true;
-            lastPosition = currentPos;
-            lastFuel = currentFuel;
-        }
-    }
 }

@@ -8,7 +8,6 @@
 enum class GameMode {
     NONE,
     SINGLE_PLAYER,
-    LOAD_GAME,
     MULTIPLAYER_HOST,
     MULTIPLAYER_JOIN,
     QUIT
@@ -27,7 +26,6 @@ private:
     void onSinglePlayerClicked();
     void onMultiplayerClicked();
     void onQuitClicked();
-    void onLoadGameClicked();
 
     // Helper methods
     void createButtons();

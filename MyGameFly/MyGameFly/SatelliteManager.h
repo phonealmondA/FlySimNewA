@@ -6,7 +6,6 @@
 #include "Planet.h"
 #include "Rocket.h"
 #include "FuelTransferNetwork.h"
-#include "NetworkManager.h"  // For complete NetworkManager definition
 #include <vector>
 #include <memory>
 #include <map>
@@ -15,8 +14,7 @@
 // Forward declarations
 class Player;
 class VehicleManager;
-struct SatelliteCreationInfo;  // Add this forward declaration
-struct PlayerState;  // Add this forward declaration
+
 // Satellite management statistics
 struct SatelliteNetworkStats {
     int totalSatellites = 0;
@@ -91,24 +89,6 @@ private:
     void performNetworkFuelTransfers(float deltaTime);
     void optimizeFuelDistribution();
     std::string generateSatelliteName(int id) const;
-
-    // Network synchronization helpers
-    void updateRocketProximity();
-
-    // Network multiplayer support - NEW
-    std::map<int, int> playerSatelliteOwnership;  // Maps satelliteID -> playerID
-    bool networkMultiplayerMode;
-    class NetworkManager* networkManager;  // Forward declaration
-
-    // Planet state tracking for network sync
-    std::vector<Planet*> originalPlanets;  // Original planet references
-    std::map<int, PlanetState> receivedPlanetStates;  // Network planet updates
-
-    // Cross-network satellite management
-    void mergeNetworkSatellites(const std::vector<SatelliteCreationInfo>& networkSatellites);
-    void updateSatelliteFromNetworkState(int satelliteID, const PlayerState& networkState);
-    void syncNetworkSatellites();
-    void handleNetworkPlanetUpdates();
 
 public:
     SatelliteManager();
@@ -192,31 +172,9 @@ public:
     void printSatelliteDetails(int satelliteID) const;
     std::vector<std::string> getNetworkStatusReport() const;
 
-    // Network multiplayer support - ENHANCED
-    void setNetworkManager(NetworkManager* netManager);
-    void enableNetworkMode(bool enabled) { networkMultiplayerMode = enabled; }
-    bool isNetworkMode() const { return networkMultiplayerMode; }
-
-    // Network satellite creation from remote players
-    int createNetworkSatellite(const SatelliteCreationInfo& creationInfo);
-    void receiveNetworkSatelliteStates(const std::vector<PlayerState>& satelliteStates);
-    void sendNetworkSatelliteStates();
-
-    // Planet state synchronization
-    void updateFromNetworkPlanetStates(const std::vector<PlanetState>& planetStates);
-    void sendPlanetStatesToNetwork();
-    std::vector<PlanetState> getCurrentPlanetStates() const;
-
-    // Cross-player satellite ownership tracking
-    void assignSatelliteOwner(int satelliteID, int playerID);
-    int getSatelliteOwner(int satelliteID) const;
-    std::vector<Satellite*> getSatellitesOwnedByPlayer(int playerID);
-    std::vector<Satellite*> getAllNetworkSatellites();  // All satellites regardless of owner
-
-    // Enhanced rocket targeting for multiplayer
-    void setAllNetworkRockets(const std::vector<Rocket*>& allRockets);
-    void addNetworkRocket(Rocket* rocket, int ownerPlayerID);
-    void removeNetworkRocket(Rocket* rocket);
+    // Future: Network multiplayer support
+    void sendNetworkUpdate();      // Sync satellite states across network
+    void receiveNetworkUpdate();   // Receive satellite updates from network
 
     // Integration with existing systems
     void integrateWithGravitySimulator(class GravitySimulator* gravSim);
@@ -226,6 +184,7 @@ public:
     void addNearbyRocket(Rocket* rocket);
     void removeNearbyRocket(Rocket* rocket);
     void setNearbyRockets(const std::vector<Rocket*>& rocketList);
+    void updateRocketProximity();
 };
 
 #endif // SATELLITE_MANAGER_H

@@ -218,14 +218,11 @@ void GravitySimulator::update(float deltaTime)
                     sf::Vector2f direction = planet1->getPosition() - planet2->getPosition();
                     float distance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
 
-                    if (distance > 1.00f) {
+                    if (distance > planet1->getRadius() + planet2->getRadius()) {
                         float forceMagnitude = G * planet1->getMass() * planet2->getMass() / (distance * distance);
                         sf::Vector2f normalizedDir = normalize(direction);
                         sf::Vector2f accel2 = normalizedDir * forceMagnitude / planet2->getMass();
                         planet2->setVelocity(planet2->getVelocity() + accel2 * deltaTime);
-                        
-
-                        // REMOVED: planet2->update(deltaTime); - This should happen after all forces are calculated
                     }
                 }
                 else {
@@ -233,34 +230,18 @@ void GravitySimulator::update(float deltaTime)
                     sf::Vector2f direction = planet2->getPosition() - planet1->getPosition();
                     float distance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
 
-                    if (distance > 1.00f) {
+                    if (distance > planet1->getRadius() + planet2->getRadius()) {
                         float forceMagnitude = G * planet1->getMass() * planet2->getMass() / (distance * distance);
                         sf::Vector2f normalizedDir = normalize(direction);
                         sf::Vector2f accel1 = normalizedDir * forceMagnitude / planet1->getMass();
                         sf::Vector2f accel2 = -normalizedDir * forceMagnitude / planet2->getMass();
                         planet1->setVelocity(planet1->getVelocity() + accel1 * deltaTime);
                         planet2->setVelocity(planet2->getVelocity() + accel2 * deltaTime);
-						
-
-                        // FIXED: Update positions after all forces are calculated
-                        // REMOVED: planet1->update(deltaTime); - This should happen after all forces are calculated
-
-
                     }
                 }
             }
         }
-
-        // FIXED: Update all planet positions after all gravitational forces have been calculated
-        for (size_t i = 1; i < planets.size(); i++) {  // Skip planet 0 (pinned in place)
-            planets[i]->update(deltaTime);
-        }
     }
-
-    for (size_t i = 1; i < planets.size(); i++) {  // Skip planet 0 (pinned in place)
-        planets[i]->update(deltaTime);
-    }
-
     // Apply gravity to satellites from planets
     if (satelliteManager) {
         auto satellites = satelliteManager->getAllSatellites();
@@ -290,6 +271,7 @@ void GravitySimulator::update(float deltaTime)
             }
         }
     }
+
 
     // FUEL SYSTEM INTEGRATION: Process fuel collection for all game modes
     if (!players.empty()) {
@@ -365,6 +347,7 @@ void GravitySimulator::update(float deltaTime)
         }
     }
 }
+
 void GravitySimulator::updateSatelliteManagerWithPlayers() {
     if (!satelliteManager) return;
 

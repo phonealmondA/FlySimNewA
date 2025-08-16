@@ -28,12 +28,10 @@ enum class MessageType : uint8_t {
     PLAYER_SPAWN = 2,      // Player joining game
     PLAYER_DISCONNECT = 3, // Player leaving game
     TRANSFORM = 4,         // Transform requests
-    DISCONNECT = 5,
     SATELLITE_CONVERSION = 6, // Satellite conversion events
-    SATELLITE_STATE = 7,      // Dedicated satellite state updates
-    SATELLITE_CREATED = 8,    // New satellite creation
-    PLANET_STATE = 9          // Planet state synchronization
+    DISCONNECT = 5    
 };
+
 // Simplified data structures for state sync - UPDATED WITH FUEL FIELDS
 struct PlayerState {
     int playerID = 0;
@@ -76,26 +74,6 @@ struct SatelliteConversionInfo {
     std::string satelliteName;
 };
 
-// Planet state synchronization
-struct PlanetState {
-    int planetID = 0;
-    sf::Vector2f position;
-    sf::Vector2f velocity;
-    float mass = 0.0f;
-    float radius = 0.0f;
-    sf::Color color;
-};
-
-// Satellite creation info
-struct SatelliteCreationInfo {
-    int satelliteID;
-    int ownerPlayerID;
-    sf::Vector2f position;
-    sf::Vector2f velocity;
-    float currentFuel;
-    float maxFuel;
-    std::string name;
-};
 
 class NetworkManager {
 private:
@@ -127,16 +105,6 @@ private:
     SatelliteConversionInfo pendingSatelliteConversion;
     bool hasPendingConversion;
 
-    // Planet state tracking
-    std::map<int, PlanetState> lastReceivedPlanetStates;
-    std::vector<PlanetState> pendingPlanetUpdates;
-    bool hasPendingPlanetUpdates;
-
-    // Satellite state tracking (separate from player states)
-    std::map<int, PlayerState> lastReceivedSatelliteStates;
-    std::vector<SatelliteCreationInfo> pendingSatelliteCreations;
-    bool hasPendingSatelliteCreations;
-
 
 public:
     NetworkManager();
@@ -144,8 +112,6 @@ public:
 
     // Connection management
     bool attemptAutoConnect();
-    bool startAsHost(unsigned short port);
-    bool connectAsClient(const std::string& ipAddress, unsigned short port);
     void update(float deltaTime);
     void disconnect();
 
@@ -159,24 +125,11 @@ public:
     bool sendPlayerDisconnect(int playerID);
     bool sendTransformRequest(int playerID, bool toRocket);
 
-    // Satellite network synchronization  
-    bool sendSatelliteCreated(const SatelliteCreationInfo& creationInfo);
+    // Satellite network synchronization
+    bool sendSatelliteCreated(int satelliteID, sf::Vector2f position, sf::Vector2f velocity, float fuel);
     bool sendSatelliteState(const PlayerState& satelliteState);
     bool receiveSatelliteState(int satelliteID, PlayerState& outState);
     void syncSatelliteStates(const std::vector<PlayerState>& satelliteStates);
-
-    // Planet state synchronization
-    bool sendPlanetState(const PlanetState& planetState);
-    bool receivePlanetState(int planetID, PlanetState& outState);
-    void syncPlanetStates(const std::vector<PlanetState>& planetStates);
-    bool hasPendingPlanetState() const;
-    std::vector<PlanetState> getPendingPlanetUpdates();
-
-    // Enhanced satellite management
-    bool receiveSatelliteCreation(SatelliteCreationInfo& outInfo);
-    bool hasPendingSatelliteCreation() const;
-    std::vector<SatelliteCreationInfo> getPendingSatelliteCreations();
-
     // Satellite conversion synchronization
     bool sendSatelliteConversion(const SatelliteConversionInfo& conversionInfo);
     bool receiveSatelliteConversion(SatelliteConversionInfo& outInfo);
@@ -207,6 +160,7 @@ private:
     void resetConnection();
     bool startAsHost();
     bool connectAsClient();
+
     // Message handling
     bool sendMessage(MessageType type, sf::Packet& packet);
     bool receiveMessage(MessageType& outType, sf::Packet& outPacket);
@@ -219,14 +173,6 @@ private:
 
     void serializeSatelliteConversion(sf::Packet& packet, const SatelliteConversionInfo& conversionInfo);
     void deserializeSatelliteConversion(sf::Packet& packet, SatelliteConversionInfo& conversionInfo);
-
-    // Planet state serialization
-    void serializePlanetState(sf::Packet& packet, const PlanetState& planetState);
-    void deserializePlanetState(sf::Packet& packet, PlanetState& planetState);
-
-    // Satellite creation serialization
-    void serializeSatelliteCreation(sf::Packet& packet, const SatelliteCreationInfo& creationInfo);
-    void deserializeSatelliteCreation(sf::Packet& packet, SatelliteCreationInfo& creationInfo);
 
     // Connection management
     void handleHeartbeat(float deltaTime);

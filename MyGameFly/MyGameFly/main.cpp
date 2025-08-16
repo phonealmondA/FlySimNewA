@@ -70,7 +70,7 @@ private:
 
     // Game objects
     std::unique_ptr<Planet> planet;
-    std::unique_ptr<Planet> planet2;
+    std::vector<std::unique_ptr<Planet>> orbitingPlanets;
     std::vector<Planet*> planets;
     std::unique_ptr<VehicleManager> vehicleManager;
     std::unique_ptr<SplitScreenManager> splitScreenManager;
@@ -116,35 +116,93 @@ public:
     }
 
     void initializeSinglePlayer() {
-        // Create planets
+        // Create planets using dynamic system
         planet = std::make_unique<Planet>(
             sf::Vector2f(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y),
-            0.0f, GameConstants::MAIN_PLANET_MASS, sf::Color::Blue);
+            0.0f, GameConstants::MAIN_PLANET_MASS, sf::Color(139, 0, 0));
         planet->setVelocity(sf::Vector2f(0.f, 0.f));
 
-        planet2 = std::make_unique<Planet>(
-            sf::Vector2f(GameConstants::SECONDARY_PLANET_X, GameConstants::SECONDARY_PLANET_Y),
-            0.0f, GameConstants::SECONDARY_PLANET_MASS, sf::Color::Green);
-
-        float orbitSpeed = std::sqrt(GameConstants::G * planet->getMass() / GameConstants::PLANET_ORBIT_DISTANCE);
-        planet2->setVelocity(sf::Vector2f(0.f, orbitSpeed));
-
-        // Setup planet vector
         planets.clear();
         planets.push_back(planet.get());
-        planets.push_back(planet2.get());
+
+        // Get planet configurations from GameConstants
+        std::vector<PlanetConfig> planetConfigs = GameConstants::getPlanetConfigurations();
+
+        // Create orbital planets dynamically
+        orbitingPlanets.clear();
+        for (const auto& config : planetConfigs) {
+            auto orbitalPlanet = Planet::createOrbitalPlanet(
+                planet.get(),
+                GameConstants::PLANET_ORBIT_DISTANCE * config.orbitDistanceMultiplier,
+                config.massRatio,
+                config.angleOffset,
+                config.color
+            );
+
+            planets.push_back(orbitalPlanet.get());
+            orbitingPlanets.push_back(std::move(orbitalPlanet));
+        }
+
+        // After creating orbital planets, add their moons
+        for (size_t i = 0; i < orbitingPlanets.size(); i++) {
+            const auto& config = planetConfigs[i];
+
+            // Check if this planet has moons configured
+            if (!config.moons.empty()) {
+                // Create moons for this planet
+                for (const auto& moonConfig : config.moons) {
+                    auto moon = Planet::createMoon(
+                        orbitingPlanets[i].get(),
+                        moonConfig.orbitDistanceMultiplier,
+                        moonConfig.massRatio,
+                        moonConfig.angleOffset,
+                        moonConfig.color
+                    );
+
+                    if (moon) {
+                        // Add moon to its parent planet
+                        orbitingPlanets[i]->addMoon(std::move(moon));
+                    }
+                }
+
+                std::cout << "Added " << config.moons.size() << " moons to planet " << i << std::endl;
+            }
+        }
+
+        // After adding moons, update the planets vector to include all moons for gravity calculations
+        for (auto& planet : orbitingPlanets) {
+            auto moonPtrs = planet->getAllMoonPointers();
+            for (auto* moon : moonPtrs) {
+                planets.push_back(moon);
+            }
+        }
 
         // SATELLITE SYSTEM: Set planets for satellite manager FIRST
         satelliteManager->setPlanets(planets);
 
-        // Create vehicle manager with satellite manager reference
-        sf::Vector2f planetPos = planet->getPosition();
-        float planetRadius = planet->getRadius();
-        float rocketSize = GameConstants::ROCKET_SIZE;
-        sf::Vector2f direction(0, -1);
-        sf::Vector2f rocketPos = planetPos + direction * (planetRadius + rocketSize);
 
-        vehicleManager = std::make_unique<VehicleManager>(rocketPos, planets, satelliteManager.get());
+        // Create vehicle manager with satellite manager reference - spawn on green planet
+        if (!orbitingPlanets.empty()) {
+            sf::Vector2f planetPos = orbitingPlanets[0]->getPosition();
+            float planetRadius = orbitingPlanets[0]->getRadius();
+            float rocketSize = GameConstants::ROCKET_SIZE;
+            sf::Vector2f direction(0, -1);
+            sf::Vector2f rocketPos = planetPos + direction * (planetRadius + rocketSize);
+
+            vehicleManager = std::make_unique<VehicleManager>(rocketPos, planets, satelliteManager.get());
+            gameView.setCenter(rocketPos);
+        }
+        else {
+            // Fallback to main planet if no orbiting planets
+            sf::Vector2f planetPos = planet->getPosition();
+            float planetRadius = planet->getRadius();
+            float rocketSize = GameConstants::ROCKET_SIZE;
+            sf::Vector2f direction(0, -1);
+            sf::Vector2f rocketPos = planetPos + direction * (planetRadius + rocketSize);
+
+            vehicleManager = std::make_unique<VehicleManager>(rocketPos, planets, satelliteManager.get());
+            gameView.setCenter(rocketPos);
+        }
 
         // FUEL SYSTEM: Set up fuel collection for the rocket
         if (vehicleManager->getRocket()) {
@@ -153,8 +211,12 @@ public:
 
         // Setup gravity simulator with satellite manager
         gravitySimulator = std::make_unique<GravitySimulator>();
-        gravitySimulator->addPlanet(planet.get());
-        gravitySimulator->addPlanet(planet2.get());
+
+        // Add all planets to gravity simulator
+        for (const auto& planetPtr : planets) {
+            gravitySimulator->addPlanet(planetPtr);
+        }
+
         gravitySimulator->addVehicleManager(vehicleManager.get());
         gravitySimulator->addSatelliteManager(satelliteManager.get());
 
@@ -166,48 +228,107 @@ public:
         // Reset camera
         zoomLevel = 1.0f;
         targetZoom = 1.0f;
-        gameView.setCenter(rocketPos);
 
         std::cout << "Single Player mode initialized with satellite system!" << std::endl;
         std::cout << "Use 'T' to convert rocket to satellite, '.' to collect fuel, ',' to give fuel" << std::endl;
     }
 
     void initializeLocalPCMultiplayer() {
-        // Create planets (same as single player)
+        // Create planets using dynamic system
         planet = std::make_unique<Planet>(
             sf::Vector2f(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y),
-            0.0f, GameConstants::MAIN_PLANET_MASS, sf::Color::Blue);
+            0.0f, GameConstants::MAIN_PLANET_MASS, sf::Color(139, 0, 0));
         planet->setVelocity(sf::Vector2f(0.f, 0.f));
-
-        planet2 = std::make_unique<Planet>(
-            sf::Vector2f(GameConstants::SECONDARY_PLANET_X, GameConstants::SECONDARY_PLANET_Y),
-            0.0f, GameConstants::SECONDARY_PLANET_MASS, sf::Color::Green);
-
-        float orbitSpeed = std::sqrt(GameConstants::G * planet->getMass() / GameConstants::PLANET_ORBIT_DISTANCE);
-        planet2->setVelocity(sf::Vector2f(0.f, orbitSpeed));
 
         planets.clear();
         planets.push_back(planet.get());
-        planets.push_back(planet2.get());
+
+        // Get planet configurations from GameConstants
+        std::vector<PlanetConfig> planetConfigs = GameConstants::getPlanetConfigurations();
+
+        // Create orbital planets dynamically
+        orbitingPlanets.clear();
+        for (const auto& config : planetConfigs) {
+            auto orbitalPlanet = Planet::createOrbitalPlanet(
+                planet.get(),
+                GameConstants::PLANET_ORBIT_DISTANCE * config.orbitDistanceMultiplier,
+                config.massRatio,
+                config.angleOffset,
+                config.color
+            );
+
+            planets.push_back(orbitalPlanet.get());
+            orbitingPlanets.push_back(std::move(orbitalPlanet));
+        }
+
+        // After creating orbital planets, add their moons
+        for (size_t i = 0; i < orbitingPlanets.size(); i++) {
+            const auto& config = planetConfigs[i];
+
+            // Check if this planet has moons configured
+            if (!config.moons.empty()) {
+                // Create moons for this planet
+                for (const auto& moonConfig : config.moons) {
+                    auto moon = Planet::createMoon(
+                        orbitingPlanets[i].get(),
+                        moonConfig.orbitDistanceMultiplier,
+                        moonConfig.massRatio,
+                        moonConfig.angleOffset,
+                        moonConfig.color
+                    );
+
+                    if (moon) {
+                        // Add moon to its parent planet
+                        orbitingPlanets[i]->addMoon(std::move(moon));
+                    }
+                }
+
+                std::cout << "Added " << config.moons.size() << " moons to planet " << i << std::endl;
+            }
+        }
+
+        // After adding moons, update the planets vector to include all moons for gravity calculations
+        for (auto& planet : orbitingPlanets) {
+            auto moonPtrs = planet->getAllMoonPointers();
+            for (auto* moon : moonPtrs) {
+                planets.push_back(moon);
+            }
+        }
 
         // SATELLITE SYSTEM: Set planets for satellite manager FIRST
         satelliteManager->setPlanets(planets);
 
-        // Create spawn positions for both players
-        sf::Vector2f planetPos = planet->getPosition();
-        float planetRadius = planet->getRadius();
-        float rocketSize = GameConstants::ROCKET_SIZE;
+        // Create spawn positions for both players - spawn on green planet
+        sf::Vector2f player1Pos, player2Pos;
+        if (!orbitingPlanets.empty()) {
+            sf::Vector2f planetPos = orbitingPlanets[0]->getPosition();
+            float planetRadius = orbitingPlanets[0]->getRadius();
+            float rocketSize = GameConstants::ROCKET_SIZE;
 
-        sf::Vector2f player1Pos = planetPos + sf::Vector2f(0, -1) * (planetRadius + rocketSize);
-        sf::Vector2f player2Pos = planetPos + sf::Vector2f(0, 1) * (planetRadius + rocketSize);
+            player1Pos = planetPos + sf::Vector2f(0, -1) * (planetRadius + rocketSize);
+            player2Pos = planetPos + sf::Vector2f(0, 1) * (planetRadius + rocketSize);
+        }
+        else {
+            // Fallback to main planet if no orbiting planets
+            sf::Vector2f planetPos = planet->getPosition();
+            float planetRadius = planet->getRadius();
+            float rocketSize = GameConstants::ROCKET_SIZE;
+
+            player1Pos = planetPos + sf::Vector2f(0, -1) * (planetRadius + rocketSize);
+            player2Pos = planetPos + sf::Vector2f(0, 1) * (planetRadius + rocketSize);
+        }
 
         // Create split screen manager with satellite manager reference
         splitScreenManager = std::make_unique<SplitScreenManager>(player1Pos, player2Pos, planets, satelliteManager.get());
 
         // Setup gravity simulator with satellite manager
         gravitySimulator = std::make_unique<GravitySimulator>();
-        gravitySimulator->addPlanet(planet.get());
-        gravitySimulator->addPlanet(planet2.get());
+
+        // Add all planets to gravity simulator
+        for (const auto& planetPtr : planets) {
+            gravitySimulator->addPlanet(planetPtr);
+        }
+
         gravitySimulator->addSatelliteManager(satelliteManager.get());
         if (splitScreenManager) {
             gravitySimulator->addVehicleManager(splitScreenManager->getPlayer1());
@@ -227,28 +348,70 @@ public:
         std::cout << "Local PC Split-Screen Multiplayer initialized with satellite system!" << std::endl;
         std::cout << "P1: T to convert to satellite, P2: Y to convert to satellite" << std::endl;
     }
-    
+
     void initializeLANMultiplayer() {
-        // Create planets with network IDs
+        // Create planets using dynamic system
         planet = std::make_unique<Planet>(
             sf::Vector2f(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y),
-            0.0f, GameConstants::MAIN_PLANET_MASS, sf::Color::Blue);
+            0.0f, GameConstants::MAIN_PLANET_MASS, sf::Color(139, 0, 0));
         planet->setVelocity(sf::Vector2f(0.f, 0.f));
-        planet->setPlanetID(0);  // Main planet gets ID 0
-
-        planet2 = std::make_unique<Planet>(
-            sf::Vector2f(GameConstants::SECONDARY_PLANET_X, GameConstants::SECONDARY_PLANET_Y),
-            0.0f, GameConstants::SECONDARY_PLANET_MASS, sf::Color::Green);
-
-        float orbitSpeed = std::sqrt(GameConstants::G * planet->getMass() / GameConstants::PLANET_ORBIT_DISTANCE);
-        planet2->setVelocity(sf::Vector2f(0.f, orbitSpeed));
-        planet2->setPlanetID(1);  // Secondary planet gets ID 1
 
         planets.clear();
         planets.push_back(planet.get());
-        planets.push_back(planet2.get());
 
-        // SATELLITE SYSTEM: Set planets for satellite manager
+        // Get planet configurations from GameConstants
+        std::vector<PlanetConfig> planetConfigs = GameConstants::getPlanetConfigurations();
+
+        // Create orbital planets dynamically
+        orbitingPlanets.clear();
+        for (const auto& config : planetConfigs) {
+            auto orbitalPlanet = Planet::createOrbitalPlanet(
+                planet.get(),
+                GameConstants::PLANET_ORBIT_DISTANCE * config.orbitDistanceMultiplier,
+                config.massRatio,
+                config.angleOffset,
+                config.color
+            );
+
+            planets.push_back(orbitalPlanet.get());
+            orbitingPlanets.push_back(std::move(orbitalPlanet));
+        }
+
+        // After creating orbital planets, add their moons
+        for (size_t i = 0; i < orbitingPlanets.size(); i++) {
+            const auto& config = planetConfigs[i];
+
+            // Check if this planet has moons configured
+            if (!config.moons.empty()) {
+                // Create moons for this planet
+                for (const auto& moonConfig : config.moons) {
+                    auto moon = Planet::createMoon(
+                        orbitingPlanets[i].get(),
+                        moonConfig.orbitDistanceMultiplier,
+                        moonConfig.massRatio,
+                        moonConfig.angleOffset,
+                        moonConfig.color
+                    );
+
+                    if (moon) {
+                        // Add moon to its parent planet
+                        orbitingPlanets[i]->addMoon(std::move(moon));
+                    }
+                }
+
+                std::cout << "Added " << config.moons.size() << " moons to planet " << i << std::endl;
+            }
+        }
+
+        // After adding moons, update the planets vector to include all moons for gravity calculations
+        for (auto& planet : orbitingPlanets) {
+            auto moonPtrs = planet->getAllMoonPointers();
+            for (auto* moon : moonPtrs) {
+                planets.push_back(moon);
+            }
+        }
+
+        // SATELLITE SYSTEM: Set planets for satellite manager FIRST
         satelliteManager->setPlanets(planets);
 
         // Initialize network manager
@@ -259,23 +422,28 @@ public:
             return;
         }
 
-        // ENHANCED: Enable network mode for satellite manager
-        satelliteManager->enableNetworkMode(true);
-        satelliteManager->setNetworkManager(networkManager.get());
-
-        // Create local player with satellite manager reference
-        sf::Vector2f spawnPos(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y - 150.0f);
+        // Create local player with satellite manager reference - spawn on green planet
+        sf::Vector2f spawnPos;
+        if (!orbitingPlanets.empty()) {
+            sf::Vector2f planetPos = orbitingPlanets[0]->getPosition();
+            float planetRadius = orbitingPlanets[0]->getRadius();
+            spawnPos = sf::Vector2f(planetPos.x, planetPos.y - planetRadius - 150.0f);
+        }
+        else {
+            // Fallback to main planet
+            spawnPos = sf::Vector2f(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y - 150.0f);
+        }
         localPlayer = std::make_unique<Player>(networkManager->getLocalPlayerID(), spawnPos,
             PlayerType::LOCAL, planets, satelliteManager.get());
 
-        // ENHANCED: Enable network mode for local player
-        localPlayer->setNetworkManager(networkManager.get());
-        localPlayer->enableNetworkMode(true);
-
         // Setup gravity simulator with satellite manager
         gravitySimulator = std::make_unique<GravitySimulator>();
-        gravitySimulator->addPlanet(planet.get());
-        gravitySimulator->addPlanet(planet2.get());
+
+        // Add all planets to gravity simulator
+        for (const auto& planetPtr : planets) {
+            gravitySimulator->addPlanet(planetPtr);
+        }
+
         gravitySimulator->addSatelliteManager(satelliteManager.get());
         gravitySimulator->addPlayer(localPlayer.get());
 
@@ -288,66 +456,104 @@ public:
 
         std::cout << "LAN Multiplayer initialized with satellite system!" << std::endl;
         std::cout << "Use 'T' to convert rocket to satellite" << std::endl;
-        std::cout << "Network mode: " << (networkManager->getRole() == NetworkRole::HOST ? "HOST" : "CLIENT") << std::endl;
     }
 
-
-
     void initializeOnlineMultiplayer(const ConnectionInfo& connectionInfo) {
-        // Create planets with network IDs (same as LAN)
+        // Create planets using dynamic system
         planet = std::make_unique<Planet>(
             sf::Vector2f(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y),
-            0.0f, GameConstants::MAIN_PLANET_MASS, sf::Color::Blue);
+            0.0f, GameConstants::MAIN_PLANET_MASS, sf::Color(139, 0, 0));
         planet->setVelocity(sf::Vector2f(0.f, 0.f));
-        planet->setPlanetID(0);
-
-        planet2 = std::make_unique<Planet>(
-            sf::Vector2f(GameConstants::SECONDARY_PLANET_X, GameConstants::SECONDARY_PLANET_Y),
-            0.0f, GameConstants::SECONDARY_PLANET_MASS, sf::Color::Green);
-
-        float orbitSpeed = std::sqrt(GameConstants::G * planet->getMass() / GameConstants::PLANET_ORBIT_DISTANCE);
-        planet2->setVelocity(sf::Vector2f(0.f, orbitSpeed));
-        planet2->setPlanetID(1);
 
         planets.clear();
         planets.push_back(planet.get());
-        planets.push_back(planet2.get());
 
+        // Get planet configurations from GameConstants
+        std::vector<PlanetConfig> planetConfigs = GameConstants::getPlanetConfigurations();
+
+        // Create orbital planets dynamically
+        orbitingPlanets.clear();
+        for (const auto& config : planetConfigs) {
+            auto orbitalPlanet = Planet::createOrbitalPlanet(
+                planet.get(),
+                GameConstants::PLANET_ORBIT_DISTANCE * config.orbitDistanceMultiplier,
+                config.massRatio,
+                config.angleOffset,
+                config.color
+            );
+
+            planets.push_back(orbitalPlanet.get());
+            orbitingPlanets.push_back(std::move(orbitalPlanet));
+        }
+
+        // After creating orbital planets, add their moons
+        for (size_t i = 0; i < orbitingPlanets.size(); i++) {
+            const auto& config = planetConfigs[i];
+
+            // Check if this planet has moons configured
+            if (!config.moons.empty()) {
+                // Create moons for this planet
+                for (const auto& moonConfig : config.moons) {
+                    auto moon = Planet::createMoon(
+                        orbitingPlanets[i].get(),
+                        moonConfig.orbitDistanceMultiplier,
+                        moonConfig.massRatio,
+                        moonConfig.angleOffset,
+                        moonConfig.color
+                    );
+
+                    if (moon) {
+                        // Add moon to its parent planet
+                        orbitingPlanets[i]->addMoon(std::move(moon));
+                    }
+                }
+
+                std::cout << "Added " << config.moons.size() << " moons to planet " << i << std::endl;
+            }
+        }
+
+        // After adding moons, update the planets vector to include all moons for gravity calculations
+        for (auto& planet : orbitingPlanets) {
+            auto moonPtrs = planet->getAllMoonPointers();
+            for (auto* moon : moonPtrs) {
+                planets.push_back(moon);
+            }
+        }
+
+        // SATELLITE SYSTEM: Set planets for satellite manager FIRST
         satelliteManager->setPlanets(planets);
 
-        // Initialize network manager for online
+        // Initialize network manager for online play
         networkManager = std::make_unique<NetworkManager>();
-        bool connected = false;
-
-        if (connectionInfo.isHost) {
-            connected = networkManager->startAsHost(connectionInfo.port);
-        }
-        else {
-            connected = networkManager->connectAsClient(connectionInfo.ipAddress, connectionInfo.port);
-        }
-
-        if (!connected) {
+        // TODO: Implement online connection with connectionInfo
+        if (!networkManager->attemptAutoConnect()) {
             std::cout << "Failed to establish online connection" << std::endl;
             handleEscapeKey();
             return;
         }
 
-        // Enable network mode
-        satelliteManager->enableNetworkMode(true);
-        satelliteManager->setNetworkManager(networkManager.get());
-
-        // Create local player
-        sf::Vector2f spawnPos(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y - 150.0f);
+        // Create local player with satellite manager reference - spawn on green planet
+        sf::Vector2f spawnPos;
+        if (!orbitingPlanets.empty()) {
+            sf::Vector2f planetPos = orbitingPlanets[0]->getPosition();
+            float planetRadius = orbitingPlanets[0]->getRadius();
+            spawnPos = sf::Vector2f(planetPos.x, planetPos.y - planetRadius - 150.0f);
+        }
+        else {
+            // Fallback to main planet
+            spawnPos = sf::Vector2f(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y - 150.0f);
+        }
         localPlayer = std::make_unique<Player>(networkManager->getLocalPlayerID(), spawnPos,
             PlayerType::LOCAL, planets, satelliteManager.get());
 
-        localPlayer->setNetworkManager(networkManager.get());
-        localPlayer->enableNetworkMode(true);
-
-        // Setup gravity simulator
+        // Setup gravity simulator with satellite manager
         gravitySimulator = std::make_unique<GravitySimulator>();
-        gravitySimulator->addPlanet(planet.get());
-        gravitySimulator->addPlanet(planet2.get());
+
+        // Add all planets to gravity simulator
+        for (const auto& planetPtr : planets) {
+            gravitySimulator->addPlanet(planetPtr);
+        }
+
         gravitySimulator->addSatelliteManager(satelliteManager.get());
         gravitySimulator->addPlayer(localPlayer.get());
 
@@ -358,8 +564,8 @@ public:
         targetZoom = 1.0f;
         gameView.setCenter(spawnPos);
 
-        std::cout << "Online Multiplayer initialized!" << std::endl;
-        std::cout << "Network mode: " << (networkManager->getRole() == NetworkRole::HOST ? "HOST" : "CLIENT") << std::endl;
+        std::cout << "Online Multiplayer initialized with satellite system!" << std::endl;
+        std::cout << "Use 'T' to convert rocket to satellite" << std::endl;
     }
 
 
@@ -577,25 +783,12 @@ public:
     void renderGame() {
         window.setView(gameView);
 
-        // Find closest planet for orbit path
-        Planet* closestPlanet = nullptr;
-        float closestDistance = std::numeric_limits<float>::max();
-
-        sf::Vector2f referencePos = getCameraReferencePosition();
-
+        // Draw orbit paths for all planets
         for (auto& planetPtr : planets) {
-            sf::Vector2f direction = planetPtr->getPosition() - referencePos;
-            float dist = std::sqrt(direction.x * direction.x + direction.y * direction.y);
-
-            if (dist < closestDistance) {
-                closestDistance = dist;
-                closestPlanet = planetPtr;
+            // Skip drawing orbit path for the main stationary planet (it doesn't orbit)
+            if (planetPtr != planet.get()) {
+                planetPtr->drawOrbitPath(window, planets);
             }
-        }
-
-        // Draw orbit path for closest planet
-        if (closestPlanet) {
-            closestPlanet->drawOrbitPath(window, planets);
         }
 
         // Draw trajectory for rockets
@@ -603,12 +796,14 @@ public:
 
         // Draw game objects - planets automatically draw fuel collection rings
         planet->draw(window);
-        planet2->draw(window);
 
-        // SATELLITE SYSTEM: Draw satellites with constant size (prevents growing when zooming)
-        if (satelliteManager) {
-            satelliteManager->drawWithConstantSize(window, zoomLevel);
+        // Draw all orbiting planets
+        for (const auto& orbitingPlanet : orbitingPlanets) {
+            orbitingPlanet->draw(window);
         }
+
+        // SATELLITE SYSTEM: Draw satellites
+        satelliteManager->drawWithConstantSize(window, zoomLevel);
 
         // Draw vehicles and fuel collection indicators
         drawVehiclesAndFuelLines();
@@ -704,7 +899,11 @@ public:
     void drawVelocityVectors() {
         // Draw planet velocity vectors
         planet->drawVelocityVector(window, 5.0f);
-        planet2->drawVelocityVector(window, 5.0f);
+
+        // Draw velocity vectors for all orbiting planets
+        for (const auto& orbitingPlanet : orbitingPlanets) {
+            orbitingPlanet->drawVelocityVector(window, 5.0f);
+        }
 
         // Draw vehicle velocity vectors
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
@@ -830,7 +1029,7 @@ public:
             std::cout << "Satellite conversion not available in current mode/state" << std::endl;
         }
     }
-    
+
     void handleNetworkSatelliteConversions() {
         if (!networkManager || !networkManager->hasPendingSatelliteConversion()) return;
 
@@ -839,37 +1038,45 @@ public:
 
             std::cout << "Processing network satellite conversion from Player " << conversionInfo.playerID << std::endl;
 
-            // Create satellite using enhanced network method
-            int satelliteID = satelliteManager->createNetworkSatellite({
-                conversionInfo.satelliteID,
-                conversionInfo.playerID,
+            // Create satellite from network data
+            SatelliteConversionConfig config;
+            config.customName = conversionInfo.satelliteName;
+
+            int satelliteID = satelliteManager->createSatellite(
                 conversionInfo.satellitePosition,
                 conversionInfo.satelliteVelocity,
-                conversionInfo.satelliteFuel,
-                GameConstants::SATELLITE_MAX_FUEL,
-                conversionInfo.satelliteName
-                });
+                config
+            );
 
             if (satelliteID >= 0) {
-                // Assign ownership
-                satelliteManager->assignSatelliteOwner(satelliteID, conversionInfo.playerID);
-
-                std::cout << "Created network satellite " << conversionInfo.satelliteName
-                    << " (ID: " << satelliteID << ") owned by Player " << conversionInfo.playerID << std::endl;
+                // Set the fuel level for the networked satellite
+                Satellite* satellite = satelliteManager->getSatellite(satelliteID);
+                if (satellite) {
+                    satellite->setFuel(conversionInfo.satelliteFuel);
+                }
 
                 // If this conversion involved the local player, handle rocket respawn
                 if (localPlayer && localPlayer->getID() == conversionInfo.playerID) {
+                    // Create new rocket at the specified spawn position
                     localPlayer->respawnAtPosition(conversionInfo.newRocketPosition);
                 }
+                // If it's a remote player, create/update their rocket position
                 else {
-                    // Find the remote player and respawn their rocket
-                    for (auto& remotePlayer : remotePlayers) {
-                        if (remotePlayer && remotePlayer->getID() == conversionInfo.playerID) {
-                            remotePlayer->respawnAtPosition(conversionInfo.newRocketPosition);
+                    // Find or create remote player
+                    Player* remotePlayer = nullptr;
+                    for (auto& player : remotePlayers) {
+                        if (player->getID() == conversionInfo.playerID) {
+                            remotePlayer = player.get();
                             break;
                         }
                     }
+
+                    if (remotePlayer) {
+                        remotePlayer->respawnAtPosition(conversionInfo.newRocketPosition);
+                    }
                 }
+
+                std::cout << "Network satellite conversion completed - ID: " << satelliteID << std::endl;
             }
             else {
                 std::cout << "Failed to create satellite from network conversion" << std::endl;
@@ -879,7 +1086,6 @@ public:
             std::cerr << "Exception during network satellite conversion: " << e.what() << std::endl;
         }
     }
-
 
     sf::Vector2f findNearestPlanetSurface(sf::Vector2f position) {
         Planet* nearestPlanet = nullptr;
@@ -978,7 +1184,7 @@ public:
                 else {
                     targetZoom *= zoomFactor;
                 }
-                targetZoom = std::max(0.5f, std::min(targetZoom, 50.0f));
+                targetZoom = std::max(0.0005f, std::min(targetZoom, 500.0f));
 
                 updateCameraCenter();
             }
@@ -1107,85 +1313,87 @@ public:
             else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::X)) {
                 sf::Vector2f vehiclePos = vehicleManager->getActiveVehicle()->getPosition();
                 sf::Vector2f direction1 = vehiclePos - planet->getPosition();
-                sf::Vector2f direction2 = vehiclePos - planet2->getPosition();
                 float dist1 = std::sqrt(direction1.x * direction1.x + direction1.y * direction1.y);
-                float dist2 = std::sqrt(direction2.x * direction2.x + direction2.y * direction2.y);
 
-                targetZoom = minZoom + (std::min(dist1, dist2) - (planet->getRadius() + GameConstants::ROCKET_SIZE)) / 100.0f;
+                float minDist = dist1;
+                for (const auto& orbitingPlanet : orbitingPlanets) {
+                    sf::Vector2f direction = vehiclePos - orbitingPlanet->getPosition();
+                    float dist = std::sqrt(direction.x * direction.x + direction.y * direction.y);
+                    if (dist < minDist) {
+                        minDist = dist;
+                    }
+                }
+
+                targetZoom = minZoom + (minDist - (planet->getRadius() + GameConstants::ROCKET_SIZE)) / 100.0f;
                 targetZoom = std::max(minZoom, std::min(targetZoom, maxZoom));
                 gameView.setCenter(vehiclePos);
             }
             else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
                 targetZoom = 10.0f;
-                gameView.setCenter(planet2->getPosition());
+                // Focus on first orbiting planet if available, otherwise main planet
+                if (!orbitingPlanets.empty()) {
+                    gameView.setCenter(orbitingPlanets[0]->getPosition());
+                }
+                else {
+                    gameView.setCenter(planet->getPosition());
+                }
             }
         }
     }
 
     void updateGame(float deltaTime) {
-        // Update network manager first (handles message processing)
+        // Update network manager if active
         if (networkManager) {
             networkManager->update(deltaTime);
-
-            // Handle network events
-            handleNetworkPlayerEvents();
+        }
+        // Handle network satellite conversions
+        if (networkManager) {
             handleNetworkSatelliteConversions();
-            handleNetworkPlanetUpdates();
         }
 
-        // Update planets and track changes for network sync
-        if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER)) {
-            updatePlanetsWithNetworkSync(deltaTime);
-        }
-        else {
-            updatePlanetsLocal(deltaTime);
-        }
+        // Update simulation
+        gravitySimulator->update(deltaTime);
+        planet->update(deltaTime);
 
-        // Update gravity simulator
-        if (gravitySimulator) {
-            gravitySimulator->update(deltaTime);
+        // Update all orbiting planets
+        for (const auto& orbitingPlanet : orbitingPlanets) {
+            orbitingPlanet->update(deltaTime);
         }
 
-        // Update satellite system
-        if (satelliteManager) {
-            satelliteManager->update(deltaTime);
+        // SATELLITE SYSTEM: Update satellites
+        satelliteManager->update(deltaTime);
 
-            // SATELLITE SYSTEM: Update rocket references for single player
-            if (currentState == GameState::SINGLE_PLAYER && vehicleManager) {
-                satelliteManager->setNearbyRockets({ vehicleManager->getRocket() });
+        // SATELLITE SYSTEM: Update rocket references for single player
+        if (currentState == GameState::SINGLE_PLAYER && vehicleManager) {
+            satelliteManager->setNearbyRockets({ vehicleManager->getRocket() });
+        }
+        // SATELLITE SYSTEM: Update rocket references for split screen
+        else if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
+            std::vector<Rocket*> activeRockets;
+            if (splitScreenManager->getPlayer1()->getActiveVehicleType() == VehicleType::ROCKET) {
+                activeRockets.push_back(splitScreenManager->getPlayer1()->getRocket());
             }
-            // SATELLITE SYSTEM: Update rocket references for split screen
-            else if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
-                std::vector<Rocket*> activeRockets;
-                if (splitScreenManager->getPlayer1()->getActiveVehicleType() == VehicleType::ROCKET) {
-                    activeRockets.push_back(splitScreenManager->getPlayer1()->getRocket());
-                }
-                if (splitScreenManager->getPlayer2()->getActiveVehicleType() == VehicleType::ROCKET) {
-                    activeRockets.push_back(splitScreenManager->getPlayer2()->getRocket());
-                }
-                satelliteManager->setNearbyRockets(activeRockets);
+            if (splitScreenManager->getPlayer2()->getActiveVehicleType() == VehicleType::ROCKET) {
+                activeRockets.push_back(splitScreenManager->getPlayer2()->getRocket());
             }
-            // SATELLITE SYSTEM: Update rocket references for network multiplayer - ENHANCED
-            else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER)) {
-                std::vector<Rocket*> networkRockets;
-
-                // Add local player rocket
-                if (localPlayer && localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
-                    networkRockets.push_back(localPlayer->getVehicleManager()->getRocket());
-                }
-
-                // Add all remote player rockets
-                for (auto& remotePlayer : remotePlayers) {
-                    if (remotePlayer && remotePlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
-                        networkRockets.push_back(remotePlayer->getVehicleManager()->getRocket());
-                    }
-                }
-
-                // ENHANCED: Use unified network rocket targeting
-                satelliteManager->setAllNetworkRockets(networkRockets);
-            }
+            satelliteManager->setNearbyRockets(activeRockets);
         }
+        // SATELLITE SYSTEM: Update rocket references for network multiplayer
+        else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER)) {
+            std::vector<Rocket*> networkRockets;
 
+            if (localPlayer && localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+                networkRockets.push_back(localPlayer->getVehicleManager()->getRocket());
+            }
+
+            for (auto& remotePlayer : remotePlayers) {
+                if (remotePlayer && remotePlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
+                    networkRockets.push_back(remotePlayer->getVehicleManager()->getRocket());
+                }
+            }
+
+            satelliteManager->setNearbyRockets(networkRockets);
+        }
         if (currentState == GameState::LOCAL_PC_MULTIPLAYER && splitScreenManager) {
             splitScreenManager->update(deltaTime);
 
@@ -1194,28 +1402,22 @@ public:
             }
         }
         else if ((currentState == GameState::LAN_MULTIPLAYER || currentState == GameState::ONLINE_MULTIPLAYER) && localPlayer) {
-            // NETWORK MULTIPLAYER: Update local player and sync with network
             localPlayer->update(deltaTime);
 
-            // Update remote players from network state
-            updateRemotePlayersFromNetwork();
+            for (auto& remotePlayer : remotePlayers) {
+                remotePlayer->update(deltaTime);
+            }
 
-            // Sync local player state to network
-            syncLocalPlayerToNetwork();
-
-            // Update camera to follow local player
-            if (localPlayer->getVehicleManager() && localPlayer->getVehicleManager()->getActiveVehicle()) {
-                sf::Vector2f playerPos = localPlayer->getVehicleManager()->getActiveVehicle()->getPosition();
-                gameView.setCenter(playerPos);
+            if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C)) {
+                gameView.setCenter(localPlayer->getPosition());
             }
         }
         else if (vehicleManager) {
             vehicleManager->update(deltaTime);
 
-            if (vehicleManager->getActiveVehicle()) {
-                sf::Vector2f vehiclePos = vehicleManager->getActiveVehicle()->getPosition();
-                gameView.setCenter(vehiclePos);
-            }
+            // Auto-center camera on vehicle
+            sf::Vector2f vehiclePos = vehicleManager->getActiveVehicle()->getPosition();
+            gameView.setCenter(vehiclePos);
         }
 
         // Smooth zoom
@@ -1225,142 +1427,6 @@ public:
         // Update UI Manager
         uiManager->update(currentState, vehicleManager.get(), splitScreenManager.get(),
             localPlayer.get(), planets, networkManager.get(), satelliteManager.get());
-    }
-
-    // Network synchronization methods - NEW
-    void handleNetworkSatelliteUpdates() {
-        if (!networkManager || !satelliteManager) return;
-
-        // Handle incoming satellite creations
-        while (networkManager->hasPendingSatelliteCreation()) {
-            SatelliteCreationInfo creationInfo;
-            if (networkManager->receiveSatelliteCreation(creationInfo)) {
-                // Only create if it's not our own satellite (avoid duplicates)
-                if (creationInfo.ownerPlayerID != networkManager->getLocalPlayerID()) {
-                    int satelliteID = satelliteManager->createNetworkSatellite(creationInfo);
-                    if (satelliteID >= 0) {
-                        std::cout << "Received network satellite (ID: " << satelliteID
-                            << ") from Player " << creationInfo.ownerPlayerID << std::endl;
-                    }
-                }
-            }
-        }
-    }
-
-    void handleNetworkPlanetUpdates() {
-        if (!networkManager || !satelliteManager) return;
-
-        // Handle incoming planet state updates
-        if (networkManager->hasPendingPlanetState()) {
-            std::vector<PlanetState> planetUpdates = networkManager->getPendingPlanetUpdates();
-
-            for (const auto& planetState : planetUpdates) {
-                // Update our local planets from network data
-                if (planetState.planetID == 0 && planet) {
-                    planet->applyPlanetState(planetState);
-                }
-                else if (planetState.planetID == 1 && planet2) {
-                    planet2->applyPlanetState(planetState);
-                }
-            }
-
-            std::cout << "Applied " << planetUpdates.size() << " planet state updates from network" << std::endl;
-        }
-    }
-
-    void handleNetworkPlayerEvents() {
-        if (!networkManager) return;
-
-        // Handle new players joining
-        while (networkManager->hasNewPlayer()) {
-            PlayerSpawnInfo spawnInfo = networkManager->getNewPlayerInfo();
-
-            // Create remote player if it doesn't exist
-            bool playerExists = false;
-            for (auto& remotePlayer : remotePlayers) {
-                if (remotePlayer && remotePlayer->getID() == spawnInfo.playerID) {
-                    playerExists = true;
-                    break;
-                }
-            }
-
-            if (!playerExists) {
-                auto newRemotePlayer = std::make_unique<Player>(
-                    spawnInfo.playerID, spawnInfo.spawnPosition,
-                    PlayerType::REMOTE, planets, satelliteManager.get()
-                );
-
-                newRemotePlayer->setNetworkManager(networkManager.get());
-                newRemotePlayer->enableNetworkMode(true);
-
-                remotePlayers.push_back(std::move(newRemotePlayer));
-
-                std::cout << "Added remote Player " << spawnInfo.playerID << std::endl;
-            }
-        }
-    }
-
-    void updatePlanetsWithNetworkSync(float deltaTime) {
-        // Update planets and track changes for network sync
-        if (planet) {
-            planet->update(deltaTime);
-        }
-        if (planet2) {
-            planet2->update(deltaTime);
-        }
-
-        // Send planet updates if we're the host and planets have changed
-        if (networkManager && networkManager->getRole() == NetworkRole::HOST) {
-            bool planetsChanged = false;
-            if (planet && planet->hasStateChanged()) planetsChanged = true;
-            if (planet2 && planet2->hasStateChanged()) planetsChanged = true;
-
-            if (planetsChanged && satelliteManager) {
-                std::vector<PlanetState> planetStates = satelliteManager->getCurrentPlanetStates();
-                networkManager->syncPlanetStates(planetStates);
-
-                // Mark planets as synced
-                if (planet) planet->markStateSynced();
-                if (planet2) planet2->markStateSynced();
-            }
-        }
-    }
-
-    void updatePlanetsLocal(float deltaTime) {
-        // Standard local planet updates
-        if (planet) {
-            planet->update(deltaTime);
-        }
-        if (planet2) {
-            planet2->update(deltaTime);
-        }
-    }
-
-    void updateRemotePlayersFromNetwork() {
-        if (!networkManager) return;
-
-        // Update remote players from network state
-        for (auto& remotePlayer : remotePlayers) {
-            if (remotePlayer) {
-                PlayerState networkState;
-                if (networkManager->receivePlayerState(remotePlayer->getID(), networkState)) {
-                    remotePlayer->receivePlayerStateFromNetwork(networkState);
-                }
-            }
-        }
-    }
-
-    void syncLocalPlayerToNetwork() {
-        if (!networkManager || !localPlayer) return;
-
-        // Send local player state to network at regular intervals
-        static float timeSinceLastSync = 0.0f;
-        timeSinceLastSync += 0.016f; // Assume ~60fps
-
-        if (timeSinceLastSync >= GameConstants::NETWORK_STATE_SEND_INTERVAL) {
-            localPlayer->sendPlayerStateToNetwork();
-            timeSinceLastSync = 0.0f;
-        }
     }
 
     // Fix the handleVehicleTransform method (it had incorrect logic)
@@ -1492,5 +1558,3 @@ int main() {
     game.run();
     return 0;
 }
-
-

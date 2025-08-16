@@ -10,7 +10,7 @@ OnlineMultiplayerMenu::OnlineMultiplayerMenu(sf::Vector2u winSize)
     titleText(font), ipText(font), portText(font), statusText(font),
     ipInputText(font), portInputText(font),
     currentIP(DEFAULT_IP), currentPort(std::to_string(DEFAULT_PORT)),
-    ipInputActive(false), portInputActive(false), isHost(false)
+    ipInputActive(false), portInputActive(false)
 {
     loadFont();
     setupBackground();
@@ -169,7 +169,6 @@ void OnlineMultiplayerMenu::createButtons() {
 void OnlineMultiplayerMenu::onHostClicked() {
     if (isValidPort(currentPort)) {
         selectedMode = OnlineMode::HOST_GAME;
-        isHost = true;  // Set host flag
         isActive = false;
         std::cout << "Host Game selected on port " << currentPort << std::endl;
     }
@@ -181,7 +180,6 @@ void OnlineMultiplayerMenu::onHostClicked() {
 void OnlineMultiplayerMenu::onJoinClicked() {
     if (isValidIP(currentIP) && isValidPort(currentPort)) {
         selectedMode = OnlineMode::JOIN_GAME;
-        isHost = false;  // Set client flag
         isActive = false;
         std::cout << "Join Game selected: " << currentIP << ":" << currentPort << std::endl;
     }
@@ -354,11 +352,9 @@ bool OnlineMultiplayerMenu::isValidPort(const std::string& port) const {
     }
 }
 
-
 ConnectionInfo OnlineMultiplayerMenu::getConnectionInfo() const {
     ConnectionInfo info;
     info.ipAddress = currentIP;
-    info.isHost = (selectedMode == OnlineMode::HOST_GAME);
 
     try {
         info.port = static_cast<unsigned short>(std::stoi(currentPort));

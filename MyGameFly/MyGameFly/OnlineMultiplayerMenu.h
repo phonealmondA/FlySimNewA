@@ -15,7 +15,6 @@ enum class OnlineMode {
 struct ConnectionInfo {
     std::string ipAddress;
     unsigned short port;
-    bool isHost = false;
     bool isValid() const {
         return !ipAddress.empty() && port > 0;
     }
@@ -30,7 +29,6 @@ private:
     sf::Text ipText;
     sf::Text portText;
     sf::Text statusText;
-    bool isHost;  // Add this line
 
     // Input fields
     sf::RectangleShape ipInputBox;
