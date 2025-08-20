@@ -39,9 +39,6 @@
     <ClCompile Include="Button.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Car.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="VehicleManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -117,9 +114,6 @@
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="Button.h">
-      <Filter>Source Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Car.h">
       <Filter>Source Files</Filter>
     </ClInclude>
     <ClInclude Include="VehicleManager.h">

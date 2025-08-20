@@ -13,36 +13,12 @@ VehicleManager::VehicleManager(sf::Vector2f initialPos, const std::vector<Planet
     rocket->setNearbyPlanets(planets);
 
     // Initialize car (will be inactive at start)
-    car = std::make_unique<Car>(initialPos, sf::Vector2f(0, 0));
 }
 
 void VehicleManager::switchVehicle() {
     if (activeVehicle == VehicleType::ROCKET) {
         // Check if rocket is close to a planet surface
         bool canTransform = false;
-        for (const auto& planet : planets) {
-            float dist = distance(rocket->getPosition(), planet->getPosition());
-            if (dist <= planet->getRadius() + GameConstants::TRANSFORM_DISTANCE) {
-                canTransform = true;
-                break;
-            }
-        }
-
-        if (canTransform) {
-            // Transfer rocket state to car
-            car->initializeFromRocket(rocket.get());
-            car->checkGrounding(planets);
-            activeVehicle = VehicleType::CAR;
-        }
-    }
-    else {
-        // Only allow switching back to rocket if car is on ground
-        if (car->isOnGround()) {
-            // Transfer car state to rocket
-            rocket->setPosition(car->getPosition());
-            rocket->setVelocity(sf::Vector2f(0, 0)); // Start with zero velocity
-            activeVehicle = VehicleType::ROCKET;
-        }
     }
 }
 
@@ -55,8 +31,6 @@ void VehicleManager::update(float deltaTime) {
         updateSatelliteManager();
     }
     else {
-        car->checkGrounding(planets);
-        car->update(deltaTime);
     }
 }
 
@@ -66,7 +40,6 @@ void VehicleManager::draw(sf::RenderWindow& window) {
         rocket->draw(window);
     }
     else {
-        car->draw(window);
     }
 }
 
@@ -75,7 +48,6 @@ void VehicleManager::drawWithConstantSize(sf::RenderWindow& window, float zoomLe
         rocket->drawWithConstantSize(window, zoomLevel);
     }
     else {
-        car->drawWithConstantSize(window, zoomLevel);
     }
 }
 
@@ -84,7 +56,6 @@ void VehicleManager::applyThrust(float amount) {
         rocket->applyThrust(amount);
     }
     else {
-        car->accelerate(amount);
     }
 }
 
@@ -93,7 +64,6 @@ void VehicleManager::rotate(float amount) {
         rocket->rotate(amount);
     }
     else {
-        car->rotate(amount);
     }
 }
 
@@ -109,7 +79,6 @@ GameObject* VehicleManager::getActiveVehicle() {
         return rocket.get();
     }
     else {
-        return car.get();
     }
 }
 

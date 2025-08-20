@@ -158,7 +158,6 @@
     <ClCompile Include="Rocket.cpp" />
     <ClCompile Include="GravitySimulator.cpp" />
     <ClCompile Include="Button.cpp" />
-    <ClCompile Include="Car.cpp" />
     <ClCompile Include="Satellite.cpp" />
     <ClCompile Include="SatelliteManager.cpp" />
     <ClCompile Include="SavesMenu.cpp" />
@@ -176,7 +175,6 @@
     <ClInclude Include="GameSaveData.h" />
     <ClInclude Include="GravitySimulator.h" />
     <ClInclude Include="Button.h" />
-    <ClInclude Include="Car.h" />
     <ClInclude Include="MainMenu.h" />
     <ClInclude Include="MultiplayerMenu.h" />
     <ClInclude Include="NetworkManager.h" />

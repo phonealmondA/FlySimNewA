@@ -5,7 +5,6 @@
 #include "Player.h"
 #include "Planet.h"
 #include "Rocket.h"
-#include "Car.h"
 #include "VectorHelper.h"
 #include "NetworkManager.h"
 #include "GameConstants.h"
@@ -147,11 +146,6 @@ std::string GameInfoDisplay::generateVehicleInfo(GameState currentState, Vehicle
                 << "Can Convert: " << (rocket->getCurrentFuel() > 10.0f ? "YES" : "NO");
         }
         else {
-            Car* car = localPlayer->getVehicleManager()->getCar();
-            ss << modeStr << " MULTIPLAYER (CAR)\n"
-                << "Player: " << localPlayer->getName() << "\n"
-                << "On Ground: " << (car->isOnGround() ? "Yes" : "No") << "\n"
-                << "Transform to rocket for satellites";
         }
     }
     else if (vehicleManager && vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
@@ -172,14 +166,6 @@ std::string GameInfoDisplay::generateVehicleInfo(GameState currentState, Vehicle
     }
     else if (vehicleManager) {
         // Car info (unchanged)
-        Car* car = vehicleManager->getCar();
-        ss << "CAR INFO\n"
-            << "On Ground: " << (car->isOnGround() ? "Yes" : "No") << "\n"
-            << "Position: (" << std::fixed << std::setprecision(1)
-            << car->getPosition().x << ", " << car->getPosition().y << ")\n"
-            << "Orientation: " << std::setprecision(1) << car->getRotation() << " degrees\n"
-            << "Press L to transform to rocket\n"
-            << "Cars don't use fuel system";
     }
 
     return ss.str();

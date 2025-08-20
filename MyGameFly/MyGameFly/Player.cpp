@@ -200,17 +200,7 @@ PlayerState Player::getState() const {
             state.maxFuel = rocket->getMaxFuel();
             state.isCollectingFuel = rocket->getIsCollectingFuel();
         }
-        else if (!state.isRocket && vehicleManager->getCar()) {
-            state.rotation = vehicleManager->getCar()->getRotation();
-            state.mass = GameConstants::ROCKET_BASE_MASS;  // Cars use base mass
-            state.thrustLevel = 0.0f;
-            state.isOnGround = vehicleManager->getCar()->isOnGround();
-
-            // Cars don't use fuel (for now)
-            state.currentFuel = 0.0f;
-            state.maxFuel = 0.0f;
-            state.isCollectingFuel = false;
-        }
+        
     }
 
     return state;
@@ -233,13 +223,10 @@ void Player::applyState(const PlayerState& state) {
                 // Don't override thrust level for remote players in state sync
             }
         }
-        else if (!state.isRocket && vehicleManager->getActiveVehicleType() == VehicleType::CAR) {
-            // Car state application would go here
-        }
+        
 
         // Handle vehicle type mismatch (transformation needed)
-        if ((state.isRocket && vehicleManager->getActiveVehicleType() != VehicleType::ROCKET) ||
-            (!state.isRocket && vehicleManager->getActiveVehicleType() != VehicleType::CAR)) {
+        if ((state.isRocket && vehicleManager->getActiveVehicleType() != VehicleType::ROCKET)) {
             vehicleManager->switchVehicle();
         }
     }

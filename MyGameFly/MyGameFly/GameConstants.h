@@ -82,13 +82,6 @@ namespace GameConstants {
     constexpr int TRAJECTORY_STEPS = 500;
     constexpr float TRAJECTORY_COLLISION_RADIUS = 10.0f;
 
-    // Vehicle physics
-    constexpr float FRICTION = 0.0098f;  // Friction coefficient for surface movement
-    constexpr float TRANSFORM_DISTANCE = 30.0f;  // Distance for vehicle transformation
-    constexpr float ADAPTIVE_TIMESTEP_THRESHOLD = 10.0f;  // Threshold for adaptive timestep
-    constexpr float CAR_WHEEL_RADIUS = 5.0f;  // Radius of car wheels
-    constexpr float CAR_BODY_WIDTH = 30.0f;  // Width of car body
-    constexpr float CAR_BODY_HEIGHT = 15.0f;  // Height of car body
 
     // Engine parameters - scaled with gravitational constant
     constexpr float BASE_THRUST_MULTIPLIER = 10000000000.0f;

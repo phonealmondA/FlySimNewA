@@ -1,7 +1,6 @@
 #include <SFML/Graphics.hpp>
 #include "Planet.h"
 #include "Rocket.h"
-#include "Car.h"
 #include "VehicleManager.h"
 #include "GravitySimulator.h"
 #include "GameConstants.h"

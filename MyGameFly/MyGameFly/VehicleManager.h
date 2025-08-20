@@ -1,20 +1,17 @@
 // VehicleManager.h
 #pragma once
 #include "Rocket.h"
-#include "Car.h"
 #include "Planet.h"
 #include <memory>
 #include <vector>
 
 enum class VehicleType {
-    ROCKET,
-    CAR
+    ROCKET
 };
 class SatelliteManager;
 class VehicleManager {
 private:
     std::unique_ptr<Rocket> rocket;
-    std::unique_ptr<Car> car;
     VehicleType activeVehicle;
     std::vector<Planet*> planets;
     SatelliteManager* satelliteManager;
@@ -33,7 +30,6 @@ public:
     void drawVelocityVector(sf::RenderWindow& window, float scale = 1.0f);
 
     Rocket* getRocket() { return rocket.get(); }
-    Car* getCar() { return car.get(); }
     GameObject* getActiveVehicle();
     // Satellite integration
     Rocket* getCurrentRocket() const;
