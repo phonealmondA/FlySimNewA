@@ -84,30 +84,67 @@ private:
     // Helper methods for state transitions
     void handleMainMenuResult() {
         GameMode mode = mainMenu.getSelectedMode();
+
+        // Only process if there's an actual selection
+        if (mode == GameMode::NONE) {
+            return;
+        }
+
+        std::cout << "Processing main menu selection: " << static_cast<int>(mode) << std::endl;
+
         if (mode == GameMode::SINGLE_PLAYER) {
-            currentState = GameState::SAVES_MENU;
-            if (savesMenu) {
-                savesMenu->show();
+            if (!savesMenu) {
+                std::cerr << "Error: SavesMenu not initialized! Creating new one..." << std::endl;
+                savesMenu = std::make_unique<SavesMenu>(window.getSize());
             }
+
+            currentState = GameState::SAVES_MENU;
+            savesMenu->show();
+            mainMenu.hide(); // Hide main menu
+            std::cout << "Transitioning to SAVES_MENU" << std::endl;
         }
         else if (mode == GameMode::MULTIPLAYER_HOST) {
-            currentState = GameState::MULTIPLAYER_MENU;
-            if (multiplayerMenu) {
-                multiplayerMenu->show();
+            if (!multiplayerMenu) {
+                std::cerr << "Error: MultiplayerMenu not initialized! Creating new one..." << std::endl;
+                multiplayerMenu = std::make_unique<MultiplayerMenu>(window.getSize());
             }
+
+            currentState = GameState::MULTIPLAYER_MENU;
+            multiplayerMenu->show();
+            mainMenu.hide(); // Hide main menu
+            std::cout << "Transitioning to MULTIPLAYER_MENU" << std::endl;
         }
         else if (mode == GameMode::QUIT) {
+            std::cout << "Quitting game..." << std::endl;
             window.close();
         }
+
+        // Reset the selection after processing
+        mainMenu.reset();
     }
 
     void handleSavesMenuResult() {
+        if (!savesMenu) return;
+
         LoadAction action = savesMenu->getSelectedAction();
+
+        // Only process if there's an actual selection
+        if (action == LoadAction::NONE) {
+            return;
+        }
+
+        std::cout << "Processing saves menu selection: " << static_cast<int>(action) << std::endl;
+
         if (action == LoadAction::NEW_GAME) {
             // Create new single player game
             singlePlayerGame = std::make_unique<SinglePlayerGame>(window, window.getSize());
             if (singlePlayerGame->initializeNewGame()) {
                 currentState = GameState::SINGLE_PLAYER;
+                savesMenu->hide(); // Hide saves menu
+                std::cout << "Starting new single player game" << std::endl;
+            }
+            else {
+                std::cerr << "Failed to initialize new single player game!" << std::endl;
             }
         }
         else if (action == LoadAction::LOAD_GAME) {
@@ -117,12 +154,22 @@ private:
                 singlePlayerGame = std::make_unique<SinglePlayerGame>(window, window.getSize());
                 if (singlePlayerGame->initializeFromLoad(saveData, savesMenu->getSelectedSaveFile())) {
                     currentState = GameState::SINGLE_PLAYER;
+                    savesMenu->hide(); // Hide saves menu
+                    std::cout << "Loaded single player game: " << savesMenu->getSelectedSaveFile() << std::endl;
                 }
+                else {
+                    std::cerr << "Failed to initialize loaded single player game!" << std::endl;
+                }
+            }
+            else {
+                std::cerr << "Failed to load save data!" << std::endl;
             }
         }
         else if (action == LoadAction::BACK_TO_MENU) {
             currentState = GameState::MAIN_MENU;
             mainMenu.show();
+            savesMenu->hide(); // Hide saves menu
+            std::cout << "Returning to main menu from saves" << std::endl;
         }
     }
 
@@ -136,6 +183,7 @@ private:
             singlePlayerGame.reset();
             currentState = GameState::MAIN_MENU;
             mainMenu.show();
+            std::cout << "Returning to main menu from single player" << std::endl;
         }
         else if (result == SinglePlayerResult::QUIT_GAME) {
             singlePlayerGame->autoSave();
@@ -303,13 +351,21 @@ public:
         zoomLevel(1.0f), targetZoom(1.0f), lKeyPressed(false), tKeyPressed(false),
         fuelIncreaseKeyPressed(false), fuelDecreaseKeyPressed(false), gameTime(0.0f)
     {
+        std::cout << "Initializing game..." << std::endl;
+
         // Initialize UI Manager
         uiManager = std::make_unique<UIManager>(window.getSize());
 
         // Initialize menu systems
-        savesMenu = std::make_unique<SavesMenu>(window.getSize());
-        multiplayerMenu = std::make_unique<MultiplayerMenu>(window.getSize());
-        onlineMenu = std::make_unique<OnlineMultiplayerMenu>(window.getSize());
+        try {
+            savesMenu = std::make_unique<SavesMenu>(window.getSize());
+            multiplayerMenu = std::make_unique<MultiplayerMenu>(window.getSize());
+            onlineMenu = std::make_unique<OnlineMultiplayerMenu>(window.getSize());
+            std::cout << "Menu systems initialized successfully" << std::endl;
+        }
+        catch (const std::exception& e) {
+            std::cerr << "Error initializing menu systems: " << e.what() << std::endl;
+        }
 
         // SinglePlayerGame will be created when needed
         singlePlayerGame = nullptr;
@@ -319,10 +375,15 @@ public:
         gameView.setSize(sf::Vector2f(1280.f, 720.f));
         uiView.setCenter(sf::Vector2f(640.f, 360.f));
         uiView.setSize(sf::Vector2f(1280.f, 720.f));
+
+        // CRITICAL FIX: Ensure main menu is active at startup
+        mainMenu.show();
+        std::cout << "Main menu activated. Menu active: " << mainMenu.getIsActive() << std::endl;
     }
 
     void run() {
         sf::Clock clock;
+        std::cout << "Starting game loop..." << std::endl;
 
         while (window.isOpen()) {
             float deltaTime = clock.restart().asSeconds();
@@ -355,8 +416,19 @@ public:
                 sf::Vector2f mousePos = sf::Vector2f(sf::Mouse::getPosition(window));
 
                 if (currentState == GameState::MAIN_MENU) {
+                    // DEBUG: Check main menu state
+                    static int debugCounter = 0;
+                    if (debugCounter % 60 == 0) { // Print every 60 frames (1 second at 60fps)
+                        std::cout << "Main menu active: " << mainMenu.getIsActive()
+                            << ", Selected mode: " << static_cast<int>(mainMenu.getSelectedMode()) << std::endl;
+                    }
+                    debugCounter++;
+
                     mainMenu.handleEvent(event, mousePos);
-                    handleMainMenuResult();
+                    // FIXED: Only handle result if there's a selection
+                    if (mainMenu.getSelectedMode() != GameMode::NONE) {
+                        handleMainMenuResult();
+                    }
                 }
                 else if (currentState == GameState::MULTIPLAYER_MENU && multiplayerMenu) {
                     multiplayerMenu->handleEvent(event, mousePos);
@@ -365,15 +437,24 @@ public:
                     if (mode == MultiplayerMode::LOCAL_PC) {
                         initializeLocalMultiplayer();
                         currentState = GameState::LOCAL_PC_MULTIPLAYER;
+                        multiplayerMenu->hide();
                     }
                     else if (mode == MultiplayerMode::BACK_TO_MAIN) {
                         currentState = GameState::MAIN_MENU;
                         mainMenu.show();
+                        multiplayerMenu->hide();
+                    }
+                    // Reset multiplayer menu selection
+                    if (mode != MultiplayerMode::NONE) {
+                        multiplayerMenu->reset();
                     }
                 }
                 else if (currentState == GameState::SAVES_MENU && savesMenu) {
                     savesMenu->handleEvent(event, mousePos);
-                    handleSavesMenuResult();
+                    // FIXED: Only handle result if there's a selection
+                    if (savesMenu->getSelectedAction() != LoadAction::NONE) {
+                        handleSavesMenuResult();
+                    }
                 }
                 else if (currentState == GameState::SINGLE_PLAYER && singlePlayerGame) {
                     SinglePlayerResult result = singlePlayerGame->handleEvents();
@@ -395,6 +476,13 @@ public:
 
             // Update game state
             switch (currentState) {
+            case GameState::MAIN_MENU:
+                // Update main menu (for hover effects, etc.)
+            {
+                sf::Vector2f mousePos = sf::Vector2f(sf::Mouse::getPosition(window));
+                mainMenu.update(mousePos);
+            }
+            break;
             case GameState::SAVES_MENU:
                 if (savesMenu) {
                     sf::Vector2f mousePos = sf::Vector2f(sf::Mouse::getPosition(window));
