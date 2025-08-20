@@ -566,7 +566,7 @@ float calculatePeriapsis(sf::Vector2f pos, sf::Vector2f vel, float planetMass, f
 
     if (energy >= 0) return -1.0f;
 
-    sf::Vector2f eVec;
+    sf::Vector2f eVec;  
     float vSquared = speed * speed;
     eVec.x = (vSquared * pos.x - (pos.x * vel.x + pos.y * vel.y) * vel.x) / (G * planetMass) - pos.x / distance;
     eVec.y = (vSquared * pos.y - (pos.x * vel.x + pos.y * vel.y) * vel.y) / (G * planetMass) - pos.y / distance;
