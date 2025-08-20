@@ -19,6 +19,7 @@ enum class GameState {
     MAIN_MENU,
     MULTIPLAYER_MENU,
     ONLINE_MENU,
+    SAVES_MENU,                // NEW: Save/Load selection menu for single player
     SINGLE_PLAYER,
     LOCAL_PC_MULTIPLAYER,
     LAN_MULTIPLAYER,
