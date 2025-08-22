@@ -59,6 +59,7 @@ bool SinglePlayerGame::initializeFromLoad(const GameSaveData& saveData, const st
     }
 }
 
+
 void SinglePlayerGame::initializeFromDefaults() {
     // Create default planets
     createDefaultPlanets();
@@ -81,6 +82,10 @@ void SinglePlayerGame::initializeFromDefaults() {
     for (const auto& planetPtr : planets) {
         gravitySimulator->addPlanet(planetPtr);
     }
+
+    // ADD THIS MISSING LINE - This is why gravity wasn't working!
+    gravitySimulator->addVehicleManager(vehicleManager.get());
+
     gravitySimulator->addSatelliteManager(satelliteManager.get());
 
     // Setup camera
@@ -102,6 +107,10 @@ void SinglePlayerGame::initializeFromSaveData(const GameSaveData& saveData) {
     for (const auto& planetPtr : planets) {
         gravitySimulator->addPlanet(planetPtr);
     }
+
+    // ADD THIS MISSING LINE - Also needed when loading saves!
+    gravitySimulator->addVehicleManager(vehicleManager.get());
+
     gravitySimulator->addSatelliteManager(satelliteManager.get());
 
     // Restore satellites
@@ -116,7 +125,6 @@ void SinglePlayerGame::initializeFromSaveData(const GameSaveData& saveData) {
 
     gameTime = saveData.gameTime;
 }
-
 void SinglePlayerGame::createDefaultPlanets() {
     // Create main planet
     planet = std::make_unique<Planet>(
@@ -410,15 +418,27 @@ void SinglePlayerGame::renderGameObjects() {
         planet->draw(window);
     }
 
-    // Draw orbiting planets
+    // Draw orbiting planets and their moons
     for (const auto& orbitingPlanet : orbitingPlanets) {
         orbitingPlanet->draw(window);
+
+        // Draw moon trajectories if they exist
+        const auto& moons = orbitingPlanet->getMoons();
+        for (const auto& moon : moons) {
+            if (moon) {
+                moon->draw(window);
+            }
+        }
     }
 
     // Draw vehicles
     if (vehicleManager) {
         vehicleManager->drawWithConstantSize(window, zoomLevel);
-        vehicleManager->drawVelocityVector(window, 0.1f);
+
+        // ADD THESE MISSING VISUAL LINES:
+        vehicleManager->drawVelocityVector(window, GameConstants::VELOCITY_VECTOR_SCALE);
+        vehicleManager->drawGravityForceVectors(window, GameConstants::GRAVITY_VECTOR_SCALE);
+        vehicleManager->drawTrajectory(window, GameConstants::TRAJECTORY_TIME_STEP, GameConstants::TRAJECTORY_STEPS);
     }
 
     // Draw satellites
@@ -434,6 +454,7 @@ void SinglePlayerGame::renderGameObjects() {
         uiManager->drawSatelliteToRocketLines(window, satelliteManager.get(), vehicleManager.get());
     }
 }
+
 
 void SinglePlayerGame::renderUI() {
     // Set UI view

@@ -42,4 +42,8 @@ public:
     int convertRocketToSatellite();
     sf::Vector2f findNearestPlanetSurface() const;
     void updateSatelliteManager();
+
+    // ADD THESE MISSING DRAWING METHODS:
+    void drawGravityForceVectors(sf::RenderWindow& window, float scale = 1.0f);
+    void drawTrajectory(sf::RenderWindow& window, float timeStep = 0.5f, int steps = 200, bool detectSelfIntersection = false);
 };

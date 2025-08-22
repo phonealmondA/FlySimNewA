@@ -164,3 +164,15 @@ void VehicleManager::updateSatelliteManager() {
         satelliteManager->setNearbyRockets({ rocket.get() });
     }
 }
+
+void VehicleManager::drawGravityForceVectors(sf::RenderWindow& window, float scale) {
+    if (activeVehicle == VehicleType::ROCKET) {
+        rocket->drawGravityForceVectors(window, planets, scale);
+    }
+}
+
+void VehicleManager::drawTrajectory(sf::RenderWindow& window, float timeStep, int steps, bool detectSelfIntersection) {
+    if (activeVehicle == VehicleType::ROCKET) {
+        rocket->drawTrajectory(window, planets, timeStep, steps, detectSelfIntersection);
+    }
+}
