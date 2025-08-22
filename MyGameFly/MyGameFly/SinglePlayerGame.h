@@ -46,6 +46,11 @@ private:
     bool fuelDecreaseKeyPressed;
     bool escKeyPressed;
 
+    // ESC key double-press handling
+    bool firstEscPress;
+    float escPressTime;
+    static constexpr float DOUBLE_ESC_TIMEOUT = 2.0f; // 2 seconds for double press
+
     // Game state
     float gameTime;
     bool isInitialized;

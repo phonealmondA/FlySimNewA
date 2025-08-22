@@ -171,8 +171,10 @@ private:
             savesMenu->hide(); // Hide saves menu
             std::cout << "Returning to main menu from saves" << std::endl;
         }
-    }
 
+        // FIX: Reset the selection after processing ANY action
+        savesMenu->resetSelection();
+    }
     void handleSinglePlayerResult() {
         if (!singlePlayerGame) return;
 

@@ -364,11 +364,21 @@ bool GameSaveManager::loadAutoSave(GameSaveData& saveData) {
 std::vector<std::string> GameSaveManager::getSaveFileList() const {
     std::vector<std::string> saveFiles;
 
+    std::cout << "Looking for saves in: " << saveDirectory << std::endl;
+
     try {
+        if (!std::filesystem::exists(saveDirectory)) {
+            std::cout << "Save directory does not exist, creating it..." << std::endl;
+            std::filesystem::create_directories(saveDirectory);
+            return saveFiles;
+        }
+
         for (const auto& entry : std::filesystem::directory_iterator(saveDirectory)) {
+            std::cout << "Found file: " << entry.path().string() << std::endl;
             if (entry.is_regular_file() &&
                 endsWith(entry.path().string(), defaultSaveExtension)) {
                 saveFiles.push_back(entry.path().stem().string());
+                std::cout << "Added to save list: " << entry.path().stem().string() << std::endl;
             }
         }
     }
@@ -376,9 +386,9 @@ std::vector<std::string> GameSaveManager::getSaveFileList() const {
         std::cerr << "Error listing save files: " << e.what() << std::endl;
     }
 
+    std::cout << "Total saves found: " << saveFiles.size() << std::endl;
     return saveFiles;
 }
-
 bool GameSaveManager::deleteSaveFile(const std::string& saveFilename) {
     try {
         std::string fullPath = saveDirectory + saveFilename;

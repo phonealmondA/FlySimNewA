@@ -20,6 +20,7 @@ SinglePlayerGame::SinglePlayerGame(sf::RenderWindow& win, sf::Vector2u winSize)
     zoomLevel(1.0f), targetZoom(1.0f),
     lKeyPressed(false), tKeyPressed(false),
     fuelIncreaseKeyPressed(false), fuelDecreaseKeyPressed(false), escKeyPressed(false),
+    firstEscPress(false), escPressTime(0.0f),
     gameTime(0.0f), isInitialized(false), currentResult(SinglePlayerResult::CONTINUE_PLAYING),
     currentSaveName("")
 {
@@ -224,8 +225,26 @@ SinglePlayerResult SinglePlayerGame::handleEvents() {
             if (keyPressed->scancode == sf::Keyboard::Scancode::Escape) {
                 if (!escKeyPressed) {
                     escKeyPressed = true;
-                    handleEscapeKey();
-                    return SinglePlayerResult::RETURN_TO_MENU;
+
+                    if (!firstEscPress) {
+                        firstEscPress = true;
+                        escPressTime = gameTime;
+                        handleEscapeKey(); // Auto-save
+                        std::cout << "Press ESC again within 2 seconds to quit" << std::endl;
+                        return SinglePlayerResult::RETURN_TO_MENU;
+                    }
+                    else if (gameTime - escPressTime <= DOUBLE_ESC_TIMEOUT) {
+                        handleEscapeKey(); // Auto-save
+                        return SinglePlayerResult::QUIT_GAME;
+                    }
+                    else {
+                        // Reset if too much time passed
+                        firstEscPress = true;
+                        escPressTime = gameTime;
+                        handleEscapeKey();
+                        std::cout << "Press ESC again within 2 seconds to quit" << std::endl;
+                        return SinglePlayerResult::RETURN_TO_MENU;
+                    }
                 }
             }
         }
@@ -244,6 +263,11 @@ void SinglePlayerGame::update(float deltaTime) {
     if (!isInitialized) return;
 
     gameTime += deltaTime;
+
+    // ADDED: Reset firstEscPress if timeout exceeded
+    if (firstEscPress && gameTime - escPressTime > DOUBLE_ESC_TIMEOUT) {
+        firstEscPress = false;
+    }
 
     updateInput(deltaTime);
     updateGameObjects(deltaTime);
