@@ -393,12 +393,12 @@ void SinglePlayerGame::updateCamera() {
 void SinglePlayerGame::render() {
     if (!isInitialized) return;
 
-    window.clear(sf::Color::Black);
+    //window.clear(sf::Color::Black);
 
     renderGameObjects();
     renderUI();
 
-    window.display();
+    //window.display();
 }
 
 void SinglePlayerGame::renderGameObjects() {

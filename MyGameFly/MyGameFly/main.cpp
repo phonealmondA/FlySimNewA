@@ -494,7 +494,7 @@ public:
             case GameState::SINGLE_PLAYER:
                 if (singlePlayerGame) {
                     singlePlayerGame->update(deltaTime);
-                    handleSinglePlayerResult();
+                    //handleSinglePlayerResult();
                 }
                 break;
             case GameState::LOCAL_PC_MULTIPLAYER:

@@ -230,7 +230,7 @@ void SavesMenu::onNewGameClicked() {
     selectedAction = LoadAction::NEW_GAME;
     selectedSaveIndex = -1;
     selectedSaveFile = "";
-    isActive = false;
+    //isActive = false;
     std::cout << "New Game selected" << std::endl;
 }
 
@@ -238,7 +238,7 @@ void SavesMenu::onBackClicked() {
     selectedAction = LoadAction::BACK_TO_MENU;
     selectedSaveIndex = -1;
     selectedSaveFile = "";
-    isActive = false;
+    //isActive = false;
     std::cout << "Back to main menu selected" << std::endl;
 }
 
@@ -247,7 +247,7 @@ void SavesMenu::onSaveFileClicked(int saveIndex) {
         selectedAction = LoadAction::LOAD_GAME;
         selectedSaveIndex = saveIndex;
         selectedSaveFile = saveFiles[saveIndex].filename;
-        isActive = false;
+        //isActive = false;
         std::cout << "Load game selected: " << saveFiles[saveIndex].displayName << std::endl;
     }
 }
