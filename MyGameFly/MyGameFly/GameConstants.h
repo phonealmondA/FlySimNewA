@@ -79,7 +79,7 @@ namespace GameConstants {
 
     // Trajectory calculation settings
     constexpr float TRAJECTORY_TIME_STEP = 0.5f;
-    constexpr int TRAJECTORY_STEPS = 500;
+    constexpr int TRAJECTORY_STEPS = 100;
     constexpr float TRAJECTORY_COLLISION_RADIUS = 10.0f;
 
 

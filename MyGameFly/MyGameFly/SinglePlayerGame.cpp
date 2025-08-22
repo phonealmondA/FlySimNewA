@@ -229,6 +229,21 @@ SinglePlayerResult SinglePlayerGame::handleEvents() {
             handleWindowResize({ resized->size.x, resized->size.y });
         }
 
+        // *** ADD SCROLL WHEEL ZOOM HANDLING ***
+        if (event->is<sf::Event::MouseWheelScrolled>()) {
+            const auto* wheelEvent = event->getIf<sf::Event::MouseWheelScrolled>();
+            if (wheelEvent) {
+                // Zoom in/out based on scroll direction
+                // Positive delta = scroll up = zoom in
+                // Negative delta = scroll down = zoom out
+                float zoomFactor = 1.0f + wheelEvent->delta * 0.1f;
+                targetZoom *= zoomFactor;
+
+                // Clamp zoom level to reasonable limits
+                targetZoom = std::max(0.1f, std::min(targetZoom, 10.0f));
+            }
+        }
+
         if (const auto* keyPressed = event->getIf<sf::Event::KeyPressed>()) {
             if (keyPressed->scancode == sf::Keyboard::Scancode::Escape) {
                 if (!escKeyPressed) {
@@ -267,6 +282,7 @@ SinglePlayerResult SinglePlayerGame::handleEvents() {
     return SinglePlayerResult::CONTINUE_PLAYING;
 }
 
+
 void SinglePlayerGame::update(float deltaTime) {
     if (!isInitialized) return;
 
@@ -282,18 +298,41 @@ void SinglePlayerGame::update(float deltaTime) {
     updateCamera();
 }
 
+
+
+
 void SinglePlayerGame::updateInput(float deltaTime) {
     // Thrust controls
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::W)) {
-        vehicleManager->applyThrust(GameConstants::ENGINE_THRUST_POWER * deltaTime);
+        vehicleManager->applyThrust(1.0f);
     }
 
     // Rotation controls
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A)) {
-        vehicleManager->rotate(-180.0f * deltaTime); // Use reasonable rotation speed
+        vehicleManager->rotate(-180.0f * deltaTime);
     }
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D)) {
-        vehicleManager->rotate(180.0f * deltaTime); // Use reasonable rotation speed
+        vehicleManager->rotate(180.0f * deltaTime);
+    }
+
+    // *** FIX 1: ADD THRUST LEVEL HANDLING (1-9 keys) ***
+    if (vehicleManager->getRocket()) {
+        float newThrustLevel = -1.0f; // -1 means no change
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num0)) newThrustLevel = 0.0f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num1)) newThrustLevel = 0.1f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num2)) newThrustLevel = 0.2f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num3)) newThrustLevel = 0.3f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num4)) newThrustLevel = 0.4f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num5)) newThrustLevel = 0.5f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num6)) newThrustLevel = 0.6f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num7)) newThrustLevel = 0.7f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num8)) newThrustLevel = 0.8f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num9)) newThrustLevel = 0.9f;
+        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Equal)) newThrustLevel = 1.0f;
+
+        if (newThrustLevel >= 0.0f) {
+            vehicleManager->getRocket()->setThrustLevel(newThrustLevel);
+        }
     }
 
     // Vehicle switching
@@ -319,31 +358,60 @@ void SinglePlayerGame::updateInput(float deltaTime) {
         tKeyPressed = false;
     }
 
-    // Manual fuel transfer controls
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Period) && !fuelIncreaseKeyPressed) {
-        fuelIncreaseKeyPressed = true;
-        // Handle fuel increase logic
-    }
-    else if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Period)) {
-        fuelIncreaseKeyPressed = false;
-    }
+    // *** FIX 2: ADD COMPLETE FUEL TRANSFER LOGIC ***
+    if (vehicleManager->getRocket()) {
+        Rocket* rocket = vehicleManager->getRocket();
 
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Comma) && !fuelDecreaseKeyPressed) {
-        fuelDecreaseKeyPressed = true;
-        // Handle fuel decrease logic
-    }
-    else if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Comma)) {
-        fuelDecreaseKeyPressed = false;
+        // Manual fuel transfer controls - Period key (.) for fuel increase
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Period) && !fuelIncreaseKeyPressed) {
+            fuelIncreaseKeyPressed = true;
+            // Start fuel transfer from planet to rocket
+            float transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * rocket->getThrustLevel() * GameConstants::FUEL_TRANSFER_THRUST_MULTIPLIER;
+            if (transferRate < GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f) {
+                transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f; // Minimum 10% rate
+            }
+            rocket->startFuelTransferIn(transferRate);
+        }
+        else if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Period)) {
+            if (fuelIncreaseKeyPressed) {
+                rocket->stopFuelTransfer();
+            }
+            fuelIncreaseKeyPressed = false;
+        }
+
+        // Manual fuel transfer controls - Comma key (,) for fuel decrease  
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Comma) && !fuelDecreaseKeyPressed) {
+            fuelDecreaseKeyPressed = true;
+            // Start fuel transfer from rocket to planet
+            float transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * rocket->getThrustLevel() * GameConstants::FUEL_TRANSFER_THRUST_MULTIPLIER;
+            if (transferRate < GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f) {
+                transferRate = GameConstants::MANUAL_FUEL_TRANSFER_RATE * 0.1f; // Minimum 10% rate
+            }
+            rocket->startFuelTransferOut(transferRate);
+        }
+        else if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Comma)) {
+            if (fuelDecreaseKeyPressed) {
+                rocket->stopFuelTransfer();
+            }
+            fuelDecreaseKeyPressed = false;
+        }
     }
 
     // Zoom controls
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Q)) {
-        targetZoom = std::max(0.1f, targetZoom - 2.0f * deltaTime);
+        targetZoom *= 1.02f;
     }
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::E)) {
-        targetZoom = std::min(10.0f, targetZoom + 2.0f * deltaTime);
+        targetZoom /= 1.02f;
     }
+
+    // Clamp zoom level
+    targetZoom = std::max(0.1f, std::min(targetZoom, 10.0f));
 }
+
+
+
+
 
 void SinglePlayerGame::updateGameObjects(float deltaTime) {
     // Update main planet
