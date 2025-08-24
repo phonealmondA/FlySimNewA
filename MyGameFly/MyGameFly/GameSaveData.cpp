@@ -27,7 +27,7 @@ GameSaveManager::GameSaveManager()
     }
     catch (const std::filesystem::filesystem_error& e) {
         std::cerr << "Warning: Could not create save directory: " << e.what() << std::endl;
-        saveDirectory = "./"; // Fallback to current directory
+        //saveDirectory = "./"; // Fallback to current directory
     }
 }
 

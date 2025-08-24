@@ -317,6 +317,7 @@ void SavesMenu::update(const sf::Vector2f& mousePos) {
     // Note: Save file buttons are now drawn manually, so no update needed
 }
 
+// Fixed draw method for SavesMenu
 void SavesMenu::draw(sf::RenderWindow& window) {
     if (!isActive) return;
 
@@ -359,7 +360,8 @@ void SavesMenu::draw(sf::RenderWindow& window) {
     // Set up clipping for save list (pseudo-clipping by checking bounds)
     sf::FloatRect saveListBounds = saveListBackground.getGlobalBounds();
 
-    if (saveFileButtons.empty()) {
+    // FIX: Check saveFiles instead of saveFileButtons
+    if (saveFiles.empty()) {
         // Draw "no saves" message
         if (noSavesText.has_value()) {
             sf::FloatRect noSavesBounds = noSavesText->getLocalBounds();
@@ -371,80 +373,50 @@ void SavesMenu::draw(sf::RenderWindow& window) {
         }
     }
     else {
-        // Draw save file buttons with scroll offset - simplified approach
+        // Draw save file buttons manually
         float saveListX = static_cast<float>(windowSize.x) - (static_cast<float>(windowSize.x) * 0.6f) - SAVE_LIST_MARGIN + 10.0f;
         float saveListY = 120.0f;
 
-        for (size_t i = 0; i < saveFileButtons.size(); ++i) {
-            if (saveFileButtons[i]) {
-                float buttonY = saveListY + (SAVE_BUTTON_HEIGHT + 5.0f) * static_cast<float>(i) - scrollOffset;
+        // FIX: Use saveFiles.size() instead of saveFileButtons.size()
+        for (size_t i = 0; i < saveFiles.size(); ++i) {
+            float buttonY = saveListY + (SAVE_BUTTON_HEIGHT + 5.0f) * static_cast<float>(i) - scrollOffset;
 
-                // Only draw if visible in the save list area
-                if (buttonY + SAVE_BUTTON_HEIGHT >= saveListBounds.position.y + 40.0f &&
-                    buttonY <= saveListBounds.position.y + saveListBounds.size.y - 10.0f) {
+            // Only draw if visible in the save list area
+            if (buttonY + SAVE_BUTTON_HEIGHT >= saveListBounds.position.y + 40.0f &&
+                buttonY <= saveListBounds.position.y + saveListBounds.size.y - 10.0f) {
 
-                    // Create a temporary button for drawing at the correct position
-                    sf::RectangleShape tempShape;
-                    tempShape.setPosition(sf::Vector2f(saveListX, buttonY));
-                    tempShape.setSize(sf::Vector2f(static_cast<float>(windowSize.x) * 0.55f, SAVE_BUTTON_HEIGHT));
-                    tempShape.setFillColor(sf::Color(100, 100, 100, 200));
-                    tempShape.setOutlineColor(sf::Color::White);
-                    tempShape.setOutlineThickness(1.0f);
+                // Create a temporary button for drawing at the correct position
+                sf::RectangleShape tempShape;
+                tempShape.setPosition(sf::Vector2f(saveListX, buttonY));
+                tempShape.setSize(sf::Vector2f(static_cast<float>(windowSize.x) * 0.55f, SAVE_BUTTON_HEIGHT));
+                tempShape.setFillColor(sf::Color(100, 100, 100, 200));
+                tempShape.setOutlineColor(sf::Color::White);
+                tempShape.setOutlineThickness(1.0f);
 
-                    window.draw(tempShape);
+                window.draw(tempShape);
 
-                    // Draw button text
-                    sf::Text buttonText(font);
-                    const auto& saveInfo = saveFiles[i];
-                    std::string displayText = saveInfo.displayName;
-                    if (!saveInfo.dateTime.empty()) {
-                        displayText += " - " + saveInfo.dateTime;
-                    }
-                    if (saveInfo.gameTime > 0.0f) {
-                        displayText += " - " + formatGameTime(saveInfo.gameTime);
-                    }
-
-                    buttonText.setString(displayText);
-                    buttonText.setCharacterSize(16);
-                    buttonText.setFillColor(sf::Color::White);
-
-                    sf::FloatRect textBounds = buttonText.getLocalBounds();
-                    buttonText.setPosition(sf::Vector2f(
-                        saveListX + 10.0f,
-                        buttonY + (SAVE_BUTTON_HEIGHT - textBounds.size.y) / 2.0f - textBounds.position.y
-                    ));
-
-                    window.draw(buttonText);
+                // Draw button text - FIX: Use saveFiles[i] instead of trying to access saveFileButtons
+                sf::Text buttonText(font);
+                const auto& saveInfo = saveFiles[i];
+                std::string displayText = saveInfo.displayName;
+                if (!saveInfo.dateTime.empty()) {
+                    displayText += " - " + saveInfo.dateTime;
                 }
+
+                buttonText.setString(displayText);
+                buttonText.setCharacterSize(16);
+                buttonText.setFillColor(sf::Color::White);
+                buttonText.setPosition(sf::Vector2f(
+                    saveListX + 10.0f,
+                    buttonY + 10.0f
+                ));
+
+                window.draw(buttonText);
             }
         }
-
-        // Draw scroll indicator if needed
-        if (maxScrollOffset > 0.0f) {
-            sf::Text scrollHint(font);
-            scrollHint.setString("Scroll for more saves");
-            scrollHint.setCharacterSize(14);
-            scrollHint.setFillColor(sf::Color(150, 150, 150));
-            scrollHint.setPosition(sf::Vector2f(
-                saveListBounds.position.x + 10.0f,
-                saveListBounds.position.y + saveListBounds.size.y - 25.0f
-            ));
-            window.draw(scrollHint);
-        }
     }
-
-    // Draw instructions
-    sf::Text instructions(font);
-    instructions.setString("Choose 'New Game' or select a saved game to load");
-    instructions.setCharacterSize(16);
-    instructions.setFillColor(sf::Color(200, 200, 200));
-    sf::FloatRect instrBounds = instructions.getLocalBounds();
-    instructions.setPosition(sf::Vector2f(
-        static_cast<float>(windowSize.x) / 2.0f - instrBounds.size.x / 2.0f,
-        static_cast<float>(windowSize.y) - 50.0f
-    ));
-    window.draw(instructions);
 }
+
 
 #ifdef _WIN32
 #pragma warning(pop)

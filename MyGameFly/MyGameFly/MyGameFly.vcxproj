@@ -77,7 +77,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IncludePath>D:\MyGameFly\SFML-3.0.0-windows-vc17-64-bit\SFML-3.0.0\include;$(IncludePath)</IncludePath>
     <LibraryPath>D:\MyGameFly\SFML-3.0.0-windows-vc17-64-bit\SFML-3.0.0\lib;$(LibraryPath)</LibraryPath>
-    <OutDir>C:\Users\phone\Desktop\katieFly\vr 1</OutDir>
+    <OutDir>C:\Users\phone\Desktop\full release\</OutDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>

@@ -175,23 +175,35 @@ private:
         // FIX: Reset the selection after processing ANY action
         savesMenu->resetSelection();
     }
+    
+
+    // In main.cpp, replace the handleSinglePlayerResult() function:
+
+    // Replace handleSinglePlayerResult() function in main.cpp with this:
+
     void handleSinglePlayerResult() {
         if (!singlePlayerGame) return;
 
         SinglePlayerResult result = singlePlayerGame->getResult();
         if (result == SinglePlayerResult::RETURN_TO_MENU) {
-            // Auto-save before returning to menu
+            // Auto-save before returning to saves menu
             singlePlayerGame->autoSave();
             singlePlayerGame.reset();
-            currentState = GameState::MAIN_MENU;
-            mainMenu.show();
-            std::cout << "Returning to main menu from single player" << std::endl;
+
+            // Go to saves menu instead of main menu
+            currentState = GameState::SAVES_MENU;
+            if (savesMenu) {
+                savesMenu->show();
+            }
+            std::cout << "Returning to saves menu from single player" << std::endl;
         }
         else if (result == SinglePlayerResult::QUIT_GAME) {
             singlePlayerGame->autoSave();
             window.close();
+            std::cout << "Closing game entirely" << std::endl;
         }
     }
+
 
     // Multiplayer initialization methods (keep existing)
     void initializeMultiplayer() {
