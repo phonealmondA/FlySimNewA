@@ -209,7 +209,7 @@ bool MultiplayerClient::connectToHost(bool lanMode, const std::string& hostAddre
 
     isLanMode = lanMode;
 
-    if (networkManager->connectAsClient()) {
+    if (networkManager->attemptAutoConnect()) {
         isConnected = true;
         connectionTimeout = 0.0f;
 

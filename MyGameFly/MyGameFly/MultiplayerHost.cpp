@@ -223,7 +223,7 @@ bool MultiplayerHost::startHosting(bool lanMode, int port) {
     isLanMode = lanMode;
 
     // Use the correct NetworkManager method - no parameters
-    if (networkManager->startAsHost()) {
+    if (networkManager->attemptAutoConnect()) {
         isHosting = true;
         std::cout << "Started hosting " << (lanMode ? "LAN" : "Online")
             << " game" << std::endl;
