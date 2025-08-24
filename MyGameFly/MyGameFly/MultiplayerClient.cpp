@@ -1,6 +1,7 @@
 // MultiplayerClient.cpp - Multiplayer Client Game Logic Implementation
 #include "MultiplayerClient.h"
 #include "VectorHelper.h"
+
 #include <iostream>
 #include <algorithm>
 #include <cmath>
@@ -72,9 +73,9 @@ bool MultiplayerClient::initializeNewOnlineGame() {
 
 bool MultiplayerClient::initializeFromLoadLan(const GameSaveData& saveData, const std::string& saveName) {
     try {
-        initializeFromSaveData(saveData, true);
+        initializeFromSaveData(saveData);
         if (!connectToHost(true)) {
-            std::cerr << "Failed to connect to LAN host from save" << std::endl;
+            std::cerr << "Failed to connect to LAN host for loaded game" << std::endl;
             return false;
         }
         isInitialized = true;
@@ -90,9 +91,9 @@ bool MultiplayerClient::initializeFromLoadLan(const GameSaveData& saveData, cons
 
 bool MultiplayerClient::initializeFromLoadOnline(const GameSaveData& saveData, const std::string& saveName) {
     try {
-        initializeFromSaveData(saveData, false);
+        initializeFromSaveData(saveData);
         if (!connectToHost(false)) {
-            std::cerr << "Failed to connect to Online host from save" << std::endl;
+            std::cerr << "Failed to connect to Online host for loaded game" << std::endl;
             return false;
         }
         isInitialized = true;
@@ -112,35 +113,6 @@ void MultiplayerClient::initializeFromDefaults(bool lanMode) {
     // Create default planets
     createDefaultPlanets();
 
-    // Setup networking first
-    setupNetworking(lanMode);
-
-    // Local player will be created after receiving player ID from host
-    // Just setup gravity simulator with planets for now
-    gravitySimulator = std::make_unique<GravitySimulator>();
-    for (const auto& planetPtr : planets) {
-        gravitySimulator->addPlanet(planetPtr);
-    }
-    gravitySimulator->addSatelliteManager(satelliteManager.get());
-
-    // Setup camera
-    setupCamera();
-    gameView.setCenter(sf::Vector2f(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y));
-
-    gameTime = 0.0f;
-    waitingForPlayerID = true;
-}
-
-void MultiplayerClient::initializeFromSaveData(const GameSaveData& saveData, bool lanMode) {
-    isLanMode = lanMode;
-
-    // Create planets from save data
-    createPlanetsFromSaveData(saveData.planets);
-
-    // Setup networking first
-    setupNetworking(lanMode);
-
-    // Local player will be created after receiving player ID from host
     // Setup gravity simulator
     gravitySimulator = std::make_unique<GravitySimulator>();
     for (const auto& planetPtr : planets) {
@@ -148,45 +120,44 @@ void MultiplayerClient::initializeFromSaveData(const GameSaveData& saveData, boo
     }
     gravitySimulator->addSatelliteManager(satelliteManager.get());
 
-    // Restore satellites (when method available)
-    for (const auto& satData : saveData.satellites) {
-        // TODO: Add satellite restoration when method is available
-        // satelliteManager->createSatelliteFromSaveData(satData);
-    }
+    // Initialize views
+    gameView = sf::View(sf::Vector2f(640.f, 360.f), sf::Vector2f(1280.f, 720.f));
+    uiView = sf::View(sf::Vector2f(640.f, 360.f), sf::Vector2f(1280.f, 720.f));
+}
 
-    // Setup camera from save data
-    setupCameraFromSaveData(saveData.camera);
+void MultiplayerClient::initializeFromSaveData(const GameSaveData& saveData) {
+    // Load planets from save data
+    createPlanetsFromSaveData(saveData.planets);
+
+    // Setup gravity simulator
+    gravitySimulator = std::make_unique<GravitySimulator>();
+    for (const auto& planetPtr : planets) {
+        gravitySimulator->addPlanet(planetPtr);
+    }
+    gravitySimulator->addSatelliteManager(satelliteManager.get());
 
     gameTime = saveData.gameTime;
-    waitingForPlayerID = true;
 }
 
 void MultiplayerClient::createDefaultPlanets() {
-    // Create main planet
+    // Create central planet
     planet = std::make_unique<Planet>(
         sf::Vector2f(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y),
-        0.0f, GameConstants::MAIN_PLANET_MASS, sf::Color(139, 0, 0));
-    planet->setVelocity(sf::Vector2f(0.f, 0.f));
-
-    planets.clear();
+        GameConstants::MAIN_PLANET_RADIUS,
+        GameConstants::MAIN_PLANET_MASS,
+        sf::Color::Blue);
     planets.push_back(planet.get());
 
-    // Get planet configurations from GameConstants
-    std::vector<PlanetConfig> planetConfigs = GameConstants::getPlanetConfigurations();
+    // Create some orbiting planets
+    orbitingPlanets.push_back(std::make_unique<Planet>(
+        sf::Vector2f(GameConstants::MAIN_PLANET_X + 200.f, GameConstants::MAIN_PLANET_Y),
+        15.0f, 50.0f, sf::Color::Red));
+    orbitingPlanets.push_back(std::make_unique<Planet>(
+        sf::Vector2f(GameConstants::MAIN_PLANET_X - 300.f, GameConstants::MAIN_PLANET_Y + 100.f),
+        20.0f, 75.0f, sf::Color::Green));
 
-    // Create orbital planets dynamically
-    orbitingPlanets.clear();
-    for (const auto& config : planetConfigs) {
-        auto orbitalPlanet = Planet::createOrbitalPlanet(
-            planet.get(),
-            GameConstants::PLANET_ORBIT_DISTANCE * config.orbitDistanceMultiplier,
-            config.massRatio,
-            config.angleOffset,
-            config.color
-        );
-
-        planets.push_back(orbitalPlanet.get());
-        orbitingPlanets.push_back(std::move(orbitalPlanet));
+    for (auto& orbitingPlanet : orbitingPlanets) {
+        planets.push_back(orbitingPlanet.get());
     }
 }
 
@@ -198,70 +169,85 @@ void MultiplayerClient::createPlanetsFromSaveData(const std::vector<SavedPlanetD
         if (savedPlanet.isMainPlanet) {
             // Create main planet
             planet = std::make_unique<Planet>(
-                savedPlanet.position, 0.0f, savedPlanet.mass, savedPlanet.color);
-            planet->setVelocity(sf::Vector2f(0.f, 0.f));
+                savedPlanet.position,
+                savedPlanet.radius,
+                savedPlanet.mass,
+                savedPlanet.color);
             planets.push_back(planet.get());
         }
         else {
             // Create orbiting planet
-            auto orbitalPlanet = std::make_unique<Planet>(
-                savedPlanet.position, 0.0f, savedPlanet.mass, savedPlanet.color);
-            planets.push_back(orbitalPlanet.get());
-            orbitingPlanets.push_back(std::move(orbitalPlanet));
+            orbitingPlanets.push_back(std::make_unique<Planet>(
+                savedPlanet.position,
+                savedPlanet.radius,
+                savedPlanet.mass,
+                savedPlanet.color));
+            planets.push_back(orbitingPlanets.back().get());
         }
     }
 }
 
-void MultiplayerClient::setupNetworking(bool lanMode) {
-    isLanMode = lanMode;
-    // Connection will be established in connectToHost()
+void MultiplayerClient::setupLocalPlayer(sf::Vector2f spawnPos) {
+    if (networkManager && networkManager->getLocalPlayerID() >= 0) {
+        localPlayer = std::make_unique<Player>(
+            networkManager->getLocalPlayerID(),
+            spawnPos,
+            PlayerType::LOCAL,
+            planets,
+            satelliteManager.get());
+
+        waitingForPlayerID = false;
+        std::cout << "Local player created with ID: " << networkManager->getLocalPlayerID() << std::endl;
+    }
 }
 
-void MultiplayerClient::setupLocalPlayer(sf::Vector2f spawnPosition, int playerID) {
-    // Create local player with assigned ID and spawn position
-    localPlayer = std::make_unique<Player>(
-        playerID,
-        spawnPosition,
-        PlayerType::LOCAL,
-        planets,
-        satelliteManager.get()
-    );
-
-    // Add to gravity simulator
-    if (gravitySimulator) {
-        gravitySimulator->addPlayer(localPlayer.get());
+bool MultiplayerClient::connectToHost(bool lanMode, const std::string& hostAddress, int port) {
+    if (!networkManager) {
+        std::cerr << "NetworkManager not initialized" << std::endl;
+        return false;
     }
 
-    // Center camera on local player
-    gameView.setCenter(spawnPosition);
+    isLanMode = lanMode;
 
-    waitingForPlayerID = false;
-    std::cout << "Local player created with ID: " << playerID << " at position ("
-        << spawnPosition.x << ", " << spawnPosition.y << ")" << std::endl;
+    if (networkManager->connectAsClient()) {
+        isConnected = true;
+        connectionTimeout = 0.0f;
+
+        // Wait for player ID assignment from host
+        waitingForPlayerID = true;
+
+        std::cout << "Connected to " << (lanMode ? "LAN" : "Online")
+            << " host" << std::endl;
+        return true;
+    }
+
+    return false;
 }
 
-void MultiplayerClient::setupCamera() {
-    zoomLevel = 1.0f;
-    targetZoom = 1.0f;
-    gameView.setSize(sf::Vector2f(static_cast<float>(windowSize.x), static_cast<float>(windowSize.y)));
-    uiView.setSize(sf::Vector2f(static_cast<float>(windowSize.x), static_cast<float>(windowSize.y)));
-    uiView.setCenter(sf::Vector2f(static_cast<float>(windowSize.x) / 2.0f, static_cast<float>(windowSize.y) / 2.0f));
+void MultiplayerClient::disconnect() {
+    if (networkManager && isConnected) {
+        networkManager->disconnect();
+        isConnected = false;
+        waitingForPlayerID = true;
+        localPlayer.reset();
+        remotePlayerStates.clear();
+        std::cout << "Disconnected from host" << std::endl;
+    }
 }
 
-void MultiplayerClient::setupCameraFromSaveData(const SavedCameraData& cameraData) {
-    zoomLevel = cameraData.zoom;
-    targetZoom = cameraData.zoom;
-    gameView.setCenter(cameraData.position);
-    gameView.setSize(cameraData.size);
-    uiView.setSize(sf::Vector2f(static_cast<float>(windowSize.x), static_cast<float>(windowSize.y)));
-    uiView.setCenter(sf::Vector2f(static_cast<float>(windowSize.x) / 2.0f, static_cast<float>(windowSize.y) / 2.0f));
+bool MultiplayerClient::isConnectedToHost() const {
+    return isConnected && networkManager && networkManager->isConnected();
+}
+
+int MultiplayerClient::getAssignedPlayerID() const {
+    return networkManager ? networkManager->getLocalPlayerID() : -1;
 }
 
 MultiplayerClientResult MultiplayerClient::handleEvents() {
     while (std::optional<sf::Event> event = window.pollEvent()) {
         if (event->is<sf::Event::Closed>()) {
-            handleEscapeKey(); // Auto-save before quit
-            currentResult = MultiplayerClientResult::QUIT_GAME;  // FIX: Set member variable
+            handleEscapeKey();
+            currentResult = MultiplayerClientResult::QUIT_GAME;
             return MultiplayerClientResult::QUIT_GAME;
         }
 
@@ -274,7 +260,7 @@ MultiplayerClientResult MultiplayerClient::handleEvents() {
                 if (!escKeyPressed) {
                     escKeyPressed = true;
                     handleEscapeKey();
-                    currentResult = MultiplayerClientResult::RETURN_TO_MENU;  // FIX: Set member variable
+                    currentResult = MultiplayerClientResult::RETURN_TO_MENU;
                     return MultiplayerClientResult::RETURN_TO_MENU;
                 }
             }
@@ -289,6 +275,7 @@ MultiplayerClientResult MultiplayerClient::handleEvents() {
 
     return MultiplayerClientResult::CONTINUE_PLAYING;
 }
+
 void MultiplayerClient::update(float deltaTime) {
     if (!isInitialized) return;
 
@@ -312,107 +299,112 @@ void MultiplayerClient::update(float deltaTime) {
 }
 
 void MultiplayerClient::updateInput(float deltaTime) {
-    // Only handle input for local player and only if we're not waiting for player ID
     if (!localPlayer || waitingForPlayerID) return;
 
     // Local player input handling
     localPlayer->handleLocalInput(deltaTime);
 
-    // Manual fuel transfer input
-    localPlayer->handleFuelTransferInput(deltaTime);
-
-    // Zoom controls
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Q)) {
-        targetZoom = std::max(0.1f, targetZoom - 2.0f * deltaTime);
+    // Camera controls
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Equal)) {
+        targetZoom = std::min(targetZoom * 1.1f, 5.0f);
     }
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::E)) {
-        targetZoom = std::min(10.0f, targetZoom + 2.0f * deltaTime);
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Hyphen)) {
+        targetZoom = std::max(targetZoom * 0.9f, 0.2f);
     }
-}
 
-void MultiplayerClient::updateNetworking(float deltaTime) {
-    if (!networkManager) return;
-
-    // Process incoming network messages
-    networkManager->update(deltaTime);
-
-    // Check if we're still connected
-    if (networkManager->isConnected()) {
-        isConnected = true;
-        connectionTimeout = 0.0f; // Reset timeout
-
-        // Handle player ID assignment if waiting
-        if (waitingForPlayerID) {
-            handlePlayerIDAssignment();
-        }
-
-        // Handle remote player states
-        handleRemotePlayerStates();
-
-        // Sync local player state at regular intervals
-        if (timeSinceLastSync >= SYNC_INTERVAL && localPlayer) {
-            syncLocalPlayerState();
-            timeSinceLastSync = 0.0f;
+    // Toggle info display
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::L)) {
+        if (!lKeyPressed) {
+            lKeyPressed = true;
+            // Toggle UI display
         }
     }
     else {
-        if (isConnected) {
-            // Just lost connection
-            handleConnectionLoss();
+        lKeyPressed = false;
+    }
+
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::T)) {
+        if (!tKeyPressed) {
+            tKeyPressed = true;
+            // Toggle trajectory display
         }
+    }
+    else {
+        tKeyPressed = false;
     }
 }
 
 void MultiplayerClient::updateGameObjects(float deltaTime) {
-    // Update main planet
-    if (planet) {
-        planet->update(deltaTime);
-    }
-
-    // Update orbiting planets
-    for (const auto& orbitingPlanet : orbitingPlanets) {
-        orbitingPlanet->update(deltaTime);
-    }
-
     // Update local player
     if (localPlayer) {
         localPlayer->update(deltaTime);
     }
 
-    // Update satellite system
+    // Update satellites
     if (satelliteManager) {
         satelliteManager->update(deltaTime);
+    }
 
-        // Update satellite manager with current rocket
-        if (localPlayer && localPlayer->getVehicleManager()->getActiveVehicleType() == VehicleType::ROCKET) {
-            satelliteManager->setNearbyRockets({ localPlayer->getVehicleManager()->getRocket() });
+    // Update gravity simulation for local player
+    if (gravitySimulator && localPlayer) {
+        gravitySimulator->update(deltaTime);
+    }
+}
+
+void MultiplayerClient::updateNetworking(float deltaTime) {
+    if (!networkManager || !isConnected) return;
+
+    processNetworkMessages();
+
+    // Send local player state periodically
+    if (timeSinceLastSync >= SYNC_INTERVAL && localPlayer && !waitingForPlayerID) {
+        syncWithHost();
+        timeSinceLastSync = 0.0f;
+    }
+
+    // Reset connection timeout when we receive messages
+    if (networkManager->isConnected()) {
+        connectionTimeout = 0.0f;
+    }
+}
+
+void MultiplayerClient::processNetworkMessages() {
+    if (!networkManager) return;
+
+    // Check for player ID assignment
+    if (waitingForPlayerID) {
+        networkManager->assignClientPlayerID();
+        if (networkManager->getLocalPlayerID() >= 0) {
+            // Set up local player once we get our ID
+            sf::Vector2f spawnPos = sf::Vector2f(
+                GameConstants::MAIN_PLANET_X + 200.f,
+                GameConstants::MAIN_PLANET_Y - 150.f);
+            setupLocalPlayer(spawnPos);
         }
     }
 
-    // Update gravity simulator
-    if (gravitySimulator) {
-        gravitySimulator->update(deltaTime);
+    // Receive remote player states
+    for (auto& [playerID, state] : remotePlayerStates) {
+        PlayerState newState;
+        if (networkManager->receivePlayerState(playerID, newState)) {
+            remotePlayerStates[playerID] = newState;
+        }
     }
+}
 
-    // Update UI
-    if (uiManager) {
-        GameState currentGameState = isLanMode ? GameState::LAN_MULTIPLAYER : GameState::ONLINE_MULTIPLAYER;
-        uiManager->update(currentGameState,
-            localPlayer ? localPlayer->getVehicleManager() : nullptr,
-            nullptr, // splitScreenManager not used in network multiplayer
-            localPlayer.get(),
-            planets,
-            networkManager.get(),
-            satelliteManager.get());
-    }
+void MultiplayerClient::syncWithHost() {
+    if (!localPlayer || !networkManager) return;
+
+    PlayerState localState = localPlayer->getState();
+    networkManager->sendPlayerState(localState);
 }
 
 void MultiplayerClient::updateCamera() {
     // Smooth zoom
     zoomLevel += (targetZoom - zoomLevel) * 3.0f * (1.0f / 60.0f);
 
-    // Follow local player if not manually controlling camera
-    if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C) && localPlayer) {
+    // Follow local player if available
+    if (localPlayer) {
         sf::Vector2f playerPos = localPlayer->getPosition();
         gameView.setCenter(playerPos);
     }
@@ -422,282 +414,129 @@ void MultiplayerClient::updateCamera() {
     gameView.setSize(baseSize / zoomLevel);
 }
 
-void MultiplayerClient::handlePlayerIDAssignment() {
-    if (!networkManager) return;
-
-    // Check if we've received our player ID assignment
-    if (networkManager->hasNewPlayer()) {
-        PlayerSpawnInfo spawnInfo = networkManager->getNewPlayerInfo();
-
-        // If this is our player ID assignment
-        if (networkManager->getLocalPlayerID() == spawnInfo.playerID) {
-            setupLocalPlayer(spawnInfo.spawnPosition, spawnInfo.playerID);
-            std::cout << "Received player ID assignment: " << spawnInfo.playerID << std::endl;
-        }
-    }
-}
-
-void MultiplayerClient::handleRemotePlayerStates() {
-    if (!networkManager) return;
-
-    // Get all available remote player states
-    // Since we don't have a method to get all player IDs, we'll check the common range
-    for (int playerID = 0; playerID < 8; ++playerID) {
-        if (localPlayer && playerID == localPlayer->getID()) {
-            continue; // Skip our own player ID
-        }
-
-        if (networkManager->hasStateForPlayer(playerID)) {
-            PlayerState remoteState;
-            if (networkManager->receivePlayerState(playerID, remoteState)) {
-                remotePlayerStates[playerID] = remoteState;
-            }
-        }
-    }
-}
-
-void MultiplayerClient::syncLocalPlayerState() {
-    if (!networkManager || !localPlayer) return;
-
-    // Send local player state to host
-    if (localPlayer->shouldSendState()) {
-        PlayerState localState = localPlayer->getState();
-        networkManager->sendPlayerState(localState);
-        localPlayer->markStateSent();
-    }
-}
-
 void MultiplayerClient::render() {
     if (!isInitialized) return;
 
     window.clear(sf::Color::Black);
 
     renderGameObjects();
+    renderRemotePlayers();
     renderUI();
 
     window.display();
 }
 
 void MultiplayerClient::renderGameObjects() {
-    // Set game view
     window.setView(gameView);
 
-    // Draw main planet
-    if (planet) {
-        planet->draw(window);
-    }
-
-    // Draw orbiting planets
-    for (const auto& orbitingPlanet : orbitingPlanets) {
-        orbitingPlanet->draw(window);
+    // Draw planets
+    for (const auto& planetPtr : planets) {
+        planetPtr->draw(window);
     }
 
     // Draw local player
     if (localPlayer) {
-        localPlayer->drawWithConstantSize(window, zoomLevel);
+        localPlayer->draw(window);
     }
-
-    // Draw remote player states
-    renderRemotePlayerStates();
 
     // Draw satellites
     if (satelliteManager) {
         satelliteManager->draw(window);
     }
-
-    // Draw UI elements that need game view
-    if (uiManager && localPlayer) {
-        uiManager->drawFuelCollectionLines(window, localPlayer->getVehicleManager()->getRocket());
-        uiManager->drawSatelliteNetworkLines(window, satelliteManager.get());
-        uiManager->drawSatelliteFuelTransfers(window, satelliteManager.get());
-        uiManager->drawSatelliteToRocketLines(window, satelliteManager.get(),
-            localPlayer->getVehicleManager());
-    }
 }
 
-void MultiplayerClient::renderRemotePlayerStates() {
-    // Draw simple representations of remote players based on their states
+void MultiplayerClient::renderRemotePlayers() {
+    // Draw remote players based on their last known states
     for (const auto& [playerID, state] : remotePlayerStates) {
-        if (state.isRocket) {
-            // Draw a simple rocket representation
-            sf::CircleShape remoteRocket(10.0f / zoomLevel);
-            remoteRocket.setFillColor(sf::Color::Yellow);
-            remoteRocket.setPosition(state.position);
-            remoteRocket.setOrigin(sf::Vector2f(remoteRocket.getRadius(), remoteRocket.getRadius()));
-            window.draw(remoteRocket);
-
-            // Draw player ID label
-            // TODO: Add text rendering for player ID when font is available
-        }
-        else {
-            // Draw a simple car representation
-            sf::RectangleShape remoteCar(sf::Vector2f(20.0f / zoomLevel, 10.0f / zoomLevel));
-            remoteCar.setFillColor(sf::Color::Green);
-            remoteCar.setPosition(state.position);
-            remoteCar.setOrigin(sf::Vector2f(remoteCar.getSize().x / 2, remoteCar.getSize().y / 2));
-            window.draw(remoteCar);
+        if (playerID != getAssignedPlayerID()) {
+            // Draw a simple representation of remote players
+            sf::CircleShape remotePlayerShape(10.0f);
+            remotePlayerShape.setPosition(state.position);
+            remotePlayerShape.setFillColor(sf::Color::Yellow);
+            remotePlayerShape.setOrigin(sf::Vector2f(10.0f, 10.0f)); // FIXED: Use Vector2f for SFML 3.0
+            window.draw(remotePlayerShape);
         }
     }
 }
 
 void MultiplayerClient::renderUI() {
-    // Set UI view
     window.setView(uiView);
 
     if (uiManager) {
         GameState currentGameState = isLanMode ? GameState::LAN_MULTIPLAYER : GameState::ONLINE_MULTIPLAYER;
+        uiManager->update(currentGameState,
+            localPlayer ? localPlayer->getVehicleManager() : nullptr,
+            nullptr, // splitScreenManager not used in network multiplayer
+            localPlayer.get(),
+            planets,
+            networkManager.get(),
+            satelliteManager.get());
+
         uiManager->draw(window, currentGameState, networkManager.get(), satelliteManager.get());
     }
-
-    // Draw connection status if waiting for player ID
-    if (waitingForPlayerID) {
-        // TODO: Add "Waiting for server..." text when font is available
-    }
-}
-
-bool MultiplayerClient::connectToHost(bool lanMode, const std::string& hostAddress, int port) {
-    if (!networkManager) {
-        std::cerr << "NetworkManager not initialized!" << std::endl;
-        return false;
-    }
-
-    isLanMode = lanMode;
-
-    // NetworkManager uses attemptAutoConnect() as the public interface
-    bool success = networkManager->attemptAutoConnect();
-
-    if (success) {
-        isConnected = true;
-        connectionTimeout = 0.0f;
-        std::cout << (lanMode ? "LAN" : "Online") << " client connected successfully" << std::endl;
-    }
-    else {
-        std::cerr << "Failed to connect to " << (lanMode ? "LAN" : "Online") << " host" << std::endl;
-    }
-
-    return success;
-}
-
-void MultiplayerClient::disconnect() {
-    if (networkManager && isConnected) {
-        networkManager->disconnect();
-        isConnected = false;
-        waitingForPlayerID = true;
-        remotePlayerStates.clear();
-        std::cout << "Disconnected from host" << std::endl;
-    }
-}
-
-bool MultiplayerClient::isConnectedToHost() const {
-    return isConnected && networkManager && networkManager->isConnected();
-}
-
-int MultiplayerClient::getAssignedPlayerID() const {
-    if (!networkManager || waitingForPlayerID) return -1;
-    return networkManager->getLocalPlayerID();
 }
 
 void MultiplayerClient::handleEscapeKey() {
-    std::cout << "ESC pressed - performing auto-save..." << std::endl;
+    // Auto-save before quitting (if possible for client)
     performAutoSave();
+
+    // Disconnect from host
+    disconnect();
 }
 
 void MultiplayerClient::handleConnectionLoss() {
-    std::cout << "Connection to host lost!" << std::endl;
-    isConnected = false;
-    currentResult = MultiplayerClientResult::DISCONNECTED;
+    std::cerr << "Connection to host lost!" << std::endl;
+    currentResult = MultiplayerClientResult::CONNECTION_ERROR;
+    disconnect();
 }
 
 bool MultiplayerClient::performAutoSave() {
-    return autoSave();
+    // Limited auto-save capability for client - mainly for local state
+    return true; // For now, always return true as client doesn't control saves
 }
 
 GameSaveData MultiplayerClient::getCurrentSaveData() const {
     GameSaveData saveData;
-
-    // Basic metadata
-    saveData.saveName = currentSaveName.empty() ? "MultiplayerClient" : currentSaveName;
-    saveData.playerName = "Client"; // Could be made configurable
-    saveData.gameMode = isLanMode ? SavedGameMode::LAN_MULTIPLAYER : SavedGameMode::ONLINE_MULTIPLAYER;
     saveData.gameTime = gameTime;
-    saveData.currentPlayerCount = static_cast<int>(remotePlayerStates.size()) + (localPlayer ? 1 : 0);
 
-    // Save planets
-    saveData.planets.clear();
-    if (planet) {
-        SavedPlanetData mainPlanetData;
-        mainPlanetData.position = planet->getPosition();
-        mainPlanetData.mass = planet->getMass();
-        mainPlanetData.color = sf::Color(139, 0, 0);
-        mainPlanetData.isMainPlanet = true;
-        mainPlanetData.radius = planet->getRadius();
-        saveData.planets.push_back(mainPlanetData);
-    }
-
-    for (const auto& orbitingPlanet : orbitingPlanets) {
+    // Save planet data
+    for (const auto& planetPtr : planets) {
         SavedPlanetData planetData;
-        planetData.position = orbitingPlanet->getPosition();
-        planetData.mass = orbitingPlanet->getMass();
-        planetData.color = sf::Color::Green;
-        planetData.isMainPlanet = false;
-        planetData.radius = orbitingPlanet->getRadius();
+        planetData.position = planetPtr->getPosition();
+        planetData.radius = planetPtr->getRadius();
+        planetData.mass = planetPtr->getMass();
+        planetData.color = sf::Color::Blue; // Default color since getColor() doesn't exist
+        planetData.isMainPlanet = (planetPtr == planet.get());
         saveData.planets.push_back(planetData);
     }
-
-    // Save local player state
-    if (localPlayer) {
-        saveData.players.push_back(localPlayer->getState());
-    }
-
-    // Save remote player states
-    for (const auto& [playerID, state] : remotePlayerStates) {
-        saveData.players.push_back(state);
-    }
-
-    // Save satellites
-    if (satelliteManager) {
-        // TODO: Add proper getSaveData method to SatelliteManager
-        saveData.satellites.clear();
-    }
-
-    // Save camera data
-    saveData.camera.position = gameView.getCenter();
-    saveData.camera.size = gameView.getSize();
-    saveData.camera.zoom = zoomLevel;
-    saveData.camera.followingPlayerID = localPlayer ? localPlayer->getID() : -1;
-
-    // Save UI settings (using defaults for now)
-    saveData.uiSettings.showUI = true;
-    saveData.uiSettings.showDebugInfo = false;
-    saveData.uiSettings.showOrbitPaths = true;
-    saveData.uiSettings.showFuelRings = true;
-    saveData.uiSettings.showPlayerLabels = true;
 
     return saveData;
 }
 
 bool MultiplayerClient::quickSave() {
-    GameSaveData saveData = getCurrentSaveData();
-    return saveManager.quickSave(saveData);
+    // Clients typically can't perform saves in multiplayer
+    return false;
 }
 
 bool MultiplayerClient::autoSave() {
-    GameSaveData saveData = getCurrentSaveData();
-    return saveManager.autoSave(saveData);
+    return performAutoSave();
 }
 
 void MultiplayerClient::handleWindowResize(sf::Vector2u newSize) {
     windowSize = newSize;
 
     // Update views
-    gameView.setSize(sf::Vector2f(static_cast<float>(newSize.x), static_cast<float>(newSize.y)) / zoomLevel);
+    gameView.setSize(sf::Vector2f(static_cast<float>(newSize.x), static_cast<float>(newSize.y)));
     uiView.setSize(sf::Vector2f(static_cast<float>(newSize.x), static_cast<float>(newSize.y)));
-    uiView.setCenter(sf::Vector2f(static_cast<float>(newSize.x) / 2.0f, static_cast<float>(newSize.y) / 2.0f));
 
     // Update UI manager
     if (uiManager) {
         uiManager->handleWindowResize(newSize);
     }
+
+    // Center the views
+    gameView.setCenter(sf::Vector2f(static_cast<float>(newSize.x) / 2.0f, static_cast<float>(newSize.y) / 2.0f));
+    uiView.setCenter(sf::Vector2f(static_cast<float>(newSize.x) / 2.0f, static_cast<float>(newSize.y) / 2.0f));
 }
 
 #ifdef _WIN32

@@ -36,7 +36,6 @@ private:
     // Player management
     std::unique_ptr<Player> localPlayer;
     std::vector<std::unique_ptr<Player>> remotePlayers;
-    std::vector<std::unique_ptr<Player>> players; // All players for convenience
     int maxPlayers;
 
     // Camera and visual settings
@@ -56,43 +55,35 @@ private:
     bool fuelDecreaseKeyPressed;
     bool escKeyPressed;
 
-    // Game state
+    // Game state tracking
     float gameTime;
     bool isInitialized;
     bool isHosting;
     MultiplayerHostResult currentResult;
-    bool isLanMode; // true for LAN, false for Online
-
-    // Save/Load functionality
-    GameSaveManager saveManager;
+    bool isLanMode;
     std::string currentSaveName;
 
-    // Network state tracking
+    // Network synchronization
     float timeSinceLastSync;
-    static constexpr float SYNC_INTERVAL = 1.0f / 30.0f; // 30 FPS sync rate
+    static constexpr float SYNC_INTERVAL = 1.0f / 30.0f; // 30 FPS sync
 
-    // Helper methods
+    // Private helper methods
     void initializeFromDefaults(bool lanMode);
-    void initializeFromSaveData(const GameSaveData& saveData, bool lanMode);
+    void initializeFromSaveData(const GameSaveData& saveData);
     void createDefaultPlanets();
     void createPlanetsFromSaveData(const std::vector<SavedPlanetData>& planetData);
-    void setupNetworking(bool lanMode);
-    void setupLocalPlayer();
-    void setupPlayersFromSaveData(const std::vector<PlayerState>& playerStates);
-    void setupCamera();
-    void setupCameraFromSaveData(const SavedCameraData& cameraData);
+    void setupLocalPlayer(sf::Vector2f spawnPos);
     void updateInput(float deltaTime);
     void updateGameObjects(float deltaTime);
     void updateNetworking(float deltaTime);
     void updateCamera();
-    void handlePlayerConnections();
-    void handlePlayerDisconnections();
-    void syncGameState();
     void renderGameObjects();
     void renderUI();
     void handleEscapeKey();
+    void handlePlayerConnections();
+    void handlePlayerDisconnections();
+    void syncGameState();
     bool performAutoSave();
-    sf::Vector2f generatePlayerSpawnPosition(int playerID);
 
 public:
     // Constructors

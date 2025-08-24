@@ -57,44 +57,37 @@ private:
     bool fuelDecreaseKeyPressed;
     bool escKeyPressed;
 
-    // Game state
+    // Game state tracking
     float gameTime;
     bool isInitialized;
     bool isConnected;
     MultiplayerClientResult currentResult;
-    bool isLanMode; // true for LAN, false for Online
-
-    // Save/Load functionality
-    GameSaveManager saveManager;
+    bool isLanMode;
     std::string currentSaveName;
 
-    // Network state tracking
+    // Network synchronization
     float timeSinceLastSync;
-    static constexpr float SYNC_INTERVAL = 1.0f / 30.0f; // 30 FPS sync rate
     float connectionTimeout;
-    static constexpr float CONNECTION_TIMEOUT = 10.0f; // 10 seconds
+    static constexpr float SYNC_INTERVAL = 1.0f / 30.0f; // 30 FPS sync
+    static constexpr float CONNECTION_TIMEOUT = 10.0f; // 10 seconds timeout
 
-    // Helper methods
+    // Private helper methods
     void initializeFromDefaults(bool lanMode);
-    void initializeFromSaveData(const GameSaveData& saveData, bool lanMode);
+    void initializeFromSaveData(const GameSaveData& saveData);
     void createDefaultPlanets();
     void createPlanetsFromSaveData(const std::vector<SavedPlanetData>& planetData);
-    void setupNetworking(bool lanMode);
-    void setupLocalPlayer(sf::Vector2f spawnPosition, int playerID);
-    void setupCamera();
-    void setupCameraFromSaveData(const SavedCameraData& cameraData);
+    void setupLocalPlayer(sf::Vector2f spawnPos);
     void updateInput(float deltaTime);
     void updateGameObjects(float deltaTime);
     void updateNetworking(float deltaTime);
     void updateCamera();
-    void handlePlayerIDAssignment();
-    void handleRemotePlayerStates();
-    void syncLocalPlayerState();
     void renderGameObjects();
     void renderUI();
-    void renderRemotePlayerStates();
+    void renderRemotePlayers();
     void handleEscapeKey();
     void handleConnectionLoss();
+    void processNetworkMessages();
+    void syncWithHost();
     bool performAutoSave();
 
 public:
