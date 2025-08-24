@@ -67,8 +67,8 @@ void SinglePlayerGame::initializeFromDefaults() {
     // Setup vehicle manager at default spawn position
     sf::Vector2f spawnPos;
     if (!orbitingPlanets.empty()) {
-        sf::Vector2f planetPos = orbitingPlanets[0]->getPosition();
-        float planetRadius = orbitingPlanets[0]->getRadius();
+        sf::Vector2f planetPos = orbitingPlanets[2]->getPosition();
+        float planetRadius = orbitingPlanets[2]->getRadius();
         spawnPos = sf::Vector2f(planetPos.x, planetPos.y - planetRadius - 150.0f);
     }
     else {
