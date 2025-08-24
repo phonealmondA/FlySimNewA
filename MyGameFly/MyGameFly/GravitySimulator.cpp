@@ -4,7 +4,7 @@
 #include "Player.h"
 #include "Satellite.h"
 #include "SatelliteManager.h"
-
+#include <iostream>  
 void GravitySimulator::addPlanet(Planet* planet)
 {
     planets.push_back(planet);
@@ -242,6 +242,7 @@ void GravitySimulator::update(float deltaTime)
             }
         }
     }
+
     // Apply gravity to satellites from planets
     if (satelliteManager) {
         auto satellites = satelliteManager->getAllSatellites();
@@ -272,7 +273,6 @@ void GravitySimulator::update(float deltaTime)
         }
     }
 
-
     // FUEL SYSTEM INTEGRATION: Process fuel collection for all game modes
     if (!players.empty()) {
         // Network multiplayer mode - handle players
@@ -281,19 +281,62 @@ void GravitySimulator::update(float deltaTime)
         processFuelCollectionForPlayers(deltaTime);
     }
     else {
-        // Local modes - handle vehicle managers and individual rockets
+        // LOCAL MODES - DEBUG THE GRAVITY ISSUE
+        static float debugTimer = 0.0f;
+        debugTimer += deltaTime;
+
+        if (debugTimer > 200.0f) { // Print debug info every 200 seconds
+            debugTimer = 0.0f;
+
+            std::cout << "\n=== GRAVITY DEBUG ===" << std::endl;
+            std::cout << "Vehicle Managers count: " << vehicleManagers.size() << std::endl;
+            std::cout << "Planets count: " << planets.size() << std::endl;
+
+            // Print all planet info
+            for (size_t i = 0; i < planets.size(); i++) {
+                auto planet = planets[i];
+                if (planet) {
+                    std::cout << "Planet " << i << ": pos(" << planet->getPosition().x
+                        << ", " << planet->getPosition().y << ") mass=" << planet->getMass()
+                        << " radius=" << planet->getRadius() << std::endl;
+                }
+            }
+        }
 
         // Apply gravity to ALL vehicle managers (split-screen and single-player)
         for (VehicleManager* vm : vehicleManagers) {
             if (vm && vm->getActiveVehicleType() == VehicleType::ROCKET) {
                 Rocket* rocket = vm->getRocket();
                 if (rocket) {
-                    for (auto planet : planets) {
-                        sf::Vector2f direction = planet->getPosition() - rocket->getPosition();
+                    sf::Vector2f rocketPos = rocket->getPosition();
+
+                    // DEBUG: Print rocket position occasionally
+                    if (debugTimer == 0.0f) { // Only when we just printed planet info
+                        std::cout << "Rocket pos: (" << rocketPos.x << ", " << rocketPos.y << ")" << std::endl;
+                    }
+
+                    for (size_t planetIndex = 0; planetIndex < planets.size(); planetIndex++) {
+                        auto planet = planets[planetIndex];
+                        sf::Vector2f direction = planet->getPosition() - rocketPos;
                         float distance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
 
+                        float collisionRadius = planet->getRadius() + GameConstants::TRAJECTORY_COLLISION_RADIUS;
+                        bool gravityEnabled = distance > collisionRadius;
+
+                        // DEBUG: Print gravity info for each planet occasionally
+                        if (debugTimer == 0.0f && planetIndex < 5) { // First 5 planets only
+                            std::cout << "Planet " << planetIndex << " dist=" << distance
+                                << " collisionRadius=" << collisionRadius
+                                << " gravityEnabled=" << (gravityEnabled ? "YES" : "NO") << std::endl;
+
+                            if (gravityEnabled) {
+                                float forceMagnitude = G * planet->getMass() * rocket->getMass() / (distance * distance);
+                                std::cout << "  -> Force magnitude: " << forceMagnitude << std::endl;
+                            }
+                        }
+
                         // Avoid division by zero and very small distances
-                        if (distance > planet->getRadius() + GameConstants::TRAJECTORY_COLLISION_RADIUS) {
+                        if (gravityEnabled) {
                             // Use rocket's DYNAMIC MASS for gravity calculation
                             float forceMagnitude = G * planet->getMass() * rocket->getMass() / (distance * distance);
                             sf::Vector2f acceleration = normalize(direction) * forceMagnitude / rocket->getMass();
@@ -317,7 +360,6 @@ void GravitySimulator::update(float deltaTime)
 
                 // Avoid division by zero and very small distances
                 if (distance > planet->getRadius() + GameConstants::TRAJECTORY_COLLISION_RADIUS) {
-                    // Use rocket's DYNAMIC MASS for gravity calculation
                     float forceMagnitude = G * planet->getMass() * rocket->getMass() / (distance * distance);
                     sf::Vector2f acceleration = normalize(direction) * forceMagnitude / rocket->getMass();
                     sf::Vector2f velocityChange = acceleration * deltaTime;
@@ -347,7 +389,6 @@ void GravitySimulator::update(float deltaTime)
         }
     }
 }
-
 void GravitySimulator::updateSatelliteManagerWithPlayers() {
     if (!satelliteManager) return;
 

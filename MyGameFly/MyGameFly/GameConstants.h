@@ -17,7 +17,7 @@ namespace GameConstants {
     constexpr float REFERENCE_MASS = 10000.0f;  // Reference mass for radius scaling
 
     // Primary inputs
-    constexpr float MAIN_PLANET_MASS = 260000.0f;  // Primary parameter to adjust
+    constexpr float MAIN_PLANET_MASS = 19891000000.0f;  // Primary parameter to adjust
     constexpr float ORBIT_PERIOD = 420.0f;  // Desired orbit period in seconds
 
     // Derived parameters

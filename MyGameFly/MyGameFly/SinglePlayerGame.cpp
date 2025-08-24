@@ -83,7 +83,7 @@ void SinglePlayerGame::initializeFromDefaults() {
         gravitySimulator->addPlanet(planetPtr);
     }
 
-    // ADD THIS MISSING LINE - This is why gravity wasn't working!
+    //FIXED: Add the missing line that registers the rocket with gravity simulator
     gravitySimulator->addVehicleManager(vehicleManager.get());
 
     gravitySimulator->addSatelliteManager(satelliteManager.get());
@@ -94,6 +94,8 @@ void SinglePlayerGame::initializeFromDefaults() {
 
     gameTime = 0.0f;
 }
+
+
 
 void SinglePlayerGame::initializeFromSaveData(const GameSaveData& saveData) {
     // Create planets from save data
@@ -108,7 +110,7 @@ void SinglePlayerGame::initializeFromSaveData(const GameSaveData& saveData) {
         gravitySimulator->addPlanet(planetPtr);
     }
 
-    // ADD THIS MISSING LINE - Also needed when loading saves!
+    // FIXED: Add the missing line that registers the rocket with gravity simulator
     gravitySimulator->addVehicleManager(vehicleManager.get());
 
     gravitySimulator->addSatelliteManager(satelliteManager.get());
@@ -125,6 +127,8 @@ void SinglePlayerGame::initializeFromSaveData(const GameSaveData& saveData) {
 
     gameTime = saveData.gameTime;
 }
+
+
 void SinglePlayerGame::createDefaultPlanets() {
     // Create main planet
     planet = std::make_unique<Planet>(
@@ -218,11 +222,13 @@ void SinglePlayerGame::setupCameraFromSaveData(const SavedCameraData& cameraData
     uiView.setCenter(sf::Vector2f(static_cast<float>(windowSize.x) / 2.0f, static_cast<float>(windowSize.y) / 2.0f));
 }
 
+
+
 SinglePlayerResult SinglePlayerGame::handleEvents() {
     while (std::optional<sf::Event> event = window.pollEvent()) {
         if (event->is<sf::Event::Closed>()) {
             handleEscapeKey(); // Auto-save before quit
-            currentResult = SinglePlayerResult::QUIT_GAME;  // FIX: Set member variable
+            currentResult = SinglePlayerResult::QUIT_GAME;
             return SinglePlayerResult::QUIT_GAME;
         }
 
@@ -230,26 +236,30 @@ SinglePlayerResult SinglePlayerGame::handleEvents() {
             handleWindowResize({ resized->size.x, resized->size.y });
         }
 
+        // FIXED: Add mouse wheel scroll zoom handling (was missing)
+        handleMouseWheelZoom(event.value());
+
         if (const auto* keyPressed = event->getIf<sf::Event::KeyPressed>()) {
             if (keyPressed->scancode == sf::Keyboard::Scancode::Escape) {
                 if (!escKeyPressed) {
                     escKeyPressed = true;
                     handleEscapeKey(); // Auto-save
                     std::cout << "ESC pressed - returning to saves menu..." << std::endl;
-                    currentResult = SinglePlayerResult::RETURN_TO_MENU;  // FIX: Set member variable
+                    currentResult = SinglePlayerResult::RETURN_TO_MENU;
                     return SinglePlayerResult::RETURN_TO_MENU;
                 }
             }
         }
+
         if (const auto* keyReleased = event->getIf<sf::Event::KeyReleased>()) {
             if (keyReleased->scancode == sf::Keyboard::Scancode::Escape) {
                 escKeyPressed = false;
             }
         }
     }
-
     return SinglePlayerResult::CONTINUE_PLAYING;
 }
+
 
 void SinglePlayerGame::update(float deltaTime) {
     if (!isInitialized) return;
@@ -268,69 +278,28 @@ void SinglePlayerGame::update(float deltaTime) {
 
 
 
-
 void SinglePlayerGame::updateInput(float deltaTime) {
-    // Thrust controls
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::W)) {
-        vehicleManager->applyThrust(1.0f);
-    }
+    if (!vehicleManager) return;
 
-    // Rotation controls
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A)) {
-        vehicleManager->rotate(-180.0f * deltaTime);
-    }
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D)) {
-        vehicleManager->rotate(180.0f * deltaTime);
-    }
+    //FIXED: Use correct individual VehicleManager methods, not handleInput()
+    // Movement controls
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Up))
+        vehicleManager->applyThrust(vehicleManager->getRocket()->getThrustLevel());
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Down))
+        vehicleManager->applyThrust(-vehicleManager->getRocket()->getThrustLevel());
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left))
+        vehicleManager->rotate(-6.0f * deltaTime * 60.0f);
+    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right))
+        vehicleManager->rotate(6.0f * deltaTime * 60.0f);
 
-    // *** FIX 1: ADD THRUST LEVEL HANDLING (1-9 keys) ***
-    if (vehicleManager->getRocket()) {
-        float newThrustLevel = -1.0f; // -1 means no change
-        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num0)) newThrustLevel = 0.0f;
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num1)) newThrustLevel = 0.1f;
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num2)) newThrustLevel = 0.2f;
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num3)) newThrustLevel = 0.3f;
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num4)) newThrustLevel = 0.4f;
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num5)) newThrustLevel = 0.5f;
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num6)) newThrustLevel = 0.6f;
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num7)) newThrustLevel = 0.7f;
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num8)) newThrustLevel = 0.8f;
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Num9)) newThrustLevel = 0.9f;
-        else if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Equal)) newThrustLevel = 1.0f;
-
-        if (newThrustLevel >= 0.0f) {
-            vehicleManager->getRocket()->setThrustLevel(newThrustLevel);
-        }
-    }
-
-    // Vehicle switching
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::L) && !lKeyPressed) {
-        lKeyPressed = true;
-        vehicleManager->switchVehicle();
-    }
-    else if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::L)) {
-        lKeyPressed = false;
-    }
-
-    // Satellite conversion
-    if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::T) && !tKeyPressed) {
-        tKeyPressed = true;
-        if (vehicleManager->canConvertToSatellite()) {
-            int satelliteID = vehicleManager->convertRocketToSatellite();
-            if (satelliteID >= 0) {
-                std::cout << "Converted rocket to satellite (ID: " << satelliteID << ")" << std::endl;
-            }
-        }
-    }
-    else if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::T)) {
-        tKeyPressed = false;
-    }
-
-    // *** FIX 2: ADD COMPLETE FUEL TRANSFER LOGIC ***
-    if (vehicleManager->getRocket()) {
+    // Handle fuel transfer input for rockets
+    if (vehicleManager->getActiveVehicleType() == VehicleType::ROCKET) {
         Rocket* rocket = vehicleManager->getRocket();
+        if (!rocket) return;
 
-        // Manual fuel transfer controls - Period key (.) for fuel increase
+        // FIXED: Use correct method names - startFuelTransferIn/Out (not startFuelCollection/Giving)
+
+        // Fuel increase (period key)
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Period) && !fuelIncreaseKeyPressed) {
             fuelIncreaseKeyPressed = true;
             // Start fuel transfer from planet to rocket
@@ -347,7 +316,7 @@ void SinglePlayerGame::updateInput(float deltaTime) {
             fuelIncreaseKeyPressed = false;
         }
 
-        // Manual fuel transfer controls - Comma key (,) for fuel decrease  
+        // Fuel decrease (comma key)
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Comma) && !fuelDecreaseKeyPressed) {
             fuelDecreaseKeyPressed = true;
             // Start fuel transfer from rocket to planet
@@ -368,16 +337,68 @@ void SinglePlayerGame::updateInput(float deltaTime) {
     // Zoom controls
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Q)) {
         targetZoom *= 1.02f;
+        updateCameraCenter();  // FIXED: Add missing camera update after zoom
     }
     if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::E)) {
         targetZoom /= 1.02f;
+        updateCameraCenter();  // FIXED: Add missing camera update after zoom
     }
 
     // Clamp zoom level
-    targetZoom = std::max(0.1f, std::min(targetZoom, 10.0f));
+    targetZoom = std::max(0.0005f, std::min(targetZoom, 50000.0f));
 }
 
 
+
+// FIXED: Replace updateCamera with proper aspect ratio handling like Version 1
+
+
+void SinglePlayerGame::updateCamera() {
+    // Smooth zoom transition
+    zoomLevel += (targetZoom - zoomLevel) * 3.0f * (1.0f / 60.0f);
+
+    // Follow vehicle if not manually controlling camera
+    if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C) && vehicleManager) {
+        sf::Vector2f vehiclePos = vehicleManager->getActiveVehicle()->getPosition();
+        gameView.setCenter(vehiclePos);
+    }
+
+    // FIXED: Apply zoom with proper aspect ratio like Version 1 main.cpp
+    float aspectRatio = static_cast<float>(windowSize.x) / static_cast<float>(windowSize.y);
+    gameView.setSize(sf::Vector2f(
+        static_cast<float>(windowSize.y) * aspectRatio * zoomLevel,
+        static_cast<float>(windowSize.y) * zoomLevel
+    ));
+}
+
+// FIXED: Replace handleWindowResize with proper aspect ratio handling
+void SinglePlayerGame::handleWindowResize(sf::Vector2u newSize) {
+    windowSize = newSize;
+
+    // FIXED: Update views with proper aspect ratio like Version 1
+    float aspectRatio = static_cast<float>(newSize.x) / static_cast<float>(newSize.y);
+    gameView.setSize(sf::Vector2f(
+        static_cast<float>(newSize.y) * aspectRatio * zoomLevel,
+        static_cast<float>(newSize.y) * zoomLevel
+    ));
+
+    uiView.setSize(sf::Vector2f(
+        static_cast<float>(newSize.x),
+        static_cast<float>(newSize.y)
+    ));
+    uiView.setCenter(sf::Vector2f(
+        static_cast<float>(newSize.x) / 2.0f,
+        static_cast<float>(newSize.y) / 2.0f
+    ));
+
+    // Update UI manager
+    if (uiManager) {
+        uiManager->handleWindowResize(newSize);
+    }
+
+    // Set the view to apply changes immediately
+    window.setView(gameView);
+}
 
 
 
@@ -417,21 +438,6 @@ void SinglePlayerGame::updateGameObjects(float deltaTime) {
         uiManager->update(GameState::SINGLE_PLAYER, vehicleManager.get(), nullptr, nullptr,
             planets, nullptr, satelliteManager.get());
     }
-}
-
-void SinglePlayerGame::updateCamera() {
-    // Smooth zoom
-    zoomLevel += (targetZoom - zoomLevel) * 3.0f * (1.0f / 60.0f); // Assuming 60 FPS for smooth transition
-
-    // Follow vehicle if not manually controlling camera
-    if (!sf::Keyboard::isKeyPressed(sf::Keyboard::Key::C) && vehicleManager) {
-        sf::Vector2f vehiclePos = vehicleManager->getActiveVehicle()->getPosition();
-        gameView.setCenter(vehiclePos);
-    }
-
-    // Apply zoom
-    sf::Vector2f baseSize(static_cast<float>(windowSize.x), static_cast<float>(windowSize.y));
-    gameView.setSize(baseSize / zoomLevel);
 }
 
 void SinglePlayerGame::render() {
@@ -621,19 +627,31 @@ bool SinglePlayerGame::autoSave() {
     return saveManager.autoSave(saveData);
 }
 
-void SinglePlayerGame::handleWindowResize(sf::Vector2u newSize) {
-    windowSize = newSize;
-
-    // Update views
-    gameView.setSize(sf::Vector2f(static_cast<float>(newSize.x), static_cast<float>(newSize.y)) / zoomLevel);
-    uiView.setSize(sf::Vector2f(static_cast<float>(newSize.x), static_cast<float>(newSize.y)));
-    uiView.setCenter(sf::Vector2f(static_cast<float>(newSize.x) / 2.0f, static_cast<float>(newSize.y) / 2.0f));
-
-    // Update UI manager
-    if (uiManager) {
-        uiManager->handleWindowResize(newSize);
+void SinglePlayerGame::updateCameraCenter() {
+    if (vehicleManager) {
+        gameView.setCenter(vehicleManager->getActiveVehicle()->getPosition());
     }
 }
+
+void SinglePlayerGame::handleMouseWheelZoom(const sf::Event& event) {
+    if (auto* scrollEvent = event.getIf<sf::Event::MouseWheelScrolled>()) {
+        if (scrollEvent->wheel == sf::Mouse::Wheel::Vertical) {
+            const float zoomFactor = 1.1f;
+            if (scrollEvent->delta > 0) {
+                targetZoom /= zoomFactor;  // Zoom in
+            }
+            else {
+                targetZoom *= zoomFactor;  // Zoom out
+            }
+            targetZoom = std::max(0.0005f, std::min(targetZoom, 50000.0f));
+
+            updateCameraCenter();  // Update camera position after zoom
+        }
+    }
+}
+
+
+
 
 #ifdef _WIN32
 #pragma warning(pop)
