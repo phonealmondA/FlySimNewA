@@ -222,6 +222,7 @@ SinglePlayerResult SinglePlayerGame::handleEvents() {
     while (std::optional<sf::Event> event = window.pollEvent()) {
         if (event->is<sf::Event::Closed>()) {
             handleEscapeKey(); // Auto-save before quit
+            currentResult = SinglePlayerResult::QUIT_GAME;  // FIX: Set member variable
             return SinglePlayerResult::QUIT_GAME;
         }
 
@@ -229,30 +230,13 @@ SinglePlayerResult SinglePlayerGame::handleEvents() {
             handleWindowResize({ resized->size.x, resized->size.y });
         }
 
-        // *** ADD SCROLL WHEEL ZOOM HANDLING ***
-        if (event->is<sf::Event::MouseWheelScrolled>()) {
-            const auto* wheelEvent = event->getIf<sf::Event::MouseWheelScrolled>();
-            if (wheelEvent) {
-                // Zoom in/out based on scroll direction
-                // Positive delta = scroll up = zoom in
-                // Negative delta = scroll down = zoom out
-                float zoomFactor = 1.0f + wheelEvent->delta * 0.1f;
-                targetZoom *= zoomFactor;
-
-                // Clamp zoom level to reasonable limits
-                targetZoom = std::max(0.1f, std::min(targetZoom, 10.0f));
-            }
-        }
-
-        // In SinglePlayerGame::handleEvents()
-// Replace the complex ESC key logic with this simple version:
-
         if (const auto* keyPressed = event->getIf<sf::Event::KeyPressed>()) {
             if (keyPressed->scancode == sf::Keyboard::Scancode::Escape) {
                 if (!escKeyPressed) {
                     escKeyPressed = true;
                     handleEscapeKey(); // Auto-save
                     std::cout << "ESC pressed - returning to saves menu..." << std::endl;
+                    currentResult = SinglePlayerResult::RETURN_TO_MENU;  // FIX: Set member variable
                     return SinglePlayerResult::RETURN_TO_MENU;
                 }
             }
@@ -266,7 +250,6 @@ SinglePlayerResult SinglePlayerGame::handleEvents() {
 
     return SinglePlayerResult::CONTINUE_PLAYING;
 }
-
 
 void SinglePlayerGame::update(float deltaTime) {
     if (!isInitialized) return;

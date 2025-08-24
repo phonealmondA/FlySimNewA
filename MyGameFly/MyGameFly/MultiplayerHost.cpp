@@ -324,6 +324,7 @@ MultiplayerHostResult MultiplayerHost::handleEvents() {
     while (std::optional<sf::Event> event = window.pollEvent()) {
         if (event->is<sf::Event::Closed>()) {
             handleEscapeKey(); // Auto-save before quit
+            currentResult = MultiplayerHostResult::QUIT_GAME;  // FIX: Set member variable
             return MultiplayerHostResult::QUIT_GAME;
         }
 
@@ -336,6 +337,7 @@ MultiplayerHostResult MultiplayerHost::handleEvents() {
                 if (!escKeyPressed) {
                     escKeyPressed = true;
                     handleEscapeKey();
+                    currentResult = MultiplayerHostResult::RETURN_TO_MENU;  // FIX: Set member variable
                     return MultiplayerHostResult::RETURN_TO_MENU;
                 }
             }
@@ -350,7 +352,6 @@ MultiplayerHostResult MultiplayerHost::handleEvents() {
 
     return MultiplayerHostResult::CONTINUE_PLAYING;
 }
-
 void MultiplayerHost::update(float deltaTime) {
     if (!isInitialized) return;
 
