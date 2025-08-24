@@ -509,6 +509,12 @@ public:
                     //handleSinglePlayerResult();
                 }
                 break;
+            case GameState::MULTIPLAYER_MENU:
+                if (multiplayerMenu) {
+                    sf::Vector2f mousePos = sf::Vector2f(sf::Mouse::getPosition(window));
+                    multiplayerMenu->update(mousePos);
+                }
+                break;
             case GameState::LOCAL_PC_MULTIPLAYER:
             case GameState::LAN_MULTIPLAYER:
             case GameState::ONLINE_MULTIPLAYER:
