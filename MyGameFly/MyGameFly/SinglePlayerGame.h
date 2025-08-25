@@ -76,6 +76,8 @@ private:
     void handleEscapeKey();
     bool performAutoSave();
 
+    bool quickSaveKeyPressed;
+
 public:
     // Constructors
     SinglePlayerGame(sf::RenderWindow& win, sf::Vector2u winSize);
