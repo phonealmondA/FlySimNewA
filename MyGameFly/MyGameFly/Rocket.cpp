@@ -410,7 +410,8 @@ void Rocket::update(float deltaTime)
     // Reset the thrusting flag AFTER fuel consumption for next frame
     isCurrentlyThrusting = false;
 
-    // Check if we're resting on any planet
+    // FIXED: Rocket collision that preserves planetary motion
+// Check if we're resting on any planet
     for (const auto& planet : nearbyPlanets) {
         sf::Vector2f direction = position - planet->getPosition();
         float distance = std::sqrt(direction.x * direction.x + direction.y * direction.y);
@@ -420,17 +421,23 @@ void Rocket::update(float deltaTime)
             // Calculate normal force direction (away from planet center)
             sf::Vector2f normal = normalize(direction);
 
-            // Project velocity onto normal to see if we're moving into the planet
-            float velDotNormal = velocity.x * normal.x + velocity.y * normal.y;
+            // FIXED: Work in planet's reference frame
+            sf::Vector2f relativeVelocity = velocity - planet->getVelocity();
+
+            // Project relative velocity onto normal to see if we're moving into the planet
+            float velDotNormal = relativeVelocity.x * normal.x + relativeVelocity.y * normal.y;
 
             if (velDotNormal < 0) {
-                // Remove velocity component toward the planet
-                velocity -= normal * velDotNormal;
+                // Remove velocity component toward the planet (in planet's frame)
+                relativeVelocity -= normal * velDotNormal;
 
                 // Apply a small friction to velocity parallel to surface
                 sf::Vector2f tangent(-normal.y, normal.x);
-                float velDotTangent = velocity.x * tangent.x + velocity.y * tangent.y;
-                velocity = tangent * velDotTangent * 0.98f;
+                float velDotTangent = relativeVelocity.x * tangent.x + relativeVelocity.y * tangent.y;
+                relativeVelocity = tangent * velDotTangent * 0.98f; // Keep some surface friction
+
+                // FIXED: Transform back to global frame - rocket moves WITH the planet
+                velocity = relativeVelocity + planet->getVelocity();
 
                 // Position correction to stay exactly on surface
                 position = planet->getPosition() + normal * (planet->getRadius() + GameConstants::ROCKET_SIZE);
@@ -438,6 +445,7 @@ void Rocket::update(float deltaTime)
                 resting = true;
             }
         }
+    
     }
 
     // Only apply normal updates if not resting on a planet

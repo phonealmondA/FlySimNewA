@@ -17,7 +17,7 @@ namespace GameConstants {
     constexpr float REFERENCE_MASS = 10000.0f;  // Reference mass for radius scaling
 
     // Primary inputs
-    constexpr float MAIN_PLANET_MASS = 19891000000.0f;  // Primary parameter to adjust
+    constexpr float MAIN_PLANET_MASS = 198910000.0f;  // Primary parameter to adjust
     constexpr float ORBIT_PERIOD = 420.0f;  // Desired orbit period in seconds
 
     // Derived parameters
@@ -79,8 +79,8 @@ namespace GameConstants {
 
     // Trajectory calculation settings
     constexpr float TRAJECTORY_TIME_STEP = 0.5f;
-    constexpr int TRAJECTORY_STEPS = 100;
-    constexpr float TRAJECTORY_COLLISION_RADIUS = 10.0f;
+    constexpr int TRAJECTORY_STEPS = 1000;
+    constexpr float TRAJECTORY_COLLISION_RADIUS = 0.5f;
 
 
     // Engine parameters - scaled with gravitational constant

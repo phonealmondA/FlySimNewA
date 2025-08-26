@@ -198,7 +198,6 @@ void SinglePlayerGame::setupVehicleFromSaveData(const std::vector<PlayerState>& 
             vehicleManager->getRocket()->setFuel(playerState.currentFuel);
             // Note: Rocket doesn't have setRotation method, rotation is handled internally
         }
-        // Add car state restoration if needed
     }
     else {
         // Fallback to default spawn
@@ -561,8 +560,11 @@ void SinglePlayerGame::updateGameObjects(float deltaTime) {
         }
     }
 
+
+
     // Update gravity simulator
     if (gravitySimulator) {
+        //std::cout << "Calling gravity simulator update..." << std::endl;  // debug grav test
         gravitySimulator->update(deltaTime);
     }
 

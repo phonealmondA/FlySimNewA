@@ -9,7 +9,7 @@ VehicleManager::VehicleManager(sf::Vector2f initialPos, const std::vector<Planet
     : activeVehicle(VehicleType::ROCKET), planets(planetList), satelliteManager(satManager)
 {
     // Create initial rocket
-    rocket = std::make_unique<Rocket>(initialPos, sf::Vector2f(0, 0));
+    rocket = std::make_unique<Rocket>(initialPos, sf::Vector2f(-420.0f, 10));
     rocket->setNearbyPlanets(planets);
 
     // Initialize car (will be inactive at start)
