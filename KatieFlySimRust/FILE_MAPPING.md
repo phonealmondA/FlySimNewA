@@ -6,8 +6,8 @@ This document maps each C++ file to its corresponding Rust module.
 
 | C++ File | Rust Module | Status | Phase |
 |----------|-------------|--------|-------|
-| `VectorHelper.h` | `src/utils/vector_helper.rs` | ⏳ Pending | 2 |
-| `GameConstants.h/.cpp` | `src/game_constants.rs` | ⏳ Pending | 2 |
+| `VectorHelper.h` | `src/utils/vector_helper.rs` | ✅ Complete | 2 |
+| `GameConstants.h/.cpp` | `src/game_constants.rs` | ✅ Complete | 2 |
 
 ## Base Game Objects
 
@@ -79,7 +79,7 @@ This document maps each C++ file to its corresponding Rust module.
 
 | C++ File | Rust Module | Status | Phase |
 |----------|-------------|--------|-------|
-| `main.cpp` | `src/main.rs` | ⏳ Pending | 14 |
+| `main.cpp` | `src/main.rs` | 🔄 In Progress | 14 |
 
 ---
 
@@ -96,6 +96,6 @@ This document maps each C++ file to its corresponding Rust module.
 
 - **Total C++ Files:** 28 (56 with headers)
 - **Total Rust Modules:** 28
-- **Completion:** 0/28 (0%)
+- **Completion:** 2/28 (7.1%) + 1 in progress
 
-**Current Phase:** 1 - Project Setup
+**Current Phase:** 2 - Core Infrastructure (Complete!) → Phase 3 Next
