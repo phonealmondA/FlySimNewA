@@ -1,15 +1,10 @@
 // Rocket - Player-controlled spacecraft with fuel and thrust
 // Ported from C++ Rocket class
 
-use sfml::graphics::{
-    Color, ConvexShape, RenderTarget, RenderWindow, Shape, Transformable,
-};
-use sfml::system::Vector2f;
+use macroquad::prelude::*;
 
 use super::game_object::{GameObject, GameObjectData};
-use super::rocket_part::RocketPart;
 use crate::game_constants::GameConstants;
-use crate::utils::vector_helper;
 
 /// Rocket with dynamic mass, fuel system, and thrust control
 pub struct Rocket {
@@ -33,24 +28,12 @@ pub struct Rocket {
     is_transferring_fuel_out: bool,
     fuel_transfer_rate: f32,
 
-    // Visual representation
-    body: ConvexShape<'static>,
-
     // Rocket parts (engines, etc.) - simplified for now
     // parts: Vec<Box<dyn RocketPart>>, // Will add later
 }
 
 impl Rocket {
-    pub fn new(position: Vector2f, velocity: Vector2f, color: Color, base_mass: f32) -> Self {
-        // Create rocket body shape (triangle)
-        let mut body = ConvexShape::new(3);
-        body.set_point(0, Vector2f::new(0.0, -GameConstants::ROCKET_SIZE));
-        body.set_point(1, Vector2f::new(-GameConstants::ROCKET_SIZE / 2.0, GameConstants::ROCKET_SIZE));
-        body.set_point(2, Vector2f::new(GameConstants::ROCKET_SIZE / 2.0, GameConstants::ROCKET_SIZE));
-        body.set_fill_color(color);
-        body.set_origin(Vector2f::new(0.0, 0.0));
-        body.set_position(position);
-
+    pub fn new(position: Vec2, velocity: Vec2, color: Color, base_mass: f32) -> Self {
         let max_fuel = GameConstants::ROCKET_MAX_FUEL;
         let starting_fuel = GameConstants::ROCKET_STARTING_FUEL;
         let mass = base_mass + starting_fuel;
@@ -69,7 +52,6 @@ impl Rocket {
             is_transferring_fuel_in: false,
             is_transferring_fuel_out: false,
             fuel_transfer_rate: 0.0,
-            body,
         }
     }
 
@@ -174,7 +156,7 @@ impl Rocket {
         self.is_currently_thrusting = true;
 
         // Calculate thrust direction
-        let thrust_direction = Vector2f::new(
+        let thrust_direction = Vec2::new(
             self.rotation.cos(),
             self.rotation.sin(),
         );
@@ -236,29 +218,49 @@ impl GameObject for Rocket {
 
         // Update position
         self.data.position += self.data.velocity * delta_time;
-
-        // Update visual representation
-        self.body.set_position(self.data.position);
-        self.body.set_rotation(self.rotation * 180.0 / std::f32::consts::PI); // Convert to degrees
     }
 
-    fn draw(&self, window: &mut RenderWindow) {
-        window.draw(&self.body);
+    fn draw(&self) {
+        // Rocket body is a triangle
+        // Local coordinates (relative to rocket center)
+        let local_points = [
+            Vec2::new(0.0, -GameConstants::ROCKET_SIZE),
+            Vec2::new(-GameConstants::ROCKET_SIZE / 2.0, GameConstants::ROCKET_SIZE),
+            Vec2::new(GameConstants::ROCKET_SIZE / 2.0, GameConstants::ROCKET_SIZE),
+        ];
+
+        // Rotate and translate points to world space
+        let cos_r = self.rotation.cos();
+        let sin_r = self.rotation.sin();
+
+        let world_points: Vec<Vec2> = local_points.iter().map(|p| {
+            let rotated_x = p.x * cos_r - p.y * sin_r;
+            let rotated_y = p.x * sin_r + p.y * cos_r;
+            self.data.position + Vec2::new(rotated_x, rotated_y)
+        }).collect();
+
+        // Draw the rocket body
+        draw_triangle(
+            world_points[0],
+            world_points[1],
+            world_points[2],
+            self.data.color,
+        );
 
         // TODO: Draw rocket parts (engines, etc.)
         // TODO: Draw velocity vector if enabled
         // TODO: Draw trajectory prediction if enabled
     }
 
-    fn position(&self) -> Vector2f {
+    fn position(&self) -> Vec2 {
         self.data.position
     }
 
-    fn velocity(&self) -> Vector2f {
+    fn velocity(&self) -> Vec2 {
         self.data.velocity
     }
 
-    fn set_velocity(&mut self, velocity: Vector2f) {
+    fn set_velocity(&mut self, velocity: Vec2) {
         self.data.velocity = velocity;
     }
 
@@ -275,9 +277,9 @@ mod tests {
     #[test]
     fn test_rocket_creation() {
         let rocket = Rocket::new(
-            Vector2f::new(0.0, 0.0),
-            Vector2f::new(0.0, 0.0),
-            Color::WHITE,
+            Vec2::new(0.0, 0.0),
+            Vec2::new(0.0, 0.0),
+            WHITE,
             GameConstants::ROCKET_BASE_MASS,
         );
 
@@ -288,9 +290,9 @@ mod tests {
     #[test]
     fn test_fuel_addition() {
         let mut rocket = Rocket::new(
-            Vector2f::new(0.0, 0.0),
-            Vector2f::new(0.0, 0.0),
-            Color::WHITE,
+            Vec2::new(0.0, 0.0),
+            Vec2::new(0.0, 0.0),
+            WHITE,
             GameConstants::ROCKET_BASE_MASS,
         );
 
@@ -301,9 +303,9 @@ mod tests {
     #[test]
     fn test_fuel_consumption() {
         let mut rocket = Rocket::new(
-            Vector2f::new(0.0, 0.0),
-            Vector2f::new(0.0, 0.0),
-            Color::WHITE,
+            Vec2::new(0.0, 0.0),
+            Vec2::new(0.0, 0.0),
+            WHITE,
             GameConstants::ROCKET_BASE_MASS,
         );
 
@@ -319,9 +321,9 @@ mod tests {
     #[test]
     fn test_mass_updates_with_fuel() {
         let mut rocket = Rocket::new(
-            Vector2f::new(0.0, 0.0),
-            Vector2f::new(0.0, 0.0),
-            Color::WHITE,
+            Vec2::new(0.0, 0.0),
+            Vec2::new(0.0, 0.0),
+            WHITE,
             GameConstants::ROCKET_BASE_MASS,
         );
 
@@ -333,9 +335,9 @@ mod tests {
     #[test]
     fn test_rotation() {
         let mut rocket = Rocket::new(
-            Vector2f::new(0.0, 0.0),
-            Vector2f::new(0.0, 0.0),
-            Color::WHITE,
+            Vec2::new(0.0, 0.0),
+            Vec2::new(0.0, 0.0),
+            WHITE,
             GameConstants::ROCKET_BASE_MASS,
         );
 

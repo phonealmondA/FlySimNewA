@@ -1,10 +1,7 @@
 // Planet - Celestial body with gravity and fuel storage
-// Ported from C++ Planet class (simplified without moons initially)
+// Ported from C++ Planet class - now using macroquad for pure Rust graphics
 
-use sfml::graphics::{
-    CircleShape, Color, RenderTarget, RenderWindow, Shape, Transformable,
-};
-use sfml::system::Vector2f;
+use macroquad::prelude::*;
 
 use super::game_object::{GameObject, GameObjectData};
 use crate::game_constants::GameConstants;
@@ -14,21 +11,14 @@ pub struct Planet {
     data: GameObjectData,
     mass: f32,
     radius: f32,
-    shape: CircleShape<'static>,
 }
 
 impl Planet {
-    pub fn new(position: Vector2f, radius: f32, mass: f32, color: Color) -> Self {
-        let mut shape = CircleShape::new(radius, 50);
-        shape.set_fill_color(color);
-        shape.set_origin(Vector2f::new(radius, radius));
-        shape.set_position(position);
-
+    pub fn new(position: Vec2, radius: f32, mass: f32, color: Color) -> Self {
         Planet {
-            data: GameObjectData::new(position, Vector2f::new(0.0, 0.0), color),
+            data: GameObjectData::new(position, Vec2::new(0.0, 0.0), color),
             mass,
             radius,
-            shape,
         }
     }
 
@@ -50,11 +40,6 @@ impl Planet {
         // Use cube root for volume-based scaling
         let mass_ratio = self.mass / GameConstants::REFERENCE_MASS;
         self.radius = GameConstants::BASE_RADIUS_FACTOR * mass_ratio.powf(1.0 / 3.0);
-
-        // Update shape
-        self.shape.set_radius(self.radius);
-        self.shape.set_origin(Vector2f::new(self.radius, self.radius));
-        self.shape.set_point_count(50);
     }
 
     /// Check if planet has enough mass for fuel collection
@@ -68,14 +53,12 @@ impl Planet {
     }
 
     /// Draw fuel collection ring around planet
-    pub fn draw_fuel_collection_ring(&self, window: &mut RenderWindow, is_actively_collecting: bool) {
+    pub fn draw_fuel_collection_ring(&self, is_actively_collecting: bool) {
         if !self.can_collect_fuel() {
             return;
         }
 
         let collection_radius = self.fuel_collection_range();
-        let mut ring = CircleShape::new(collection_radius, 50);
-        ring.set_fill_color(Color::TRANSPARENT);
 
         let color = if is_actively_collecting {
             crate::game_constants::colors::FUEL_RING_ACTIVE_COLOR
@@ -83,12 +66,14 @@ impl Planet {
             crate::game_constants::colors::FUEL_RING_COLOR
         };
 
-        ring.set_outline_color(color);
-        ring.set_outline_thickness(GameConstants::FUEL_RING_THICKNESS);
-        ring.set_origin(Vector2f::new(collection_radius, collection_radius));
-        ring.set_position(self.data.position);
-
-        window.draw(&ring);
+        // Draw collection ring using macroquad
+        draw_circle_lines(
+            self.data.position.x,
+            self.data.position.y,
+            collection_radius,
+            GameConstants::FUEL_RING_THICKNESS,
+            color,
+        );
     }
 }
 
@@ -96,22 +81,27 @@ impl GameObject for Planet {
     fn update(&mut self, delta_time: f32) {
         // Update position based on velocity
         self.data.position += self.data.velocity * delta_time;
-        self.shape.set_position(self.data.position);
     }
 
-    fn draw(&self, window: &mut RenderWindow) {
-        window.draw(&self.shape);
+    fn draw(&self) {
+        // Draw the planet as a filled circle
+        draw_circle(
+            self.data.position.x,
+            self.data.position.y,
+            self.radius,
+            self.data.color,
+        );
     }
 
-    fn position(&self) -> Vector2f {
+    fn position(&self) -> Vec2 {
         self.data.position
     }
 
-    fn velocity(&self) -> Vector2f {
+    fn velocity(&self) -> Vec2 {
         self.data.velocity
     }
 
-    fn set_velocity(&mut self, velocity: Vector2f) {
+    fn set_velocity(&mut self, velocity: Vec2) {
         self.data.velocity = velocity;
     }
 
@@ -127,44 +117,48 @@ mod tests {
     #[test]
     fn test_planet_creation() {
         let planet = Planet::new(
-            Vector2f::new(0.0, 0.0),
-            100.0,
-            10000.0,
-            Color::BLUE,
+            Vec2::new(100.0, 100.0),
+            20.0,
+            1000.0,
+            BLUE,
         );
-        assert_eq!(planet.mass(), 10000.0);
-        assert_eq!(planet.radius(), 100.0);
+        assert_eq!(planet.mass(), 1000.0);
+        assert_eq!(planet.radius(), 20.0);
+        assert_eq!(planet.position(), Vec2::new(100.0, 100.0));
     }
 
     #[test]
     fn test_planet_mass_update() {
         let mut planet = Planet::new(
-            Vector2f::new(0.0, 0.0),
-            100.0,
-            10000.0,
-            Color::BLUE,
+            Vec2::new(0.0, 0.0),
+            20.0,
+            1000.0,
+            BLUE,
         );
-        planet.set_mass(20000.0);
-        assert_eq!(planet.mass(), 20000.0);
-        // Radius should be updated (cube root scaling)
-        assert!(planet.radius() > 100.0);
+
+        let old_radius = planet.radius();
+        planet.set_mass(2000.0);
+
+        assert_eq!(planet.mass(), 2000.0);
+        // Radius should increase with mass (cube root relationship)
+        assert!(planet.radius() > old_radius);
     }
 
     #[test]
-    fn test_fuel_collection_check() {
+    fn test_fuel_collection_capability() {
         let planet = Planet::new(
-            Vector2f::new(0.0, 0.0),
-            100.0,
-            GameConstants::MIN_PLANET_MASS_FOR_COLLECTION + 10.0,
-            Color::BLUE,
+            Vec2::new(0.0, 0.0),
+            20.0,
+            GameConstants::MIN_PLANET_MASS_FOR_COLLECTION + 100.0,
+            BLUE,
         );
         assert!(planet.can_collect_fuel());
 
         let small_planet = Planet::new(
-            Vector2f::new(0.0, 0.0),
-            10.0,
-            GameConstants::MIN_PLANET_MASS_FOR_COLLECTION - 10.0,
-            Color::BLUE,
+            Vec2::new(0.0, 0.0),
+            5.0,
+            GameConstants::MIN_PLANET_MASS_FOR_COLLECTION - 100.0,
+            BLUE,
         );
         assert!(!small_planet.can_collect_fuel());
     }

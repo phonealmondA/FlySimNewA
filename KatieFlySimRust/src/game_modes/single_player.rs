@@ -1,14 +1,12 @@
 // Single Player Game - Main single player game mode
 // Integrates all systems for playable game
 
-use sfml::graphics::{Color, Font, RenderTarget, RenderWindow};
-use sfml::system::Vector2f;
-use sfml::window::{Event, Key};
+use macroquad::prelude::*;
 
 use crate::entities::{GameObject, Planet, Rocket};
 use crate::game_constants::GameConstants;
-use crate::save_system::{GameSaveData, SavedCamera, SavedPlanet, SavedRocket, SavedSatellite};
-use crate::systems::{EntityId, World};
+use crate::save_system::{GameSaveData, SavedCamera};
+use crate::systems::World;
 use crate::ui::{Camera, Hud};
 
 /// Single player game result
@@ -20,10 +18,10 @@ pub enum SinglePlayerResult {
 }
 
 /// Single player game mode
-pub struct SinglePlayerGame<'a> {
+pub struct SinglePlayerGame {
     world: World,
     camera: Camera,
-    hud: Hud<'a>,
+    hud: Hud,
     game_time: f32,
     is_paused: bool,
 
@@ -37,12 +35,12 @@ pub struct SinglePlayerGame<'a> {
     auto_save_interval: f32,
 }
 
-impl<'a> SinglePlayerGame<'a> {
-    pub fn new(window_size: Vector2f, font: &'a Font) -> Self {
+impl SinglePlayerGame {
+    pub fn new(window_size: Vec2) -> Self {
         SinglePlayerGame {
             world: World::new(),
             camera: Camera::new(window_size),
-            hud: Hud::new(font, Vector2f::new(10.0, 10.0)),
+            hud: Hud::new(Vec2::new(10.0, 10.0)),
             game_time: 0.0,
             is_paused: false,
             thrust_input: 0.0,
@@ -60,23 +58,23 @@ impl<'a> SinglePlayerGame<'a> {
 
         // Create main planet (like Earth)
         let main_planet = Planet::new(
-            Vector2f::new(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y),
+            Vec2::new(GameConstants::MAIN_PLANET_X, GameConstants::MAIN_PLANET_Y),
             GameConstants::MAIN_PLANET_RADIUS,
             GameConstants::MAIN_PLANET_MASS,
-            Color::BLUE,
+            BLUE,
         );
         self.world.add_planet(main_planet);
 
         // Create secondary planet (like Moon)
         let mut secondary_planet = Planet::new(
-            Vector2f::new(*crate::game_constants::SECONDARY_PLANET_X, *crate::game_constants::SECONDARY_PLANET_Y),
+            Vec2::new(*crate::game_constants::SECONDARY_PLANET_X, *crate::game_constants::SECONDARY_PLANET_Y),
             GameConstants::SECONDARY_PLANET_RADIUS,
             GameConstants::SECONDARY_PLANET_MASS,
-            Color::rgb(150, 150, 150),
+            Color::from_rgba(150, 150, 150, 255),
         );
 
         // Set orbital velocity for secondary planet
-        secondary_planet.set_velocity(Vector2f::new(
+        secondary_planet.set_velocity(Vec2::new(
             0.0,
             -*crate::game_constants::SECONDARY_PLANET_ORBITAL_VELOCITY,
         ));
@@ -86,12 +84,12 @@ impl<'a> SinglePlayerGame<'a> {
         // Create starting rocket near main planet
         let rocket_spawn_distance = GameConstants::MAIN_PLANET_RADIUS + 200.0;
         let rocket = Rocket::new(
-            Vector2f::new(
+            Vec2::new(
                 GameConstants::MAIN_PLANET_X + rocket_spawn_distance,
                 GameConstants::MAIN_PLANET_Y,
             ),
-            Vector2f::new(0.0, 0.0),
-            Color::WHITE,
+            Vec2::new(0.0, 0.0),
+            WHITE,
             GameConstants::ROCKET_BASE_MASS,
         );
 
@@ -158,7 +156,7 @@ impl<'a> SinglePlayerGame<'a> {
 
         // Save camera
         save_data.camera = SavedCamera {
-            center: self.camera.view().center().into(),
+            center: self.camera.camera().target.into(),
             zoom: self.camera.zoom_level(),
         };
 
@@ -167,34 +165,32 @@ impl<'a> SinglePlayerGame<'a> {
         save_data
     }
 
-    /// Handle input events
-    pub fn handle_event(&mut self, event: &Event) -> SinglePlayerResult {
-        match event {
-            Event::Closed => SinglePlayerResult::Quit,
-
-            Event::KeyPressed { code, .. } => match code {
-                Key::Escape => SinglePlayerResult::ReturnToMenu,
-                Key::P => {
-                    self.is_paused = !self.is_paused;
-                    SinglePlayerResult::Continue
-                }
-                Key::F5 => {
-                    // Quick save
-                    if let Err(e) = self.save_game("quicksave") {
-                        log::error!("Failed to quick save: {}", e);
-                    }
-                    SinglePlayerResult::Continue
-                }
-                _ => SinglePlayerResult::Continue,
-            },
-
-            Event::MouseWheelScrolled { delta, .. } => {
-                self.camera.adjust_zoom(-delta * 0.1);
-                SinglePlayerResult::Continue
-            }
-
-            _ => SinglePlayerResult::Continue,
+    /// Handle input for game controls
+    pub fn handle_input(&mut self) -> SinglePlayerResult {
+        // Check for escape to return to menu
+        if is_key_pressed(KeyCode::Escape) {
+            return SinglePlayerResult::ReturnToMenu;
         }
+
+        // Toggle pause
+        if is_key_pressed(KeyCode::P) {
+            self.is_paused = !self.is_paused;
+        }
+
+        // Quick save
+        if is_key_pressed(KeyCode::F5) {
+            if let Err(e) = self.save_game("quicksave") {
+                log::error!("Failed to quick save: {}", e);
+            }
+        }
+
+        // Mouse wheel zoom
+        let mouse_wheel = mouse_wheel().1;
+        if mouse_wheel != 0.0 {
+            self.camera.adjust_zoom(-mouse_wheel * 0.1);
+        }
+
+        SinglePlayerResult::Continue
     }
 
     /// Update game state
@@ -234,15 +230,15 @@ impl<'a> SinglePlayerGame<'a> {
         let mut rotation_delta = 0.0;
 
         // Thrust controls
-        if Key::Space.is_pressed() {
+        if is_key_down(KeyCode::Space) {
             thrust_level = 1.0;
         }
 
         // Rotation controls
-        if Key::Left.is_pressed() || Key::A.is_pressed() {
+        if is_key_down(KeyCode::Left) || is_key_down(KeyCode::A) {
             rotation_delta = -3.0; // degrees per frame
         }
-        if Key::Right.is_pressed() || Key::D.is_pressed() {
+        if is_key_down(KeyCode::Right) || is_key_down(KeyCode::D) {
             rotation_delta = 3.0;
         }
 
@@ -258,12 +254,12 @@ impl<'a> SinglePlayerGame<'a> {
         }
 
         // Launch new rocket (L key)
-        if Key::L.is_pressed() {
+        if is_key_pressed(KeyCode::L) {
             self.launch_new_rocket();
         }
 
         // Convert to satellite (T key)
-        if Key::T.is_pressed() {
+        if is_key_pressed(KeyCode::T) {
             if let Some(rocket_id) = self.world.active_rocket_id() {
                 if self.world.convert_rocket_to_satellite(rocket_id).is_some() {
                     log::info!("Rocket converted to satellite");
@@ -278,7 +274,7 @@ impl<'a> SinglePlayerGame<'a> {
             let new_rocket = Rocket::new(
                 current_rocket.position(),
                 current_rocket.velocity(),
-                Color::rgb(200, 200, 255),
+                Color::from_rgba(200, 200, 255, 255),
                 GameConstants::ROCKET_BASE_MASS,
             );
 
@@ -290,27 +286,37 @@ impl<'a> SinglePlayerGame<'a> {
     }
 
     /// Render the game
-    pub fn render(&self, window: &mut RenderWindow) {
+    pub fn render(&self) {
         // Set camera view
-        window.set_view(self.camera.view());
+        set_camera(self.camera.camera());
 
         // Render world
-        self.world.render(window);
+        self.world.render();
 
-        // Reset to UI view for HUD
-        window.set_view(&window.default_view());
+        // Reset to default camera for HUD
+        set_default_camera();
 
         // Render HUD
         if let Some(rocket) = self.world.get_active_rocket() {
-            self.hud.draw_rocket_stats(window, rocket);
+            self.hud.draw_rocket_stats(rocket);
         } else {
-            self.hud.draw_message(window, "No active rocket");
+            self.hud.draw_message("No active rocket");
         }
 
         // Draw pause indicator if paused
         if self.is_paused {
-            use sfml::graphics::{Text, Transformable};
-            // Note: Would need font access here - simplified
+            let screen_width = screen_width();
+            let screen_height = screen_height();
+            let pause_text = "PAUSED";
+            let font_size = 48.0;
+            let text_dims = measure_text(pause_text, None, font_size as u16, 1.0);
+            draw_text(
+                pause_text,
+                screen_width / 2.0 - text_dims.width / 2.0,
+                screen_height / 2.0,
+                font_size,
+                WHITE,
+            );
         }
     }
 

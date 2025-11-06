@@ -2,7 +2,6 @@
 // Rust-idiomatic approach to avoid ownership issues
 
 use std::collections::HashMap;
-use sfml::graphics::RenderWindow;
 
 use crate::entities::{GameObject, Planet, Rocket, Satellite};
 use crate::physics::GravitySimulator;
@@ -178,20 +177,20 @@ impl World {
 
     // === Render ===
 
-    pub fn render(&self, window: &mut RenderWindow) {
+    pub fn render(&self) {
         // Draw planets
         for planet in self.planets.values() {
-            planet.draw(window);
+            planet.draw();
         }
 
         // Draw rockets
         for rocket in self.rockets.values() {
-            rocket.draw(window);
+            rocket.draw();
         }
 
         // Draw satellites
         for satellite in self.satellites.values() {
-            satellite.draw(window);
+            satellite.draw();
         }
     }
 
@@ -222,24 +221,23 @@ impl Default for World {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sfml::graphics::Color;
-    use sfml::system::Vector2f;
+    use macroquad::prelude::*;
 
     #[test]
     fn test_world_entity_management() {
         let mut world = World::new();
 
         let planet_id = world.add_planet(Planet::new(
-            Vector2f::new(0.0, 0.0),
+            Vec2::new(0.0, 0.0),
             100.0,
             10000.0,
-            Color::BLUE,
+            BLUE,
         ));
 
         let rocket_id = world.add_rocket(Rocket::new(
-            Vector2f::new(200.0, 0.0),
-            Vector2f::new(0.0, 0.0),
-            Color::WHITE,
+            Vec2::new(200.0, 0.0),
+            Vec2::new(0.0, 0.0),
+            WHITE,
             1.0,
         ));
 
@@ -254,9 +252,9 @@ mod tests {
         let mut world = World::new();
 
         let rocket1_id = world.add_rocket(Rocket::new(
-            Vector2f::new(0.0, 0.0),
-            Vector2f::new(0.0, 0.0),
-            Color::WHITE,
+            Vec2::new(0.0, 0.0),
+            Vec2::new(0.0, 0.0),
+            WHITE,
             1.0,
         ));
 
@@ -264,9 +262,9 @@ mod tests {
         assert_eq!(world.active_rocket_id(), Some(rocket1_id));
 
         let rocket2_id = world.add_rocket(Rocket::new(
-            Vector2f::new(100.0, 0.0),
-            Vector2f::new(0.0, 0.0),
-            Color::RED,
+            Vec2::new(100.0, 0.0),
+            Vec2::new(0.0, 0.0),
+            RED,
             1.0,
         ));
 
@@ -283,9 +281,9 @@ mod tests {
         let mut world = World::new();
 
         let rocket_id = world.add_rocket(Rocket::new(
-            Vector2f::new(0.0, 0.0),
-            Vector2f::new(0.0, 0.0),
-            Color::WHITE,
+            Vec2::new(0.0, 0.0),
+            Vec2::new(0.0, 0.0),
+            WHITE,
             1.0,
         ));
 

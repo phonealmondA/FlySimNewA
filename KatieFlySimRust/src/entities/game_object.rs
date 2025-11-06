@@ -1,25 +1,25 @@
 // GameObject trait - Base trait for all game entities
 // Ported from C++ GameObject base class
+// Now using macroquad for pure Rust graphics (no external dependencies!)
 
-use sfml::graphics::{Color, RenderWindow};
-use sfml::system::Vector2f;
+use macroquad::prelude::*;
 
 /// Core game object trait that all entities implement
 pub trait GameObject {
     /// Update the game object's state
     fn update(&mut self, delta_time: f32);
 
-    /// Draw the game object to the window
-    fn draw(&self, window: &mut RenderWindow);
+    /// Draw the game object (macroquad uses global rendering context)
+    fn draw(&self);
 
     /// Get the position of the object
-    fn position(&self) -> Vector2f;
+    fn position(&self) -> Vec2;
 
     /// Get the velocity of the object
-    fn velocity(&self) -> Vector2f;
+    fn velocity(&self) -> Vec2;
 
     /// Set the velocity of the object
-    fn set_velocity(&mut self, velocity: Vector2f);
+    fn set_velocity(&mut self, velocity: Vec2);
 
     /// Get the color of the object
     fn color(&self) -> Color;
@@ -28,13 +28,13 @@ pub trait GameObject {
 /// Common game object data that most entities share
 #[derive(Debug, Clone)]
 pub struct GameObjectData {
-    pub position: Vector2f,
-    pub velocity: Vector2f,
+    pub position: Vec2,
+    pub velocity: Vec2,
     pub color: Color,
 }
 
 impl GameObjectData {
-    pub fn new(position: Vector2f, velocity: Vector2f, color: Color) -> Self {
+    pub fn new(position: Vec2, velocity: Vec2, color: Color) -> Self {
         GameObjectData {
             position,
             velocity,
@@ -46,9 +46,9 @@ impl GameObjectData {
 impl Default for GameObjectData {
     fn default() -> Self {
         GameObjectData {
-            position: Vector2f::new(0.0, 0.0),
-            velocity: Vector2f::new(0.0, 0.0),
-            color: Color::WHITE,
+            position: Vec2::new(0.0, 0.0),
+            velocity: Vec2::new(0.0, 0.0),
+            color: WHITE,
         }
     }
 }

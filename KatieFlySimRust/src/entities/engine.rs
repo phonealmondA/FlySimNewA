@@ -1,8 +1,7 @@
 // Engine - Rocket engine component
 // Ported from C++ Engine class
 
-use sfml::graphics::{Color, ConvexShape, RenderTarget, RenderWindow, Shape, Transformable};
-use sfml::system::Vector2f;
+use macroquad::prelude::*;
 
 use super::rocket_part::{RocketPart, RocketPartData};
 use crate::utils::vector_helper;
@@ -14,7 +13,7 @@ pub struct Engine {
 }
 
 impl Engine {
-    pub fn new(relative_pos: Vector2f, thrust_power: f32, color: Color) -> Self {
+    pub fn new(relative_pos: Vec2, thrust_power: f32, color: Color) -> Self {
         Engine {
             data: RocketPartData::new(relative_pos, color),
             thrust: thrust_power,
@@ -27,31 +26,38 @@ impl Engine {
 }
 
 impl RocketPart for Engine {
-    fn draw(&self, window: &mut RenderWindow, rocket_pos: Vector2f, rotation: f32, scale: f32) {
-        // Create engine shape (small triangle)
-        let mut shape = ConvexShape::new(3);
-
-        // Engine triangle points
-        shape.set_point(0, Vector2f::new(0.0, -5.0 * scale));
-        shape.set_point(1, Vector2f::new(-3.0 * scale, 5.0 * scale));
-        shape.set_point(2, Vector2f::new(3.0 * scale, 5.0 * scale));
-
-        // Apply rocket color
-        shape.set_fill_color(self.data.color);
-
+    fn draw(&self, rocket_pos: Vec2, rotation: f32, scale: f32) {
         // Calculate world position
         let rotated_offset = vector_helper::rotate(self.data.relative_position, rotation);
         let world_pos = rocket_pos + rotated_offset;
 
-        // Set position and rotation
-        shape.set_position(world_pos);
-        shape.set_rotation(rotation * 180.0 / std::f32::consts::PI); // Convert to degrees
+        // Engine triangle points (local coordinates)
+        let local_points = [
+            Vec2::new(0.0, -5.0 * scale),
+            Vec2::new(-3.0 * scale, 5.0 * scale),
+            Vec2::new(3.0 * scale, 5.0 * scale),
+        ];
 
-        // Draw
-        window.draw(&shape);
+        // Rotate and translate points to world space
+        let cos_r = rotation.cos();
+        let sin_r = rotation.sin();
+
+        let world_points: Vec<Vec2> = local_points.iter().map(|p| {
+            let rotated_x = p.x * cos_r - p.y * sin_r;
+            let rotated_y = p.x * sin_r + p.y * cos_r;
+            world_pos + Vec2::new(rotated_x, rotated_y)
+        }).collect();
+
+        // Draw triangle
+        draw_triangle(
+            world_points[0],
+            world_points[1],
+            world_points[2],
+            self.data.color,
+        );
     }
 
-    fn relative_position(&self) -> Vector2f {
+    fn relative_position(&self) -> Vec2 {
         self.data.relative_position
     }
 

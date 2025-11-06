@@ -1,30 +1,34 @@
 // Main Menu - Entry point menu
 // Ported from C++ MainMenu class
 
-use sfml::graphics::{Color, Font, RenderTarget, RenderWindow, Text, Transformable};
-use sfml::system::Vector2f;
-use sfml::window::mouse;
+use macroquad::prelude::*;
 
 use crate::game_state::GameMode;
 use crate::ui::Button;
 
 /// Main menu with game mode selection
-pub struct MainMenu<'a> {
-    title: Text<'a>,
-    single_player_button: Button<'a>,
-    multiplayer_button: Button<'a>,
-    quit_button: Button<'a>,
+pub struct MainMenu {
+    title_text: String,
+    title_position: Vec2,
+    title_font_size: f32,
+    single_player_button: Button,
+    multiplayer_button: Button,
+    quit_button: Button,
     selected_mode: GameMode,
 }
 
-impl<'a> MainMenu<'a> {
-    pub fn new(window_size: Vector2f, font: &'a Font) -> Self {
+impl MainMenu {
+    pub fn new(window_size: Vec2) -> Self {
         // Title
-        let mut title = Text::new("KatieFlySimRust", font, 72);
-        title.set_fill_color(Color::WHITE);
-        let title_bounds = title.local_bounds();
-        title.set_origin(Vector2f::new(title_bounds.width / 2.0, 0.0));
-        title.set_position(Vector2f::new(window_size.x / 2.0, 100.0));
+        let title_text = "KatieFlySimRust".to_string();
+        let title_font_size = 72.0;
+
+        // Calculate title position (centered)
+        let text_dims = measure_text(&title_text, None, title_font_size as u16, 1.0);
+        let title_position = Vec2::new(
+            window_size.x / 2.0 - text_dims.width / 2.0,
+            100.0 + text_dims.height,
+        );
 
         // Button positioning
         let button_width = 300.0;
@@ -34,42 +38,41 @@ impl<'a> MainMenu<'a> {
 
         // Single Player button
         let single_player_button = Button::new(
-            Vector2f::new(
+            Vec2::new(
                 window_size.x / 2.0 - button_width / 2.0,
                 start_y,
             ),
-            Vector2f::new(button_width, button_height),
+            Vec2::new(button_width, button_height),
             "Single Player",
-            font,
-            Color::rgb(50, 100, 150),
+            Color::from_rgba(50, 100, 150, 255),
         );
 
         // Multiplayer button
         let multiplayer_button = Button::new(
-            Vector2f::new(
+            Vec2::new(
                 window_size.x / 2.0 - button_width / 2.0,
                 start_y + button_spacing,
             ),
-            Vector2f::new(button_width, button_height),
+            Vec2::new(button_width, button_height),
             "Multiplayer",
-            font,
-            Color::rgb(50, 120, 100),
+            Color::from_rgba(50, 120, 100, 255),
         );
 
         // Quit button
         let quit_button = Button::new(
-            Vector2f::new(
+            Vec2::new(
                 window_size.x / 2.0 - button_width / 2.0,
                 start_y + button_spacing * 2.0,
             ),
-            Vector2f::new(button_width, button_height),
+            Vec2::new(button_width, button_height),
             "Quit",
-            font,
-            Color::rgb(120, 50, 50),
+            Color::from_rgba(120, 50, 50, 255),
         );
 
         MainMenu {
-            title,
+            title_text,
+            title_position,
+            title_font_size,
             single_player_button,
             multiplayer_button,
             quit_button,
@@ -78,21 +81,21 @@ impl<'a> MainMenu<'a> {
     }
 
     /// Update menu and handle input
-    pub fn update(&mut self, window: &RenderWindow) -> GameMode {
-        let mouse_pressed = mouse::Button::Left.is_pressed();
+    pub fn update(&mut self) -> GameMode {
+        let mouse_pressed = is_mouse_button_down(MouseButton::Left);
 
         // Update buttons
-        if self.single_player_button.update(window, mouse_pressed) {
+        if self.single_player_button.update(mouse_pressed) {
             self.selected_mode = GameMode::SinglePlayer;
             return GameMode::SinglePlayer;
         }
 
-        if self.multiplayer_button.update(window, mouse_pressed) {
+        if self.multiplayer_button.update(mouse_pressed) {
             self.selected_mode = GameMode::Multiplayer;
             return GameMode::Multiplayer;
         }
 
-        if self.quit_button.update(window, mouse_pressed) {
+        if self.quit_button.update(mouse_pressed) {
             self.selected_mode = GameMode::Quit;
             return GameMode::Quit;
         }
@@ -101,11 +104,20 @@ impl<'a> MainMenu<'a> {
     }
 
     /// Draw the menu
-    pub fn draw(&self, window: &mut RenderWindow) {
-        window.draw(&self.title);
-        self.single_player_button.draw(window);
-        self.multiplayer_button.draw(window);
-        self.quit_button.draw(window);
+    pub fn draw(&self) {
+        // Draw title
+        draw_text(
+            &self.title_text,
+            self.title_position.x,
+            self.title_position.y,
+            self.title_font_size,
+            WHITE,
+        );
+
+        // Draw buttons
+        self.single_player_button.draw();
+        self.multiplayer_button.draw();
+        self.quit_button.draw();
     }
 
     /// Get the selected mode

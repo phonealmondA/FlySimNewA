@@ -7,8 +7,8 @@ description = "Rust port of FlySimNewA - A physics-based space flight simulator"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-# Graphics and windowing - SFML bindings
-sfml = "0.21"
+# Graphics and windowing - Pure Rust game library (no external dependencies!)
+macroquad = "0.4"
 
 # Serialization for save files and networking
 serde = { version = "1.0", features = ["derive"] }

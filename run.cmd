@@ -1,6 +1,7 @@
 @echo off
 echo ====================================
 echo   KatieFlySimRust Launcher
+echo   Pure Rust - Zero Dependencies!
 echo ====================================
 echo.
 
@@ -16,11 +17,6 @@ if %ERRORLEVEL% NEQ 0 (
 )
 
 echo Rust/Cargo found!
-echo.
-
-REM Check if SFML is available (just a warning, not blocking)
-echo NOTE: This game requires SFML libraries to be installed.
-echo If compilation fails, install SFML from: https://www.sfml-dev.org/
 echo.
 
 REM Navigate to Rust project directory
@@ -40,10 +36,7 @@ if %ERRORLEVEL% NEQ 0 (
     echo   Build/Run Failed!
     echo ====================================
     echo.
-    echo Common issues:
-    echo 1. SFML not installed - Install from https://www.sfml-dev.org/
-    echo 2. Missing Visual Studio Build Tools - Install from:
-    echo    https://visualstudio.microsoft.com/downloads/
+    echo Please check the error messages above.
     echo.
     pause
     exit /b 1

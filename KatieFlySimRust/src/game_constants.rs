@@ -177,34 +177,43 @@ lazy_static! {
     };
 }
 
-// Color constants (using SFML color representation)
-// Note: SFML colors in Rust use (r, g, b, a) format
+// Color constants (using macroquad color representation)
 pub mod colors {
-    use sfml::graphics::Color;
+    use macroquad::prelude::Color;
+
+    // Helper function to create colors from RGBA values (0-255)
+    const fn rgba(r: u8, g: u8, b: u8, a: u8) -> Color {
+        Color::new(
+            r as f32 / 255.0,
+            g as f32 / 255.0,
+            b as f32 / 255.0,
+            a as f32 / 255.0,
+        )
+    }
 
     // Fuel ring colors
-    pub const FUEL_RING_COLOR: Color = Color::rgba(0, 255, 255, 128);
-    pub const FUEL_RING_ACTIVE_COLOR: Color = Color::rgba(255, 255, 0, 200);
+    pub const FUEL_RING_COLOR: Color = rgba(0, 255, 255, 128);
+    pub const FUEL_RING_ACTIVE_COLOR: Color = rgba(255, 255, 0, 200);
 
     // Satellite body colors
-    pub const SATELLITE_BODY_COLOR: Color = Color::rgba(100, 200, 255, 255);
-    pub const SATELLITE_PANEL_COLOR: Color = Color::rgba(50, 50, 200, 255);
+    pub const SATELLITE_BODY_COLOR: Color = rgba(100, 200, 255, 255);
+    pub const SATELLITE_PANEL_COLOR: Color = rgba(50, 50, 200, 255);
 
     // Satellite status colors
-    pub const SATELLITE_STATUS_ACTIVE: Color = Color::rgba(0, 255, 0, 200);
-    pub const SATELLITE_STATUS_LOW_FUEL: Color = Color::rgba(255, 255, 0, 200);
-    pub const SATELLITE_STATUS_CRITICAL: Color = Color::rgba(255, 100, 0, 200);
-    pub const SATELLITE_STATUS_DEPLETED: Color = Color::rgba(255, 0, 0, 200);
+    pub const SATELLITE_STATUS_ACTIVE: Color = rgba(0, 255, 0, 200);
+    pub const SATELLITE_STATUS_LOW_FUEL: Color = rgba(255, 255, 0, 200);
+    pub const SATELLITE_STATUS_CRITICAL: Color = rgba(255, 100, 0, 200);
+    pub const SATELLITE_STATUS_DEPLETED: Color = rgba(255, 0, 0, 200);
 
     // Orbit visualization colors
-    pub const SATELLITE_ORBIT_PATH_COLOR: Color = Color::rgba(0, 255, 255, 128);
-    pub const SATELLITE_TARGET_ORBIT_COLOR: Color = Color::rgba(255, 255, 0, 128);
-    pub const SATELLITE_MAINTENANCE_BURN_COLOR: Color = Color::rgba(255, 0, 255, 255);
+    pub const SATELLITE_ORBIT_PATH_COLOR: Color = rgba(0, 255, 255, 128);
+    pub const SATELLITE_TARGET_ORBIT_COLOR: Color = rgba(255, 255, 0, 128);
+    pub const SATELLITE_MAINTENANCE_BURN_COLOR: Color = rgba(255, 0, 255, 255);
 
     // Network visualization colors
-    pub const SATELLITE_CONNECTION_COLOR: Color = Color::rgba(100, 255, 100, 100);
-    pub const SATELLITE_TRANSFER_FLOW_COLOR: Color = Color::rgba(255, 255, 100, 200);
-    pub const SATELLITE_EMERGENCY_COLOR: Color = Color::rgba(255, 50, 50, 255);
+    pub const SATELLITE_CONNECTION_COLOR: Color = rgba(100, 255, 100, 100);
+    pub const SATELLITE_TRANSFER_FLOW_COLOR: Color = rgba(255, 255, 100, 200);
+    pub const SATELLITE_EMERGENCY_COLOR: Color = rgba(255, 50, 50, 255);
 }
 
 #[cfg(test)]

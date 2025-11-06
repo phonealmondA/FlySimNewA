@@ -2,6 +2,7 @@
 
 echo "===================================="
 echo "  KatieFlySimRust Launcher"
+echo "  Pure Rust - Zero Dependencies!"
 echo "===================================="
 echo ""
 
@@ -18,17 +19,6 @@ if ! command -v cargo &> /dev/null; then
 fi
 
 echo "Rust/Cargo found!"
-echo ""
-
-# Check OS and provide SFML installation hints
-echo "NOTE: This game requires SFML libraries to be installed."
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-    echo "On Ubuntu/Debian, install with:"
-    echo "  sudo apt-get install libsfml-dev libcsfml-dev"
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-    echo "On macOS, install with Homebrew:"
-    echo "  brew install sfml csfml"
-fi
 echo ""
 
 # Navigate to Rust project directory
@@ -48,14 +38,7 @@ if [ $? -ne 0 ]; then
     echo "  Build/Run Failed!"
     echo "===================================="
     echo ""
-    echo "Common issues:"
-    echo "1. SFML not installed - See installation commands above"
-    echo "2. Missing build tools - Install with:"
-    if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-        echo "   sudo apt-get install build-essential"
-    elif [[ "$OSTYPE" == "darwin"* ]]; then
-        echo "   xcode-select --install"
-    fi
+    echo "Please check the error messages above."
     echo ""
     exit 1
 fi

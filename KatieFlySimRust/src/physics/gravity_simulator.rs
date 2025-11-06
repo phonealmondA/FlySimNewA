@@ -1,7 +1,7 @@
 // Gravity Simulator - Applies gravitational forces between objects
 // Ported from C++ GravitySimulator class
 
-use sfml::system::Vector2f;
+use macroquad::prelude::*;
 
 use crate::entities::{GameObject, Planet, Rocket, Satellite};
 use crate::game_constants::GameConstants;
@@ -123,11 +123,11 @@ impl GravitySimulator {
     /// Returns the force vector applied to object1
     fn calculate_gravitational_force(
         &self,
-        pos1: Vector2f,
+        pos1: Vec2,
         mass1: f32,
-        pos2: Vector2f,
+        pos2: Vec2,
         mass2: f32,
-    ) -> Vector2f {
+    ) -> Vec2 {
         let direction = pos2 - pos1;
         let mut distance = vector_helper::magnitude(direction);
 
@@ -147,15 +147,15 @@ impl GravitySimulator {
     /// Calculate orbital velocity for a circular orbit
     pub fn calculate_circular_orbit_velocity(
         &self,
-        center_pos: Vector2f,
+        center_pos: Vec2,
         center_mass: f32,
-        orbit_pos: Vector2f,
-    ) -> Vector2f {
+        orbit_pos: Vec2,
+    ) -> Vec2 {
         let direction_to_center = center_pos - orbit_pos;
         let distance = vector_helper::magnitude(direction_to_center);
 
         if distance < 0.01 {
-            return Vector2f::new(0.0, 0.0);
+            return Vec2::new(0.0, 0.0);
         }
 
         // v = sqrt(G * M / r)
@@ -163,7 +163,7 @@ impl GravitySimulator {
 
         // Perpendicular to direction (rotate 90 degrees)
         let normalized_dir = vector_helper::normalize(direction_to_center);
-        let perpendicular = Vector2f::new(-normalized_dir.y, normalized_dir.x);
+        let perpendicular = Vec2::new(-normalized_dir.y, normalized_dir.x);
 
         perpendicular * velocity_magnitude
     }
@@ -187,9 +187,9 @@ pub mod orbital {
 
     /// Calculate apoapsis (highest point in orbit)
     pub fn calculate_apoapsis(
-        position: Vector2f,
-        velocity: Vector2f,
-        planet_pos: Vector2f,
+        position: Vec2,
+        velocity: Vec2,
+        planet_pos: Vec2,
         planet_mass: f32,
         g: f32,
     ) -> f32 {
@@ -222,9 +222,9 @@ pub mod orbital {
 
     /// Calculate periapsis (lowest point in orbit)
     pub fn calculate_periapsis(
-        position: Vector2f,
-        velocity: Vector2f,
-        planet_pos: Vector2f,
+        position: Vec2,
+        velocity: Vec2,
+        planet_pos: Vec2,
         planet_mass: f32,
         g: f32,
     ) -> f32 {
@@ -252,9 +252,9 @@ pub mod orbital {
 
     /// Calculate orbital period
     pub fn calculate_orbital_period(
-        position: Vector2f,
-        velocity: Vector2f,
-        planet_pos: Vector2f,
+        position: Vec2,
+        velocity: Vec2,
+        planet_pos: Vec2,
         planet_mass: f32,
         g: f32,
     ) -> f32 {
@@ -282,8 +282,8 @@ mod tests {
     #[test]
     fn test_gravitational_force_calculation() {
         let sim = GravitySimulator::new();
-        let pos1 = Vector2f::new(0.0, 0.0);
-        let pos2 = Vector2f::new(100.0, 0.0);
+        let pos1 = Vec2::new(0.0, 0.0);
+        let pos2 = Vec2::new(100.0, 0.0);
         let mass1 = 1000.0;
         let mass2 = 1000.0;
 
@@ -297,8 +297,8 @@ mod tests {
     #[test]
     fn test_circular_orbit_velocity() {
         let sim = GravitySimulator::new();
-        let center = Vector2f::new(0.0, 0.0);
-        let orbit_pos = Vector2f::new(1000.0, 0.0);
+        let center = Vec2::new(0.0, 0.0);
+        let orbit_pos = Vec2::new(1000.0, 0.0);
         let mass = 198910000.0;
 
         let velocity = sim.calculate_circular_orbit_velocity(center, mass, orbit_pos);

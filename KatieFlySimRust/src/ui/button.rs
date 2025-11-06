@@ -1,65 +1,44 @@
 // Button - UI button component
 // Ported from C++ Button class
 
-use sfml::graphics::{
-    Color, Font, RectangleShape, RenderTarget, RenderWindow, Shape, Text, Transformable,
-};
-use sfml::system::Vector2f;
-use sfml::window::mouse;
+use macroquad::prelude::*;
 
 /// Simple UI button
-pub struct Button<'a> {
-    shape: RectangleShape<'static>,
-    text: Text<'a>,
-    position: Vector2f,
-    size: Vector2f,
+pub struct Button {
+    text: String,
+    position: Vec2,
+    size: Vec2,
     is_hovered: bool,
     is_pressed: bool,
     normal_color: Color,
     hover_color: Color,
     press_color: Color,
+    font_size: f32,
 }
 
-impl<'a> Button<'a> {
+impl Button {
     pub fn new(
-        position: Vector2f,
-        size: Vector2f,
+        position: Vec2,
+        size: Vec2,
         text: &str,
-        font: &'a Font,
         normal_color: Color,
     ) -> Self {
-        let mut shape = RectangleShape::with_size(size);
-        shape.set_position(position);
-        shape.set_fill_color(normal_color);
-        shape.set_outline_color(Color::WHITE);
-        shape.set_outline_thickness(2.0);
-
-        let mut text_obj = Text::new(text, font, 20);
-        text_obj.set_fill_color(Color::WHITE);
-
-        // Center text in button
-        let text_bounds = text_obj.local_bounds();
-        text_obj.set_origin(Vector2f::new(text_bounds.width / 2.0, text_bounds.height / 2.0));
-        text_obj.set_position(Vector2f::new(
-            position.x + size.x / 2.0,
-            position.y + size.y / 2.0 - 5.0, // Slight offset for better visual centering
-        ));
-
-        let hover_color = Color::rgb(
-            normal_color.r.saturating_add(30),
-            normal_color.g.saturating_add(30),
-            normal_color.b.saturating_add(30),
+        let hover_color = Color::new(
+            (normal_color.r + 0.12).min(1.0),
+            (normal_color.g + 0.12).min(1.0),
+            (normal_color.b + 0.12).min(1.0),
+            normal_color.a,
         );
 
-        let press_color = Color::rgb(
-            normal_color.r.saturating_sub(30),
-            normal_color.g.saturating_sub(30),
-            normal_color.b.saturating_sub(30),
+        let press_color = Color::new(
+            (normal_color.r - 0.12).max(0.0),
+            (normal_color.g - 0.12).max(0.0),
+            (normal_color.b - 0.12).max(0.0),
+            normal_color.a,
         );
 
         Button {
-            shape,
-            text: text_obj,
+            text: text.to_string(),
             position,
             size,
             is_hovered: false,
@@ -67,26 +46,23 @@ impl<'a> Button<'a> {
             normal_color,
             hover_color,
             press_color,
+            font_size: 20.0,
         }
     }
 
     /// Update button state based on mouse position and clicks
-    pub fn update(&mut self, window: &RenderWindow, mouse_pressed: bool) -> bool {
-        let mouse_pos = mouse::position_f(window);
-        let mouse_pos_vec = Vector2f::new(mouse_pos.x, mouse_pos.y);
+    pub fn update(&mut self, mouse_pressed: bool) -> bool {
+        let mouse_pos = mouse_position();
+        let mouse_pos_vec = Vec2::new(mouse_pos.0, mouse_pos.1);
 
         // Check if mouse is over button
-        let was_hovered = self.is_hovered;
         self.is_hovered = self.contains_point(mouse_pos_vec);
 
-        // Update visual state
+        // Update visual state and detect clicks
         if self.is_hovered {
             if mouse_pressed {
-                self.shape.set_fill_color(self.press_color);
                 self.is_pressed = true;
             } else {
-                self.shape.set_fill_color(self.hover_color);
-
                 // Button was clicked (released over button after being pressed)
                 if self.is_pressed {
                     self.is_pressed = false;
@@ -94,7 +70,6 @@ impl<'a> Button<'a> {
                 }
             }
         } else {
-            self.shape.set_fill_color(self.normal_color);
             self.is_pressed = false;
         }
 
@@ -102,7 +77,7 @@ impl<'a> Button<'a> {
     }
 
     /// Check if a point is inside the button
-    fn contains_point(&self, point: Vector2f) -> bool {
+    fn contains_point(&self, point: Vec2) -> bool {
         point.x >= self.position.x
             && point.x <= self.position.x + self.size.x
             && point.y >= self.position.y
@@ -110,22 +85,52 @@ impl<'a> Button<'a> {
     }
 
     /// Draw the button
-    pub fn draw(&self, window: &mut RenderWindow) {
-        window.draw(&self.shape);
-        window.draw(&self.text);
+    pub fn draw(&self) {
+        // Determine current color based on state
+        let current_color = if self.is_pressed {
+            self.press_color
+        } else if self.is_hovered {
+            self.hover_color
+        } else {
+            self.normal_color
+        };
+
+        // Draw button background
+        draw_rectangle(
+            self.position.x,
+            self.position.y,
+            self.size.x,
+            self.size.y,
+            current_color,
+        );
+
+        // Draw button outline
+        draw_rectangle_lines(
+            self.position.x,
+            self.position.y,
+            self.size.x,
+            self.size.y,
+            2.0,
+            WHITE,
+        );
+
+        // Draw text centered in button
+        let text_dims = measure_text(&self.text, None, self.font_size as u16, 1.0);
+        let text_x = self.position.x + (self.size.x - text_dims.width) / 2.0;
+        let text_y = self.position.y + (self.size.y - text_dims.height) / 2.0 + text_dims.height;
+
+        draw_text(
+            &self.text,
+            text_x,
+            text_y,
+            self.font_size,
+            WHITE,
+        );
     }
 
     /// Set button text
     pub fn set_text(&mut self, text: &str) {
-        self.text.set_string(text);
-
-        // Re-center text
-        let text_bounds = self.text.local_bounds();
-        self.text.set_origin(Vector2f::new(text_bounds.width / 2.0, text_bounds.height / 2.0));
-        self.text.set_position(Vector2f::new(
-            self.position.x + self.size.x / 2.0,
-            self.position.y + self.size.y / 2.0 - 5.0,
-        ));
+        self.text = text.to_string();
     }
 
     pub fn is_hovered(&self) -> bool {

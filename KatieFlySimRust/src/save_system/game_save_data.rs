@@ -2,29 +2,29 @@
 // Ported from C++ GameSaveData with serde
 
 use serde::{Deserialize, Serialize};
-use sfml::system::Vector2f;
+use macroquad::prelude::*;
 use std::fs;
 use std::path::Path;
 
 use crate::entities::{Planet, Rocket, Satellite};
 use crate::systems::EntityId;
 
-/// Serializable Vector2f wrapper
+/// Serializable Vec2 wrapper
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SavedVector2 {
     pub x: f32,
     pub y: f32,
 }
 
-impl From<Vector2f> for SavedVector2 {
-    fn from(v: Vector2f) -> Self {
+impl From<Vec2> for SavedVector2 {
+    fn from(v: Vec2) -> Self {
         SavedVector2 { x: v.x, y: v.y }
     }
 }
 
-impl From<SavedVector2> for Vector2f {
+impl From<SavedVector2> for Vec2 {
     fn from(v: SavedVector2) -> Self {
-        Vector2f::new(v.x, v.y)
+        Vec2::new(v.x, v.y)
     }
 }
 
@@ -50,21 +50,19 @@ impl SavedPlanet {
             mass: planet.mass(),
             radius: planet.radius(),
             color: (
-                planet.color().r,
-                planet.color().g,
-                planet.color().b,
+                (planet.color().r * 255.0) as u8,
+                (planet.color().g * 255.0) as u8,
+                (planet.color().b * 255.0) as u8,
             ),
         }
     }
 
     pub fn to_planet(&self) -> (EntityId, Planet) {
-        use sfml::graphics::Color;
-
         let planet = Planet::new(
             self.position.clone().into(),
             self.radius,
             self.mass,
-            Color::rgb(self.color.0, self.color.1, self.color.2),
+            Color::from_rgba(self.color.0, self.color.1, self.color.2, 255),
         );
 
         (self.id, planet)
@@ -93,21 +91,20 @@ impl SavedRocket {
             rotation: rocket.rotation(),
             fuel: rocket.current_fuel(),
             color: (
-                rocket.color().r,
-                rocket.color().g,
-                rocket.color().b,
+                (rocket.color().r * 255.0) as u8,
+                (rocket.color().g * 255.0) as u8,
+                (rocket.color().b * 255.0) as u8,
             ),
         }
     }
 
     pub fn to_rocket(&self) -> (EntityId, Rocket) {
-        use sfml::graphics::Color;
         use crate::game_constants::GameConstants;
 
         let mut rocket = Rocket::new(
             self.position.clone().into(),
             self.velocity.clone().into(),
-            Color::rgb(self.color.0, self.color.1, self.color.2),
+            Color::from_rgba(self.color.0, self.color.1, self.color.2, 255),
             GameConstants::ROCKET_BASE_MASS,
         );
 
@@ -140,12 +137,10 @@ impl SavedSatellite {
     }
 
     pub fn to_satellite(&self) -> (EntityId, Satellite) {
-        use sfml::graphics::Color;
-
         let mut satellite = Satellite::new(
             self.position.clone().into(),
             self.velocity.clone().into(),
-            Color::CYAN,
+            Color::new(0.0, 1.0, 1.0, 1.0), // CYAN
         );
 
         satellite.add_fuel(self.fuel - satellite.current_fuel());
@@ -249,12 +244,12 @@ mod tests {
 
     #[test]
     fn test_vector2_conversion() {
-        let v = Vector2f::new(100.0, 200.0);
+        let v = Vec2::new(100.0, 200.0);
         let saved: SavedVector2 = v.into();
         assert_eq!(saved.x, 100.0);
         assert_eq!(saved.y, 200.0);
 
-        let restored: Vector2f = saved.into();
+        let restored: Vec2 = saved.into();
         assert_eq!(restored.x, 100.0);
         assert_eq!(restored.y, 200.0);
     }
