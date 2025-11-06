@@ -29,10 +29,29 @@ cargo run --release
    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
    ```
 
-2. **SFML Libraries**
+2. **SFML Libraries** - Required for graphics
+
+   ### Easy Installation (Automated)
+
+   **Linux/macOS:**
+   ```bash
+   ./install_sfml.sh
+   ```
+
+   **Windows (PowerShell):**
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File install_sfml.ps1
+   ```
+
+   ### Manual Installation
+
    - **Ubuntu/Debian**: `sudo apt-get install libsfml-dev libcsfml-dev`
+   - **Fedora/RHEL**: `sudo dnf install SFML-devel CSFML-devel`
+   - **Arch Linux**: `sudo pacman -S sfml csfml`
    - **macOS**: `brew install sfml csfml`
-   - **Windows**: Download from [SFML website](https://www.sfml-dev.org/download.php)
+   - **Windows**:
+     - Option 1: `vcpkg install sfml:x64-windows csfml:x64-windows`
+     - Option 2: Download from [SFML website](https://www.sfml-dev.org/download.php)
 
 ## Game Controls
 
