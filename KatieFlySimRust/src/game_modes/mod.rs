@@ -1,4 +1,5 @@
 // Game modes module
 
-// pub mod single_player;
-// pub mod split_screen;
+pub mod single_player;
+
+pub use single_player::{SinglePlayerGame, SinglePlayerResult};

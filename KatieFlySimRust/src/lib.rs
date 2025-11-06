@@ -4,6 +4,9 @@
 // Game constants and configuration
 pub mod game_constants;
 
+// Game state management
+pub mod game_state;
+
 // Utility modules
 pub mod utils;
 
