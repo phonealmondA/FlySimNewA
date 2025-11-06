@@ -1,7 +1,9 @@
 // User interface module
 
-// pub mod button;
-// pub mod text_panel;
-// pub mod ui_manager;
-// pub mod game_info_display;
-// pub mod camera;
+pub mod button;
+pub mod camera;
+pub mod hud;
+
+pub use button::Button;
+pub use camera::Camera;
+pub use hud::Hud;
